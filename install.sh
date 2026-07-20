@@ -183,10 +183,14 @@ if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
   bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
 fi
 
-# Directories: always overwrite with upstream (same as update.sh)
+# Directories: always overwrite with upstream (same as update.sh).
+# Copy contents (src/.) into a pre-created destination so an existing symlink
+# (e.g. .agents/skills -> ../.claude/skills) is followed and merged into,
+# instead of cp failing with "cannot overwrite non-directory".
 for dir in agents skills rules commands bin; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
-    cp -r "$TEMP_DIR/repo/.claude/$dir" "$TARGET_DIR/$CONFIG_DIR/"
+    mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
+    cp -r "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
   fi
 done
 
