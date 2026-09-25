@@ -152,4 +152,11 @@ done
 echo "[model routing]"
 assert_eq "__MISSING__" "$(json_get '["modelDefaults"]')" "no modelDefaults key (not a Claude Code setting)"
 
+# --- safe-ai-skill (core security plugin) ---
+# A full install registers the kit's stbr marketplace and enables safe-ai-skill for the
+# project; Claude Code applies both after the folder is trusted.
+echo "[safe-ai-skill]"
+assert_eq "true" "$(json_get '["enabledPlugins"]["safe-ai-skill@stbr"]')" "enabledPlugins enables safe-ai-skill@stbr"
+assert_eq "https://github.com/solanabr/solana-ai-kit.git" "$(json_get '["extraKnownMarketplaces"]["stbr"]["source"]["url"]')" "extraKnownMarketplaces.stbr points at the kit marketplace"
+
 print_summary

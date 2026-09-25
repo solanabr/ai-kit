@@ -20,5 +20,6 @@
     "agents",
     "mcp"
   ],
+  "dependencies": ["safe-ai-skill"],
   "mcpServers": "./.mcp.json"
 }

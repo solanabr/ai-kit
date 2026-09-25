@@ -45,6 +45,16 @@
     }
   },
 
+  "extraKnownMarketplaces": {
+    "stbr": {
+      "source": { "source": "git", "url": "https://github.com/solanabr/solana-ai-kit.git" }
+    }
+  },
+
+  "enabledPlugins": {
+    "safe-ai-skill@stbr": true
+  },
+
   "attribution": {
     "commit": "",
     "pr": ""

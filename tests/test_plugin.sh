@@ -19,7 +19,7 @@ assert_json_valid "$MARKETPLACE" "marketplace.json is valid JSON"
 assert_file_exists "$PLUGIN_MANIFEST" "plugin.json exists at plugin/.claude-plugin/"
 assert_json_valid "$PLUGIN_MANIFEST" "plugin.json is valid JSON"
 
-# Marketplace points its one plugin at ./plugin (NOT ./ — avoids caching tests/install.sh/ext)
+# Marketplace points the kit plugin at ./plugin (NOT ./ — avoids caching tests/install.sh/ext)
 MARKET_CONTENT="$(cat "$MARKETPLACE")"
 assert_contains "$MARKET_CONTENT" '"source": "./plugin"' "marketplace plugin source is ./plugin"
 # Marketplace renamed to stbr (installs as solana-ai-kit@stbr); plugin entry keeps name solana-ai-kit
@@ -27,6 +27,21 @@ MARKET_NAME="$(python3 -c "import json; print(json.load(open('$MARKETPLACE'))['n
 assert_eq "$MARKET_NAME" "stbr" "marketplace name is stbr"
 PLUGIN_ENTRY_NAME="$(python3 -c "import json; print(json.load(open('$MARKETPLACE'))['plugins'][0]['name'])" 2>/dev/null)"
 assert_eq "$PLUGIN_ENTRY_NAME" "solana-ai-kit" "marketplace plugin entry name is solana-ai-kit"
+
+# safe-ai-skill is core: a second entry fetched from its own repo (git-subdir, pinned to a
+# full commit SHA, not vendored) that the kit plugin declares as a dependency
+SAFE_ENTRY="$(python3 -c "
+import json, re
+m = json.load(open('$MARKETPLACE'))
+e = next((p for p in m['plugins'] if p['name'] == 'safe-ai-skill'), {})
+s = e.get('source', {})
+ok = (s.get('source') == 'git-subdir' and 'solanabr/safe-ai-skill' in s.get('url', '')
+      and s.get('path') == 'plugins/safe-ai-skill' and re.fullmatch('[0-9a-f]{40}', s.get('sha', '')))
+print('ok' if ok else 'bad')
+" 2>/dev/null)"
+assert_eq "$SAFE_ENTRY" "ok" "marketplace lists safe-ai-skill (git-subdir from solanabr/safe-ai-skill, SHA-pinned)"
+PLUGIN_DEPS="$(python3 -c "import json; print(json.dumps(json.load(open('$PLUGIN_MANIFEST')).get('dependencies', [])))" 2>/dev/null)"
+assert_contains "$PLUGIN_DEPS" '"safe-ai-skill"' "plugin.json declares safe-ai-skill as a dependency"
 
 # --- claude plugin validate (skip-with-note if CLI unavailable in CI) ---
 if command -v claude >/dev/null 2>&1; then

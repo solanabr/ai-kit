@@ -17,9 +17,13 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 - [idea-sprint/SKILL.md](idea-sprint/SKILL.md): what to build; blunt interview, crypto-necessity gate, 3 scored candidates, go/no-go
 - [pitch-deck/SKILL.md](pitch-deck/SKILL.md): audience-aware decks (hackathon, VC, grant, accelerator) with speaking notes and objection prep
 - [hackathon/SKILL.md](hackathon/SKILL.md): scannable submissions, demo scripts under 3 minutes, track choice, Superteam Earn grants
-- [skill-registry.json](skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms.
+- [skill-registry.json](skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`.
 
 These three skills are adapted from sendaifun/solana-new (MIT, telemetry removed).
+
+## Security firewall (core)
+
+This plugin depends on [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) (`safe-ai-skill@stbr`), which installs with it. Its hooks gate mainnet, value-moving and authority actions and secret reads, and pin installed skills at session start. Its ask or deny is the user's policy, so don't retry the action another way. Its CLI is on PATH while it is enabled: `safe-ai-skill status`, `safe-ai-skill verify check <dir>`.
 
 ## Getting more depth
 
@@ -54,4 +58,5 @@ The project README ("External Skill Submodules" and "Install as a Claude Code pl
 | Pitch deck, demo day, investor or grant slides | pitch-deck/SKILL.md |
 | Hackathon submission, demo script, track choice | hackathon/SKILL.md |
 | An add-on skill, plugin or MCP that isn't bundled | skill-registry.json |
+| A safe-ai-skill ask or deny, skill or MCP supply-chain checks | Security firewall (core) above |
 | Protocol SDK depth, security audits, infra | Option A marketplaces or the Option B full install |

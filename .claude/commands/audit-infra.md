@@ -52,6 +52,7 @@ References: [Ghost Security skills](../skills/ext/ghostsecurity/plugins/ghost/sk
 - Exfiltration: model output used to build URLs, paths or shell commands, passed to `eval`/`exec`/`Function()`, or rendered as markdown images/links.
 - Trust boundaries: what reaches the model (PII, keys, balances); LLM keys server-side only; rate limits on LLM endpoints.
 - Skills in `.claude/skills/` (including `ext/`) and `~/.claude/skills/`: `allowed-tools` granting unconstrained Bash (Write plus Bash means modify-and-execute); `curl ... | bash`, outbound POSTs or telemetry preambles; injection text ("ignore previous instructions", "you are now"); unpinned submodules or unexplained changes (`git log -- .claude/skills/ext/`); binaries, encoded blobs or odd URLs in `references/`.
+- With the kit's safe-ai-skill plugin enabled, `safe-ai-skill status` lists skill and submodule pins, the quarantine and recent gate decisions, and `safe-ai-skill verify check <dir>` scans one skill without moving it. Report quarantined items; restoring them is the user's call.
 
 ## Phase 6: OWASP Top 10, Solana notes
 

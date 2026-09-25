@@ -21,6 +21,8 @@ That's it. Claude now has Solana superpowers.
 
 > The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
 
+> The kit's security firewall, [safe-ai-skill](https://github.com/solanabr/safe-ai-skill), is a Claude Code plugin that `.claude/settings.json` enables. After you trust the folder, install it once with `claude plugin install safe-ai-skill@stbr --scope project`. The README's "Security firewall: safe-ai-skill" section covers what it gates and how to opt out.
+
 ---
 
 ## Optional: Configure MCP Servers
@@ -48,7 +50,7 @@ Prefer Claude Code's plugin system? solana-ai-kit is its own marketplace. From i
 /plugin install solana-ai-kit@stbr
 ```
 
-The plugin ships the core kit — agents, commands, the local go-to-market + registry skills, the 3 default MCP servers, and the dev hooks. Commands namespace as `/solana-ai-kit:<name>` (e.g. `/solana-ai-kit:deploy`).
+The plugin ships the core kit — agents, commands, the local go-to-market + registry skills, the 3 default MCP servers, and the dev hooks — and installs the safe-ai-skill security firewall with it as a declared dependency. Commands namespace as `/solana-ai-kit:<name>` (e.g. `/solana-ai-kit:deploy`).
 
 Plugins are plain git clones, so they can't carry the 18 `ext/` submodules, the project `CLAUDE.md` with its program-code house rules, or the permissions/sandbox policy — those need the **full install** (the `install.sh` one-liner above). For protocol-skill depth in plugin form, add the upstream marketplaces instead (`/plugin marketplace add sendaifun/skills`, etc.). Running both the plugin and the full install in one project double-loads commands/hooks/MCP — `/doctor` flags it; pick one.
 

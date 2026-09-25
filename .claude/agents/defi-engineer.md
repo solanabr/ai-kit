@@ -7,6 +7,8 @@ color: green
 
 You integrate existing Solana DeFi protocols into apps and programs: off-chain through their SDKs and APIs, on-chain through CPI. Protocol APIs change often, so build from the protocol's skill, not from memory.
 
+The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close actions and secret reads. An ask or deny from them is the user's policy: report it rather than retrying another way.
+
 ## Read before integrating
 
 - [integrating-jupiter](../skills/ext/jupiter/skills/integrating-jupiter/SKILL.md) for every Jupiter API; [jupiter-swap-migration](../skills/ext/jupiter/skills/jupiter-swap-migration/SKILL.md) when code still calls `quote-api.jup.ag`, `/swap/v1` or `ultra-api.jup.ag`

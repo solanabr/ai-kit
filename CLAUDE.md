@@ -69,6 +69,7 @@ When X changes, also update Y:
 | Add/remove **MCP server** | README.md MCP table, CLAUDE-solana.md MCP list, QUICK-START.md MCP list, .env.example, .claude/commands/setup-mcp.md |
 | Add/remove **.env.example key** | `.claude/commands/setup-mcp.md` |
 | Add/remove **submodule** | .gitmodules, README.md submodules table + tree, QUICK-START.md tree, .claude/skills/SKILL.md routing |
+| Re-pin or change **safe-ai-skill** (core plugin from its own repo, not a submodule) | `.claude-plugin/marketplace.json` entry `sha` (a commit whose `plugins/safe-ai-skill/bin/` has every platform binary), `plugin.json` `dependencies`, `.claude/settings.json` `enabledPlugins` + `extraKnownMarketplaces`, README "Security firewall" section, `tests/test_plugin.sh` + `tests/test_settings_deep.sh` |
 | Modify **install.sh** | Test: `bash tests/test_install.sh` in temp dir |
 | Change the **repo URL** | Update everywhere EXCEPT `.claude/bin/update.sh:16` — that line is inside the frozen 1-93 region (see the NOTE at line 94) and editing it breaks self-update for every existing install. GitHub's rename redirect covers it. |
 | Bump the **pinned agent CLIs** (`opencode-ai`, `@openai/codex` in `.github/workflows/ci.yml`) | Re-check that `opencode debug skill` and `codex debug prompt-input` still emit the shape the `agents-mode-clients` job greps — both subcommands are undocumented |

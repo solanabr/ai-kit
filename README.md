@@ -26,6 +26,7 @@ A complete `.claude/` configuration that turns Claude into a Solana development 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research)
 - **30 workflow commands** for building, testing, deploying, profiling, migrating, and committing
 - **3 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev) and library docs (Context7), plus opt-in browser automation (Playwright), local-validator / mainnet-fork control (Surfpool) and context optimization (context-mode)
+- **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
 - **A small always-on CLAUDE.md** carrying only the program-code house rules and workflow; everything else is on demand
@@ -84,6 +85,16 @@ To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.js
 
 Want the config tracked in git (team setup, reproducible config)? Run `/commit-claude-config` — it un-ignores those files and commits them (or edit `.gitignore` by hand). If your project already commits `.claude/` or its own `.gitmodules`, the new ignore lines are a no-op — git keeps tracking files it already tracks.
 
+### Security firewall: safe-ai-skill
+
+[safe-ai-skill](https://github.com/solanabr/safe-ai-skill) is a core part of the kit. It is a Claude Code plugin whose hooks gate mainnet, value-moving and authority actions, block reads of keypairs and `.env`, and pin installed skills and MCPs at session start. The kit's `stbr` marketplace lists it next to the kit plugin, pinned to a specific commit.
+
+- **Plugin install:** `solana-ai-kit@stbr` depends on `safe-ai-skill@stbr`, so installing the kit installs it.
+- **Full install:** `.claude/settings.json` registers the `stbr` marketplace and enables `safe-ai-skill@stbr`. After you trust the folder, Claude Code reports the plugin as enabled but not installed until you run `claude plugin install safe-ai-skill@stbr --scope project` once.
+- **`--agents` install (Codex, opencode):** the hooks are Claude Code only. Vet add-ons with the CLI instead: `npx @stbr/safe-ai-skill add skill|mcp <source>`.
+
+Its engine ships prebuilt for macOS and Linux (x64, arm64) and fails closed elsewhere, such as native Windows. To turn it off for yourself in a full install, set `"safe-ai-skill@stbr": false` under `enabledPlugins` in `.claude/settings.local.json`.
+
 ### MCP Setup (Optional)
 
 After installation, configure MCP servers for enhanced capabilities:
@@ -97,14 +108,14 @@ This guides you through the Helius API key and offers the [optional MCP servers]
 
 ## Install as a Claude Code plugin
 
-solana-ai-kit is also its own Claude Code marketplace serving one **core plugin**. From inside Claude Code:
+solana-ai-kit is also its own Claude Code marketplace, serving the **core plugin** and its security dependency, [safe-ai-skill](#security-firewall-safe-ai-skill). From inside Claude Code:
 
 ```text
 /plugin marketplace add https://github.com/solanabr/ai-kit.git
 /plugin install solana-ai-kit@stbr
 ```
 
-The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 

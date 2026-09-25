@@ -13,9 +13,23 @@
     {
       "name": "solana-ai-kit",
       "source": "./plugin",
-      "description": "Core Solana dev kit: 15 agents, 30 commands, idea→pitch→hackathon→registry skills, 3 MCP servers, and dev hooks. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and 18 ext/ submodules.)",
+      "description": "Core Solana dev kit: 15 agents, 30 commands, idea→pitch→hackathon→registry skills, 3 MCP servers, and dev hooks. Installs the safe-ai-skill security firewall as a dependency. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and 18 ext/ submodules.)",
       "category": "Development",
       "strict": true
+    },
+    {
+      "name": "safe-ai-skill",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/solanabr/safe-ai-skill.git",
+        "path": "plugins/safe-ai-skill",
+        "ref": "main",
+        "sha": "2997280e2deaf074e9bf34a79797a0b71123b18a"
+      },
+      "description": "Security firewall and supply-chain verifier (hooks): gates mainnet, value-moving and authority actions and secret reads, and pins installed skills and MCPs at session start. Core part of the kit: solana-ai-kit depends on it.",
+      "category": "Security",
+      "homepage": "https://github.com/solanabr/safe-ai-skill",
+      "license": "MIT"
     }
   ]
 }
