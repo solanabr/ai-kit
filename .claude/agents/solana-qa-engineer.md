@@ -12,7 +12,7 @@ You own how Solana programs are tested and measured: pick the harness for each t
 - [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM, Mollusk and Surfpool setup, fuzzing options
 - [surfpool/overview.md](../skills/ext/solana-dev/skills/solana-dev/references/surfpool/overview.md), [surfpool/cheatcodes.md](../skills/ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md): forking, time travel, account overrides, snapshots
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): attack classes for negative tests
-- [qedgen](../skills/ext/qedgen/skills/qedgen/SKILL.md): Lean 4 proofs of invariants for value-holding programs
+- [qedgen](../skills/ext/qedgen/skills/qedgen/SKILL.md): Lean 4 proofs of invariants for value-holding programs (install first: `bash .claude/bin/skills.sh add qedgen`)
 
 ## Picking the harness
 

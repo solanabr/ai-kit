@@ -15,8 +15,8 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 - [kit/programs/token-2022.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the `@solana-program/token-2022` Kit client, sizing, ATA derivation, init order
 - [confidential-transfers.md](../skills/ext/solana-dev/skills/solana-dev/references/confidential-transfers.md): keys, pending balances, supported clusters
 - [security.md, Token-2022 section](../skills/ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security): fee rounding, permanent delegate, mint close and reinit, hook attack surface
-- [metaplex](../skills/ext/metaplex/skills/metaplex/SKILL.md) (official): Core, Token Metadata, Bubblegum, Candy Machine, Genesis launches
-- Launches: [tokenomics-checklist.md](../skills/ext/solana-new/skills/build/launch-token/references/tokenomics-checklist.md), [pumpfun](../skills/ext/sendai/skills/pumpfun/SKILL.md), [meteora](../skills/ext/sendai/skills/meteora/SKILL.md) (DBC, DLMM)
+- [metaplex](../skills/ext/metaplex/skills/metaplex/SKILL.md) (official; install first: `bash .claude/bin/skills.sh add metaplex`): Core, Token Metadata, Bubblegum, Candy Machine, Genesis launches
+- Launches (install first: `bash .claude/bin/skills.sh add solana-new sendai`): [tokenomics-checklist.md](../skills/ext/solana-new/skills/build/launch-token/references/tokenomics-checklist.md), [pumpfun](../skills/ext/sendai/skills/pumpfun/SKILL.md), [meteora](../skills/ext/sendai/skills/meteora/SKILL.md) (DBC, DLMM)
 
 ## Token details that are easy to get wrong
 
@@ -35,7 +35,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 <!-- Adapted from sendaifun/solana-new (launch-token), MIT -->
 - Supply, decimals and emission documented; allocations sum to 100%, with the community as the largest share.
 - Team tokens vest on-chain (12-month cliff, 24-month linear). Compute vesting in u128; the checklist's sample overflows u64.
-- Treasury and every remaining authority (mint, freeze, fee, hook, metadata) on a [Squads](../skills/ext/sendai/skills/squads/SKILL.md) multisig of 3/5 or more, or revoked. Revoking is permanent, so confirm with the user.
+- Treasury and every remaining authority (mint, freeze, fee, hook, metadata) on a [Squads](../skills/ext/sendai/skills/squads/SKILL.md) multisig of 3/5 or more, or revoked. Revoking is permanent, so confirm with the user. The Squads skill comes with `bash .claude/bin/skills.sh add sendai`.
 - LP burned or timelocked for 6+ months, metadata URI on immutable storage, allocation wallets published.
 - Rug-check the mint before announcing; traders will within minutes.
 

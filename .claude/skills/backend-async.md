@@ -5,7 +5,7 @@ description: "Solana-specific rules for Rust backends and indexers: async RPC cl
 
 # Rust backends and indexers
 
-Only the Solana-specific parts; Axum, Tokio and SQLx are used as usual. Helius APIs (Laserstream, Sender, webhooks): [helius skill](ext/helius/helius-skills/helius/SKILL.md).
+Only the Solana-specific parts; Axum, Tokio and SQLx are used as usual. Helius APIs (Laserstream, Sender, webhooks): [helius skill](ext/helius/helius-skills/helius/SKILL.md) (install first: `bash .claude/bin/skills.sh add helius`).
 
 ## RPC client
 
@@ -25,7 +25,7 @@ Only the Solana-specific parts; Axum, Tokio and SQLx are used as usual. Helius A
 ## Streams
 
 - Subscriptions drop silently and never replay. Run a watchdog (a slot subscription as heartbeat) and resubscribe with backoff.
-- On reconnect, backfill the gap: page `getSignaturesForAddress(program, until = last_processed_signature)` backward, then process oldest first through the same idempotent path. Laserstream/Yellowstone take `from_slot = last_processed_slot` ([Laserstream](ext/helius/helius-skills/helius/references/laserstream.md) replays about 24 h).
+- On reconnect, backfill the gap: page `getSignaturesForAddress(program, until = last_processed_signature)` backward, then process oldest first through the same idempotent path. Laserstream/Yellowstone take `from_slot = last_processed_slot` ([Laserstream](ext/helius/helius-skills/helius/references/laserstream.md) replays about 24 h; install first: `bash .claude/bin/skills.sh add helius`).
 - Yellowstone gRPC: answer server pings with a ping `SubscribeRequest` or load balancers drop the stream; pin `yellowstone-grpc-proto >= 12.6.0` so v1 message config decodes.
 - Decode events from `emit_cpi!` inner-instruction data or from instructions, not logs: logs truncate, and `logsSubscribe` carries no account data.
 
@@ -42,7 +42,7 @@ Only the Solana-specific parts; Axum, Tokio and SQLx are used as usual. Helius A
 ## Sending transactions
 
 - `get_latest_blockhash_with_commitment(confirmed)` also returns `last_valid_block_height`; expiry is by block height, not time.
-- Simulate once to size the compute limit (consumed plus 10-20%); the v0 fee is limit x price, so overshooting wastes lamports. Price from `getRecentPrioritizationFees` over the writable accounts you lock (capped percentile) or [a provider estimate](ext/helius/helius-skills/helius/references/priority-fees.md). In v1 transactions the priority fee is a lamport total, and unset compute and data limits are zero, not defaults.
+- Simulate once to size the compute limit (consumed plus 10-20%); the v0 fee is limit x price, so overshooting wastes lamports. Price from `getRecentPrioritizationFees` over the writable accounts you lock (capped percentile) or [a provider estimate](ext/helius/helius-skills/helius/references/priority-fees.md) (install first: `bash .claude/bin/skills.sh add helius`). In v1 transactions the priority fee is a lamport total, and unset compute and data limits are zero, not defaults.
 - Send with `skip_preflight: true` (already simulated) and `max_retries: Some(0)`; rebroadcast the same signed bytes every ~2 s while polling `get_signature_statuses`, until confirmed or the block height passes `last_valid_block_height`.
 - Re-sign with a fresh blockhash only after the old one expired, or both can land. Durable nonces for slow or multi-party signing.
-- Landing services (Helius Sender, Jito) add tip and preflight rules: [sender.md](ext/helius/helius-skills/helius/references/sender.md).
+- Landing services (Helius Sender, Jito) add tip and preflight rules: [sender.md](ext/helius/helius-skills/helius/references/sender.md) (install first: `bash .claude/bin/skills.sh add helius`).

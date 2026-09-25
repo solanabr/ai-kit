@@ -34,7 +34,7 @@ for f in "$CMDS_DIR"/*.md; do
 done
 
 echo ""
-assert_eq "30" "$COUNT" "Total command count is 30"
+assert_eq "31" "$COUNT" "Total command count is 31"
 
 echo ""
 echo "[test_commands] Checking setup-mcp.md covers every .env.example key..."

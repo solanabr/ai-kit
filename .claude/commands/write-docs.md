@@ -10,7 +10,7 @@ Document the code in `$ARGUMENTS`. Take facts from the source and the IDL (`targ
 |------|---------|
 | Program | Program IDs per cluster. Per instruction: accounts (signer, writable, PDA seeds), arguments with valid ranges, errors with codes, who may call it, CU estimate. Per account: fields with sizes, total size including the discriminator, rent, and which instructions create, mutate and close it |
 | SDK/API | Functions with parameters, return values, thrown errors, and a working example |
-| Unity/C# component | Serialized fields, events, usage; patterns in [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md) |
+| Unity/C# component | Serialized fields, events, usage; patterns in [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md) (install first: `bash .claude/bin/skills.sh add solana-game`) |
 | README | What it is, program IDs, install, quick start, instruction summary, test and deploy commands, audit status |
 
 ## Rules

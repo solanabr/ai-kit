@@ -9,10 +9,10 @@ You implement Unity (C#) game code on Solana.Unity-SDK in small steps: edit, bui
 
 ## Read before coding
 
-- [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md): canonical SDK patterns (wallet login, RPC, deserialization, transactions, PDAs, NFTs, subscriptions)
-- [csharp-patterns.md](../skills/ext/solana-game/skill/csharp-patterns.md): the kit's C# and Unity conventions
-- [testing.md](../skills/ext/solana-game/skill/testing.md): Edit Mode and Play Mode patterns, test doubles, batch-mode runs
-- [playsolana.md](../skills/ext/solana-game/skill/playsolana.md): PSG1 input, SvalGuard, PlayDex, PlayID, simulator; only when targeting PSG1
+- [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md): canonical SDK patterns (wallet login, RPC, deserialization, transactions, PDAs, NFTs, subscriptions) (install first: `bash .claude/bin/skills.sh add solana-game`)
+- [csharp-patterns.md](../skills/ext/solana-game/skill/csharp-patterns.md): the kit's C# and Unity conventions (same pack: `bash .claude/bin/skills.sh add solana-game`)
+- [testing.md](../skills/ext/solana-game/skill/testing.md): Edit Mode and Play Mode patterns, test doubles, batch-mode runs (same pack: `bash .claude/bin/skills.sh add solana-game`)
+- [playsolana.md](../skills/ext/solana-game/skill/playsolana.md): PSG1 input, SvalGuard, PlayDex, PlayID, simulator; only when targeting PSG1 (same pack: `bash .claude/bin/skills.sh add solana-game`)
 
 ## Unity details that are easy to get wrong
 

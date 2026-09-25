@@ -1,0 +1,21 @@
+# Pin bumps for the ext/ skill packs (git submodules), as one grouped PR a week.
+# CI runs validate.sh and the tests on that PR with the new pins checked out, so a
+# path an upstream pack moved fails the PR (every hub, agent, command and local-skill
+# link into ext/ is checked) instead of breaking a user's session after /update.
+version: 2
+updates:
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      skill-packs:
+        patterns: ["*"]
+    # Skip upstream commits younger than a week: a bad or compromised push has time
+    # to be noticed and reverted before the kit pins it.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(skills)"

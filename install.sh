@@ -7,6 +7,7 @@ set -euo pipefail
 #   (fallback if DNS not yet live: curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash)
 #   bash install.sh /path/to/project
 #   bash install.sh --agents /path/to/project   # installs into .agents/ instead of .claude/
+#   bash install.sh --with sendai,jupiter /path/to/project   # core skill packs plus these extensions (--with all: every one)
 
 REPO_URL="https://github.com/solanabr/ai-kit.git"
 SCRIPT_VERSION="dev"
@@ -14,9 +15,14 @@ SCRIPT_VERSION="dev"
 # Parse flags
 AGENTS_ONLY=false
 TARGET_ARG=""
+WITH_SKILLS=""
+WITH_NEXT=false
 for arg in "$@"; do
+  if [ "$WITH_NEXT" = true ]; then WITH_SKILLS="$WITH_SKILLS,$arg"; WITH_NEXT=false; continue; fi
   case "$arg" in
     --agents) AGENTS_ONLY=true ;;
+    --with) WITH_NEXT=true ;;
+    --with=*) WITH_SKILLS="$WITH_SKILLS,${arg#--with=}" ;;
     *) TARGET_ARG="$arg" ;;
   esac
 done
@@ -169,6 +175,12 @@ mkdir -p "$TARGET_DIR/$CONFIG_DIR"
 
 if [ -d "$TARGET_DIR/$CONFIG_DIR/agents" ]; then
   warn "Warning: $CONFIG_DIR/ already exists, merging..."
+fi
+
+# Skill packs: keep the core ext/ packs, plus extensions named with --with or already
+# installed here (skills/skill-registry.json tiers). Releases without skills.sh vendor every pack.
+if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+  bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
 fi
 
 # Directories: always overwrite with upstream (same as update.sh)

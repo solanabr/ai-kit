@@ -17,7 +17,7 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 - [idea-sprint/SKILL.md](idea-sprint/SKILL.md): what to build; blunt interview, crypto-necessity gate, 3 scored candidates, go/no-go
 - [pitch-deck/SKILL.md](pitch-deck/SKILL.md): audience-aware decks (hackathon, VC, grant, accelerator) with speaking notes and objection prep
 - [hackathon/SKILL.md](hackathon/SKILL.md): scannable submissions, demo scripts under 3 minutes, track choice, Superteam Earn grants
-- [skill-registry.json](skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`.
+- [skill-registry.json](skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Entries with a `tier` are the full install's pinned skill packs; their `source` is the upstream repo.
 
 These three skills are adapted from sendaifun/solana-new (MIT, telemetry removed).
 
@@ -27,7 +27,7 @@ This plugin depends on [safe-ai-skill](https://github.com/solanabr/safe-ai-skill
 
 ## Getting more depth
 
-Plugins cannot carry git submodules, so the 18 external skill packs (the `ext` submodules) are not bundled here. Two ways to get them:
+Plugins cannot carry git submodules, so the kit's external skill packs (the `ext` submodules) are not bundled here. Two ways to get them:
 
 ### Option A: add the upstream marketplaces
 
@@ -38,11 +38,11 @@ Plugins cannot carry git submodules, so the 18 external skill packs (the `ext` s
 | Security auditing, vulnerability scanning | `/plugin marketplace add trailofbits/skills` | the audit plugins you need |
 | Infrastructure (Workers, Agents SDK, MCP servers) | `/plugin marketplace add cloudflare/skills` | `cloudflare` |
 
-For Jupiter, Metaplex and Helius the official skill repos are the primary sources; `skill-registry.json` lists their current upstream locations and `/plugin marketplace add` targets. Route to a marketplace and install the plugin rather than pointing at an upstream repo's `SKILL.md`.
+For Jupiter, Metaplex, Helius, MagicBlock and Alchemy the official skill repos are the primary sources; `skill-registry.json` lists their current upstream locations. Route to a marketplace and install the plugin rather than pointing at an upstream repo's `SKILL.md`.
 
 ### Option B: full install (recommended for project teams)
 
-Run the installer in your project to get what the plugin can't carry: the 18 external skill submodules, the project CLAUDE.md, and the curated permissions and sandbox policy.
+Run the installer in your project to get what the plugin can't carry: the core external skill packs (extensions install on demand with `/add-skill`), the project CLAUDE.md, and the curated permissions and sandbox policy.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash

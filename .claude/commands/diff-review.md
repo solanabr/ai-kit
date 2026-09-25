@@ -2,7 +2,7 @@
 description: "Review the branch diff for Solana security issues, CU waste and AI slop"
 ---
 
-Review this branch's changes against the base branch ($ARGUMENTS, default `main`, else `master`) and report findings by severity, each with `file:line` and a concrete fix. Vulnerability classes: [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md); scanning workflow: [solana-vulnerability-scanner](../skills/ext/trailofbits/plugins/building-secure-contracts/skills/solana-vulnerability-scanner/).
+Review this branch's changes against the base branch ($ARGUMENTS, default `main`, else `master`) and report findings by severity, each with `file:line` and a concrete fix. Vulnerability classes: [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md); scanning workflow: [solana-vulnerability-scanner](../skills/ext/trailofbits/plugins/building-secure-contracts/skills/solana-vulnerability-scanner/) (install first: `bash .claude/bin/skills.sh add trailofbits`).
 
 ## Steps
 

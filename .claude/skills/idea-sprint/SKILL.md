@@ -25,11 +25,11 @@ No flattery. Short, pointed questions, one at a time, until three things are exp
 - **Constraint** — time, money, team, chain commitments
 - **Wedge** — the niche entry point, not the end-state vision
 
-Push back on vague answers. "DeFi for everyone" is not a wedge. Full question bank: [interview-framework.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/interview-framework.md).
+Push back on vague answers. "DeFi for everyone" is not a wedge. Full question bank: [interview-framework.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/interview-framework.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 2. Crypto-necessity gate
 
-Kill question: **"What gets worse if I remove the blockchain?"** If the answer is vague, aesthetic, or marketing-driven — redirect the idea before scoring it. Pass criteria and redirect patterns: [crypto-necessity-test.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/crypto-necessity-test.md).
+Kill question: **"What gets worse if I remove the blockchain?"** If the answer is vague, aesthetic, or marketing-driven — redirect the idea before scoring it. Pass criteria and redirect patterns: [crypto-necessity-test.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/crypto-necessity-test.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 3. Exactly 3 candidates
 
@@ -43,7 +43,7 @@ Seed from datasets + live landscape (below), then combine with fresh research. D
 
 ### 4. Score /15
 
-Each candidate, 0–3 per dimension (full anchors: [scoring-rubric.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/scoring-rubric.md)):
+Each candidate, 0–3 per dimension (full anchors: [scoring-rubric.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/scoring-rubric.md); install first: `bash .claude/bin/skills.sh add solana-new`):
 
 | Dimension | 3 means |
 |-----------|---------|
@@ -55,11 +55,11 @@ Each candidate, 0–3 per dimension (full anchors: [scoring-rubric.md](../ext/so
 
 ### 5. Validate + go/no-go
 
-Check demand signals against [customer-signal-rubric.md](../ext/solana-new/skills/idea/validate-idea/references/customer-signal-rubric.md) — manual workarounds, active forks, bounties, on-chain activity = real; likes and "cool idea" replies = noise. Sprint structure: [validation-framework.md](../ext/solana-new/skills/idea/validate-idea/references/validation-framework.md).
+Check demand signals against [customer-signal-rubric.md](../ext/solana-new/skills/idea/validate-idea/references/customer-signal-rubric.md) — manual workarounds, active forks, bounties, on-chain activity = real; likes and "cool idea" replies = noise. Sprint structure: [validation-framework.md](../ext/solana-new/skills/idea/validate-idea/references/validation-framework.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 - **≥ 8/15** → go. Write `idea.md`, suggest `/scaffold` next.
 - **6–7** → conditional: name the one dimension to de-risk first.
-- **< 6** → strong no-go. **Every no-go gets a pivot suggestion** — use [pivot-or-persist.md](../ext/solana-new/skills/idea/validate-idea/references/pivot-or-persist.md).
+- **< 6** → strong no-go. **Every no-go gets a pivot suggestion** — use [pivot-or-persist.md](../ext/solana-new/skills/idea/validate-idea/references/pivot-or-persist.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 6. Write `.claude/context/idea.md`
 
@@ -67,20 +67,20 @@ Chosen idea, wedge, scores table, demand evidence, bear case, next step.
 
 ## Idea datasets (inert JSON, ~515 entries)
 
-In [../ext/solana-new/skills/data/ideas/](../ext/solana-new/skills/data/ideas/):
+In [../ext/solana-new/skills/data/ideas/](../ext/solana-new/skills/data/ideas/) (install first: `bash .claude/bin/skills.sh add solana-new`):
 
-- [web3-ideas-combined.json](../ext/solana-new/skills/data/ideas/web3-ideas-combined.json) — master list ([summary](../ext/solana-new/skills/data/ideas/web3-ideas-summary.json))
-- [a16z-big-ideas-2025.json](../ext/solana-new/skills/data/ideas/a16z-big-ideas-2025.json), [a16z-state-of-crypto-2025.json](../ext/solana-new/skills/data/ideas/a16z-state-of-crypto-2025.json)
-- [yc-requests-for-startups.json](../ext/solana-new/skills/data/ideas/yc-requests-for-startups.json), [yc-crypto-companies.json](../ext/solana-new/skills/data/ideas/yc-crypto-companies.json)
-- [alliance-ideas.json](../ext/solana-new/skills/data/ideas/alliance-ideas.json), [superteam-ideas.json](../ext/solana-new/skills/data/ideas/superteam-ideas.json)
-- [rwa-defi-2026-ideas.json](../ext/solana-new/skills/data/ideas/rwa-defi-2026-ideas.json), [yash-defi-2024-ideas.json](../ext/solana-new/skills/data/ideas/yash-defi-2024-ideas.json)
+- [web3-ideas-combined.json](../ext/solana-new/skills/data/ideas/web3-ideas-combined.json) — master list ([summary](../ext/solana-new/skills/data/ideas/web3-ideas-summary.json)) (`bash .claude/bin/skills.sh add solana-new`)
+- [a16z-big-ideas-2025.json](../ext/solana-new/skills/data/ideas/a16z-big-ideas-2025.json), [a16z-state-of-crypto-2025.json](../ext/solana-new/skills/data/ideas/a16z-state-of-crypto-2025.json) (`bash .claude/bin/skills.sh add solana-new`)
+- [yc-requests-for-startups.json](../ext/solana-new/skills/data/ideas/yc-requests-for-startups.json), [yc-crypto-companies.json](../ext/solana-new/skills/data/ideas/yc-crypto-companies.json) (`bash .claude/bin/skills.sh add solana-new`)
+- [alliance-ideas.json](../ext/solana-new/skills/data/ideas/alliance-ideas.json), [superteam-ideas.json](../ext/solana-new/skills/data/ideas/superteam-ideas.json) (`bash .claude/bin/skills.sh add solana-new`)
+- [rwa-defi-2026-ideas.json](../ext/solana-new/skills/data/ideas/rwa-defi-2026-ideas.json), [yash-defi-2024-ideas.json](../ext/solana-new/skills/data/ideas/yash-defi-2024-ideas.json) (`bash .claude/bin/skills.sh add solana-new`)
 
-Idea-source guides (markdown commentary on the same sources): [../ext/solana-new/skills/data/guides/](../ext/solana-new/skills/data/guides/) — plus [source-map.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/source-map.md) and [research-playbook.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/research-playbook.md) for where/how to research live.
+Idea-source guides (markdown commentary on the same sources): [../ext/solana-new/skills/data/guides/](../ext/solana-new/skills/data/guides/) — plus [source-map.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/source-map.md) and [research-playbook.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/research-playbook.md) for where/how to research live (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ## Live hackathon landscape
 
-[ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — 5,400+ Colosseum submissions for crowdedness checks, winner patterns, and gap analysis (requires `COLOSSEUM_COPILOT_PAT`).
+[ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — 5,400+ Colosseum submissions for crowdedness checks, winner patterns, and gap analysis (requires `COLOSSEUM_COPILOT_PAT`; install first: `bash .claude/bin/skills.sh add colosseum`).
 
 ## Output format
 
-Report spec (3 ranked candidates, scores, decision): [output-spec.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/output-spec.md).
+Report spec (3 ranked candidates, scores, decision): [output-spec.md](../ext/solana-new/skills/idea/find-next-crypto-idea/references/output-spec.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
