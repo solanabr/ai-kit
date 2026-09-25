@@ -33,7 +33,7 @@ assert_dir_not_exists "$TEMP_DIR/.claude/.claude" "No .claude/.claude nesting"
 assert_dir_exists "$TEMP_DIR/.claude/agents" "agents/ installed"
 assert_count "$TEMP_DIR/.claude/agents" "*.md" "15" "Agent count correct"
 assert_dir_exists "$TEMP_DIR/.claude/commands" "commands/ installed"
-assert_count "$TEMP_DIR/.claude/commands" "*.md" "30" "Command count correct"
+assert_count "$TEMP_DIR/.claude/commands" "*.md" "31" "Command count correct"
 assert_dir_not_exists "$TEMP_DIR/.claude/rules" "no rules/ installed (kit ships none)"
 assert_dir_exists "$TEMP_DIR/.claude/skills" "skills/ installed"
 

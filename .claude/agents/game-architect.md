@@ -8,10 +8,10 @@ You design Solana games (on-chain state, Unity structure, economy, platform) and
 
 ## Read before designing
 
-- [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md): default stack and routing
-- [game-architecture.md](../skills/ext/solana-game/skill/game-architecture.md): state framework, Unity layout, progression and economy patterns
-- [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md): what Solana.Unity-SDK offers per platform
-- [playsolana.md](../skills/ext/solana-game/skill/playsolana.md): PSG1, SvalGuard, PlayDex, PlayID, PlayGate; only when targeting PSG1
+- [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md): default stack and routing (install first: `bash .claude/bin/skills.sh add solana-game`)
+- [game-architecture.md](../skills/ext/solana-game/skill/game-architecture.md): state framework, Unity layout, progression and economy patterns (same pack: `bash .claude/bin/skills.sh add solana-game`)
+- [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md): what Solana.Unity-SDK offers per platform (same pack: `bash .claude/bin/skills.sh add solana-game`)
+- [playsolana.md](../skills/ext/solana-game/skill/playsolana.md): PSG1, SvalGuard, PlayDex, PlayID, PlayGate; only when targeting PSG1 (same pack: `bash .claude/bin/skills.sh add solana-game`)
 
 ## Platform targeting
 

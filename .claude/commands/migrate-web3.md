@@ -4,7 +4,7 @@ description: "Migrate TypeScript from @solana/web3.js 1.x to @solana/kit"
 
 Migrate `@solana/web3.js` 1.x code to `@solana/kit`. `$ARGUMENTS` can limit the scope to paths or packages; empty means the whole repo.
 
-Read first: [kit-web3-interop.md](../skills/ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md) (choosing the target, dependency boundaries) and [kit/overview.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/overview.md) (the current plugin-client API). Detailed mappings and edge cases: [solana-kit-migration](../skills/ext/sendai/skills/solana-kit-migration/SKILL.md), with its `resources/api-mappings.md` and `docs/edge-cases.md`. Where it disagrees with kit/overview.md (older type names, no plugin client), follow kit/overview.md.
+Read first: [kit-web3-interop.md](../skills/ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md) (choosing the target, dependency boundaries) and [kit/overview.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/overview.md) (the current plugin-client API). Detailed mappings and edge cases: [solana-kit-migration](../skills/ext/sendai/skills/solana-kit-migration/SKILL.md), with its `resources/api-mappings.md` and `docs/edge-cases.md` (install first: `bash .claude/bin/skills.sh add sendai`). Where it disagrees with kit/overview.md (older type names, no plugin client), follow kit/overview.md.
 
 ## Steps
 

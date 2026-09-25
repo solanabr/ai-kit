@@ -14,7 +14,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 - [deployment.md](../skills/deployment.md): devnet and mainnet flows, verifiable builds, Squads multisig upgrades, upgrade-authority staging, rollback
 - [/setup-ci-cd](../commands/setup-ci-cd.md) generates the kit's pipeline; [/deploy](../commands/deploy.md) runs program deploys
 - [compatibility-matrix.md](../skills/ext/solana-dev/skills/solana-dev/references/compatibility-matrix.md) for Anchor, Solana CLI, Rust and GLIBC pairings; [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md) for Surfpool in CI
-- [workers-best-practices](../skills/ext/cloudflare/skills/workers-best-practices/SKILL.md) and [wrangler](../skills/ext/cloudflare/skills/wrangler/SKILL.md): Workers APIs move quickly, so read these before writing Worker code
+- [workers-best-practices](../skills/ext/cloudflare/skills/workers-best-practices/SKILL.md) and [wrangler](../skills/ext/cloudflare/skills/wrangler/SKILL.md): Workers APIs move quickly, so read these before writing Worker code (install first: `bash .claude/bin/skills.sh add cloudflare`)
 
 ## Solana CI facts
 

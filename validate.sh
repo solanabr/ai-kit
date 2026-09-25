@@ -114,6 +114,27 @@ else
 fi
 echo ""
 
+# --- ext/ links in agents, commands and local skills ---
+# Dependabot bumps the ext/ pins; a path an upstream pack moved must fail here, in CI,
+# not in a user's session. Anchors (#...) are stripped; the hub is checked above.
+echo "[ext/ links]"
+broken=0
+while IFS= read -r f; do
+  while IFS= read -r link; do
+    link="${link%%#*}"
+    [ -z "$link" ] && continue
+    if [ ! -e "$(dirname "$f")/$link" ]; then
+      echo "  FAIL: $f -> $link"
+      FAIL=$((FAIL + 1))
+      broken=$((broken + 1))
+    fi
+  done < <(grep -oE '\]\([^)[:space:]]*ext/[^)[:space:]]*\)' "$f" | sed 's/^](//; s/)$//' | grep -v '^http' || true)
+done < <(find .claude/agents .claude/commands -name '*.md'; find .claude/skills -path .claude/skills/ext -prune -o -name '*.md' ! -path .claude/skills/SKILL.md -print)
+if [ "$broken" -eq 0 ]; then
+  check "Every ext/ link in agents, commands and local skills resolves" 0
+fi
+echo ""
+
 # --- Submodules ---
 echo "[Submodules]"
 for dir in .claude/skills/ext/*/; do

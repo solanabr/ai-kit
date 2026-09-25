@@ -35,7 +35,7 @@ Blunt, one at a time, skipping anything already answered by context files:
 
 ### 2. Audience detection → slide set
 
-Q10 decides the slide set — full breakdown in [investor-audience-guide.md](../ext/solana-new/skills/launch/create-pitch-deck/references/investor-audience-guide.md):
+Q10 decides the slide set — full breakdown in [investor-audience-guide.md](../ext/solana-new/skills/launch/create-pitch-deck/references/investor-audience-guide.md) (install first: `bash .claude/bin/skills.sh add solana-new`):
 
 | Audience | Emphasis | Length |
 |----------|----------|--------|
@@ -44,24 +44,24 @@ Q10 decides the slide set — full breakdown in [investor-audience-guide.md](../
 | Grant committee | ecosystem benefit, public-good angle, milestones, budget | 8–10 |
 | Accelerator | team velocity, learning rate, wedge → expansion path | 8–10 |
 
-Slide-by-slide order per audience: [pitch-structure.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-structure.md).
+Slide-by-slide order per audience: [pitch-structure.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-structure.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 3. Narrative framework
 
-Pick one backbone and state why — PAS (obvious pain, hackathons), 6-Part Investor Arc (VC), BAB (before/after/bridge), Hero's Journey (founder-story-driven), Pixar (narrative momentum). Definitions, slide mappings, and crypto examples: [storytelling-frameworks.md](../ext/solana-new/skills/launch/create-pitch-deck/references/storytelling-frameworks.md).
+Pick one backbone and state why — PAS (obvious pain, hackathons), 6-Part Investor Arc (VC), BAB (before/after/bridge), Hero's Journey (founder-story-driven), Pixar (narrative momentum). Definitions, slide mappings, and crypto examples: [storytelling-frameworks.md](../ext/solana-new/skills/launch/create-pitch-deck/references/storytelling-frameworks.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 4. Build slides + speaking notes
 
 For each slide: headline (a claim, not a label), 3–5 supporting points, visual suggestion, and 30–60s speaking notes. Use:
 
-- [slide-templates.md](../ext/solana-new/skills/launch/create-pitch-deck/references/slide-templates.md) — per-slide-type templates
-- [deck-design-system.md](../ext/solana-new/skills/launch/create-pitch-deck/references/deck-design-system.md) — typography, layout, color rules
-- [crypto-pitch-examples.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-examples.md) — real decks that worked
-- [pitch-reference-sources.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-reference-sources.md) — primary sources
+- [slide-templates.md](../ext/solana-new/skills/launch/create-pitch-deck/references/slide-templates.md) — per-slide-type templates (install first: `bash .claude/bin/skills.sh add solana-new`)
+- [deck-design-system.md](../ext/solana-new/skills/launch/create-pitch-deck/references/deck-design-system.md) — typography, layout, color rules (`bash .claude/bin/skills.sh add solana-new`)
+- [crypto-pitch-examples.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-examples.md) — real decks that worked (`bash .claude/bin/skills.sh add solana-new`)
+- [pitch-reference-sources.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-reference-sources.md) — primary sources (`bash .claude/bin/skills.sh add solana-new`)
 
 ### 5. Self-score vs audience rubric
 
-Score the draft against the audience's actual criteria (clarity, credibility, demo strength, ask specificity) and against [crypto-pitch-mistakes.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-mistakes.md) — flag every mistake the deck still commits, fix, re-score. Don't present a deck you'd score below 8/10.
+Score the draft against the audience's actual criteria (clarity, credibility, demo strength, ask specificity) and against [crypto-pitch-mistakes.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-mistakes.md) (install first: `bash .claude/bin/skills.sh add solana-new`) — flag every mistake the deck still commits, fix, re-score. Don't present a deck you'd score below 8/10.
 
 ### 6. Objection-prep Q&A
 

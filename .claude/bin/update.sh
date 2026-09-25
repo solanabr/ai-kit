@@ -231,6 +231,12 @@ if [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
   fi
 fi
 
+# Skill packs: the copy loop brought every ext/ pack. Keep the core packs and the
+# extensions this project installed (skills/extensions.txt); drop the rest.
+if [ "$DRY_RUN" = false ] && [ -f "$SCRIPT_DIR/skills.sh" ]; then
+  bash "$SCRIPT_DIR/skills.sh" prune
+fi
+
 # Update VERSION
 if [ -f "$TEMP_DIR/repo/.claude/VERSION" ]; then
   if [ "$DRY_RUN" = false ]; then
