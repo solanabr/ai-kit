@@ -38,6 +38,6 @@ Sources: `orca-so/whirlpools` `programs/whirlpool/src/util/v2/token.rs`; `raydiu
 
 ## Risk signals and real incidents
 
-- RugCheck scores freeze and mint authority and flags transfer-hook mints as dangerous; Phantom warns on permanent delegate. Expect traders to see these within minutes of launch.
+- Risk scanners reportedly score freeze and mint authority and flag transfer-hook mints (RugCheck), and Phantom reportedly warns on permanent delegate (from public summaries, not checked against their code). Expect traders to see these within minutes of launch.
 - Documented incidents: the 2025 ZK ElGamal proof bugs (no loss, confidential transfers off for about a year); permanent delegate used to burn buyers' tokens seconds after purchase (2024); the BONKKILLER freeze-authority honeypot (April 2024, about $1.62M pulled). Hook sell-blockers, mint close-and-reinit and pause abuse are real risks but have no public, dated incident yet; describe them as risks, not history.
 - Before trusting a hooked mint, check the hook program's upgrade authority (`solana program show <hook>`) and who can update its ExtraAccountMetaList.

@@ -13,7 +13,12 @@ Writing a hook program and moving hooked mints from clients and programs. Offici
 ## Anchor 1.2 hook
 
 ```rust
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::{transfer_hook::{TransferHook, TransferHookAccount}, BaseStateWithExtensions, StateWithExtensions},
+    state::{Account as T22Account, Mint as T22Mint},
+};
 use spl_discriminator::SplDiscriminate;
+use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 use spl_transfer_hook_interface::instruction::{ExecuteInstruction, InitializeExtraAccountMetaListInstruction};
 
 // Anchor 1.0 removed #[interface]; match the interface discriminators directly.
@@ -106,8 +111,17 @@ spl_token_2022::onchain::invoke_transfer_checked(
 
 ## Security
 
-- Check the `transferring` flag and that the mint's TransferHook points at your program; otherwise anyone can call Execute directly. More checks: [security.md, Token-2022 section](../ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security).
-- The hook program and the meta-list update authority can change behavior after listing (sell blockers, fees). Integrators check `solana program show <hook>` for an upgrade authority; Meteora requires both revoked.
+A hook program checks, in Execute:
+1. The source account's `TransferHookAccount.transferring` flag is set; otherwise anyone can call Execute directly.
+2. The mint's TransferHook `program_id` is this program, and the mint is one you serve.
+3. Source and destination belong to that mint and are owned by Token-2022 (`token::mint`, `token::token_program`).
+4. The meta-list PDA matches its seeds, and every extra account matches what the list derives.
+5. `amount == u64::MAX` means a confidential transfer with an unknown amount.
+
+Only the mint's hook authority should initialize or update the meta list. More checks: [security.md, Token-2022 section](../ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security).
+
+For integrators:
+- The hook program and the meta-list update authority can change behavior after listing (sell blockers, fees). Check `solana program show <hook>` for an upgrade authority and who can update the list.
 - Clients that cache resolved extras break when the issuer changes the hook program or the list (`UpdateExtraAccountMetaList`); resolve per transfer.
 - Every transfer pays the hook's compute: a hooked `transfer_checked` through a small allowlist hook took about 20k CU in LiteSVM. Keep hooks small.
 - Venues differ on hooks: approving a hooked mint is not the same as forwarding its accounts ([integrating-mints.md](integrating-mints.md)).

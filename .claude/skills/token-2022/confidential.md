@@ -1,6 +1,6 @@
 # Confidential transfers (extensions 4, 5, 16, 17, 24)
 
-Current state as of 2026-09-28. Official guides: [confidential-transfer](https://solana.com/docs/tokens/extensions/confidential-transfer) and its sub-pages (create-mint, create-token-account, deposit, apply-pending-balance, transfer-tokens, withdraw, issuer-guide, integration-guide).
+Current state as of 2026-09-28. Official guides: [confidential-transfer](https://solana.com/docs/tokens/extensions/confidential-transfer) and its sub-pages (create-mint, create-token-account, deposit-tokens, apply-pending-balance, transfer-tokens, withdraw-tokens, issuer-guide, integration-guide).
 
 The Rust walkthrough in [confidential-transfers.md](../ext/solana-dev/skills/solana-dev/references/confidential-transfers.md) still shows the flow (configure, deposit, apply pending, transfer, withdraw), but these parts of it are out of date:
 
@@ -12,7 +12,7 @@ The Rust walkthrough in [confidential-transfers.md](../ext/solana-dev/skills/sol
 
 ## Status
 
-- The ZK ElGamal proof program was disabled on 2025-06-19 (epoch 805) after two proof-verification bugs (no funds lost), and re-enabled at slot 424,224,000 (epoch 982, June 2026) by feature `zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN`. Token-2022 11.0.0 restored the confidential instructions.
+- The ZK ElGamal proof program was disabled on 2025-06-19 (epoch 805) after two proof-verification bugs (no funds lost), and re-enabled at slot 424,224,000 (epoch 982, June 2026) by feature `zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN`. Token-2022 was then redeployed with the confidential instructions enabled (around 2026-06-18).
 - Many guides and community skills still call the feature disabled. Check the cluster rather than any date: `solana feature status zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN -u mainnet-beta`.
 - Wallet and venue support is thin; plan a withdraw-to-public path for users.
 

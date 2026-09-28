@@ -19,16 +19,22 @@ What goes wrong when creating or integrating Token-2022 mints, current to 2026-0
 
 Related: Kit client basics in [kit/programs/token-2022.md](ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md); security checklist in [security.md, Token-2022 section](ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security); NFTs in [metaplex](ext/metaplex/skills/metaplex/SKILL.md).
 
+Where those references are out of date (checked 2026-09-28):
+- security.md says `token_interface` handles all extensions; its `transfer_checked` drops a hook's extra accounts ([transfer-hooks.md](token-2022/transfer-hooks.md)).
+- kit/programs/token-2022.md says every extension instruction comes before mint initialization; TokenMetadata and TokenGroup/TokenGroupMember come after.
+- [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md) section 17 moves programs to `spl-token-2022-interface` 2.1. That is right for `anchor-spl` compatibility, but PermissionedBurn needs interface 3.x and `onchain::invoke_transfer_checked` lives in `spl-token-2022` 11.x; both work alongside Anchor 1.2.
+- confidential-transfers.md: see [confidential.md](token-2022/confidential.md).
+
 ## Versions (checked 2026-09-28)
 
 Training data trails these by one to three majors. Re-check with `npm view <pkg> version` or crates.io before pinning.
 
 | Package                            | Version                                            | Note                                                                                                               |
 | ---------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Token-2022 program                 | 11.0.0 on mainnet, 11.1.0 latest (devnet, testnet) | 11.0.0 added PermissionedBurn and restored confidential transfers                                                  |
+| Token-2022 program | 11.0.0 on mainnet (per release notes; confirm with `solana program show`), 11.1.0 latest on devnet and testnet | 11.0.0 added PermissionedBurn |
 | `spl-token-2022-interface`         | 3.1.2                                              | state, extensions, instruction builders; 3.x replaces `OptionalNonZeroPubkey` with `MaybeNull<Address>` (`.get()`) |
 | `spl-token-2022`                   | 11.1.0                                             | only `onchain`/`offchain` helpers and the processor; its other modules are deprecated re-exports                   |
-| `@solana-program/token-2022`       | 0.19.0                                             | Kit client, needs `@solana/kit` 8.x                                                                                |
+| `@solana-program/token-2022` | 0.19.0 | Kit client, needs `@solana/kit` 8.x (8.4.0) |
 | `@solana/spl-token`                | 0.4.15                                             | web3.js 1.x client; no ConfidentialMintBurn                                                                        |
 | `anchor-lang` / `anchor-spl`       | 1.2.0                                              | `anchor-spl` pins interface `^2` (no PermissionedBurn)                                                             |
 | `pinocchio-token-2022`             | 0.4.0                                              | pinocchio 0.11                                                                                                     |
@@ -40,7 +46,7 @@ Support for the newest extensions:
 | ------------------------------------- | ------------------------ | ---------------------- | ------------------- | ------------------------- |
 | Kit `@solana-program/token-2022` 0.19 | yes                      | yes                    | yes                 | yes                       |
 | `@solana/spl-token` 0.4.15            | yes                      | yes                    | yes                 | no                        |
-| `spl-token` CLI                       | yes                      | yes                    | yes                 | create only               |
+| `spl-token` CLI 5.6.1 | yes | yes | yes | no (unreleased master adds it) |
 | `anchor-spl` 1.2                      | constraint + CPI helpers | no (use interface 3.x) | no                  | no                        |
 | `pinocchio-token-2022` 0.4            | yes                      | yes                    | yes                 | no                        |
 
@@ -54,7 +60,7 @@ Support for the newest extensions:
 
 ## Invalid combinations
 
-`InitializeMint2` rejects these with `InvalidExtensionCombination` (custom error 51), per `check_for_invalid_mint_extension_combinations` in the token-2022 interface crate:
+`InitializeMint2` rejects these with `InvalidExtensionCombination` (custom error 51). This is the complete list in `check_for_invalid_mint_extension_combinations` (interface crate, program 11.x); Pausable and PermissionedBurn combine with anything:
 
 | Rule                                            |                                                           |
 | ----------------------------------------------- | --------------------------------------------------------- |
@@ -99,8 +105,9 @@ pub fn pay(ctx: Context<Pay>, amount: u64) -> Result<()> {
 - `token_interface::transfer_checked` forwards only the four base accounts, so it fails on transfer-hook mints. Programs that may see hooked mints use `spl_token_2022::onchain::invoke_transfer_checked` with `ctx.remaining_accounts` ([transfer-hooks.md](token-2022/transfer-hooks.md)).
 - `token::token_program`, `mint::token_program` and `associated_token::token_program` bind each account to the program that was passed in.
 - Credit what arrived, not `amount`: with a transfer fee the destination receives less. `.reload()` after the CPI and use the balance delta.
-- Extension constraints on `init`: `extensions::metadata_pointer::{authority, metadata_address}`, `extensions::transfer_hook::{authority, program_id}`, `extensions::group_pointer::{authority, group_address}`, `extensions::group_member_pointer::{authority, member_address}`, `extensions::close_authority::authority`, `extensions::permanent_delegate::delegate`, `extensions::pausable::authority` (1.2). Extensions without a constraint (TransferFeeConfig, NonTransferable, ScaledUiAmount, PermissionedBurn): create the account with `try_calculate_account_len::<PodMint>`, call the initialize CPIs (`anchor_spl::token_interface::*_initialize`, or interface 3.x builders for PermissionedBurn), then `initialize_mint2`.
-- Anchor 1.2 with `spl-token-2022` 11.x or interface 3.x shares `solana-program-error` 3.x, so `?` converts their errors. An older direct `spl-*` dependency on `solana-program-error` 2.x needs `.map_err(...)`; see [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md), section 17.
+- Extension constraints on `init`: `extensions::metadata_pointer::{authority, metadata_address}`, `extensions::transfer_hook::{authority, program_id}`, `extensions::group_pointer::{authority, group_address}`, `extensions::group_member_pointer::{authority, member_address}`, `extensions::close_authority::authority`, `extensions::permanent_delegate::delegate`, `extensions::pausable::authority` (1.2).
+- `init` runs `InitializeMint2` itself, so a mint that also needs an extension without a constraint (TransferFeeConfig, NonTransferable, InterestBearingConfig, DefaultAccountState, ScaledUiAmount, PermissionedBurn) can't use `init`. Create the account with `try_calculate_account_len::<PodMint>`, call the initialize CPIs (`anchor_spl::token_interface::*_initialize` with the `anchor-spl` feature `token_2022_extensions`; for ScaledUiAmount the interface 2.x builder `scaled_ui_amount::instruction::initialize`, for PermissionedBurn the 3.x one), then `initialize_mint2`.
+- Anchor 1.2 with `spl-token-2022` 11.x or interface 3.x shares `solana-program-error` 3.x, so `?` converts their errors. A direct `spl-*` dependency still on `solana-program-error` 2.x needs `.map_err(...)` at the boundary.
 
 ## Extensions the model already handles
 
@@ -125,4 +132,4 @@ p-token (SIMD-0266) replaced the classic Token program's code in place at epoch 
 
 - Check every target venue's extension policy before fixing the extension set ([integrating-mints.md](token-2022/integrating-mints.md)).
 - Authorities (fee config, withdraw, metadata and hook pointers, pause, permanent delegate, permissioned burn) outlive the launch. Put the ones you may still need on a multisig and revoke the rest.
-- Test against the program version mainnet runs; `solana-test-validator` and Mollusk still bundle 10.0.0 ([testing.md](token-2022/testing.md)).
+- Test against the program version mainnet runs; `solana-test-validator` bundles 10.0.0 and Mollusk a mid-2025 dump ([testing.md](token-2022/testing.md)).

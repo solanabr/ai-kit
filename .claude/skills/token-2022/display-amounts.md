@@ -4,7 +4,7 @@ Interest-bearing and scaled UI amount mints change only what users see; raw bala
 
 - InterestBearingConfig compounds a rate continuously over time; ScaledUiAmount applies a multiplier and can schedule `new_multiplier` at `new_multiplier_effective_timestamp` (splits, dividends, rebasing). They cannot share a mint (`InvalidExtensionCombination`).
 - Show balances through the extension-aware conversion, never `amount / 10^decimals`. Store and send raw amounts, and convert user input back with the inverse.
-- The scaled UI amount issuer guide on solana.com still says the extension is "not live yet"; it is supported by the deployed program and the SDKs listed in [the index](../token-2022.md#versions-checked-2026-09-28).
+- The scaled UI amount issuer guide on solana.com marks a multiplier-override fix as "not live yet"; that fix is in the current program source.
 
 ## Kit rounds, the program truncates
 
