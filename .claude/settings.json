@@ -16,7 +16,6 @@
         "~/.kube/config",
         "~/.pypirc",
         "~/.gem/credentials",
-
         "~/Library/Application Support/Google/Chrome",
         "~/Library/Application Support/BraveSoftware/Brave-Browser",
         "~/Library/Application Support/Microsoft Edge",
@@ -25,7 +24,6 @@
         "~/Library/Application Support/Vivaldi",
         "~/Library/Application Support/Arc",
         "~/Library/Application Support/com.operasoftware.Opera",
-
         "~/.config/google-chrome",
         "~/.config/BraveSoftware/Brave-Browser",
         "~/.config/microsoft-edge",
@@ -33,7 +31,6 @@
         "~/.config/chromium",
         "~/.config/vivaldi",
         "~/.config/opera",
-
         "~/AppData/Local/Google/Chrome/User Data",
         "~/AppData/Local/BraveSoftware/Brave-Browser/User Data",
         "~/AppData/Local/Microsoft/Edge/User Data",
@@ -44,12 +41,10 @@
       ]
     }
   },
-
   "attribution": {
     "commit": "",
     "pr": ""
   },
-
   "permissions": {
     "allow": [
       "Bash(anchor *)",
@@ -74,7 +69,6 @@
       "Bash(rustup *)",
       "Bash(rustfmt *)",
       "Bash(trident *)",
-
       "Bash(solana config *)",
       "Bash(solana address *)",
       "Bash(solana balance *)",
@@ -93,7 +87,6 @@
       "Bash(solana-keygen *)",
       "Bash(solana-test-validator *)",
       "Bash(surfpool *)",
-
       "Bash(npm *)",
       "Bash(yarn *)",
       "Bash(pnpm *)",
@@ -108,7 +101,6 @@
       "Bash(prettier *)",
       "Bash(eslint *)",
       "Bash(create-solana-dapp *)",
-
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
@@ -130,7 +122,6 @@
       "Bash(git blame *)",
       "Bash(git cherry-pick *)",
       "Bash(gh *)",
-
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(head *)",
@@ -181,7 +172,6 @@
       "Bash(md5sum *)",
       "Bash(base64 *)",
       "Bash(openssl *)",
-
       "Bash(docker build *)",
       "Bash(docker run *)",
       "Bash(docker compose *)",
@@ -191,16 +181,13 @@
       "Bash(docker exec *)",
       "Bash(docker stop *)",
       "Bash(docker inspect *)",
-
       "Bash(unity-editor *)",
       "Bash(dotnet *)",
       "Bash(nuget *)",
-
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pip *)",
       "Bash(pip3 *)",
-
       "Bash(avm *)",
       "Bash(solana-verify *)",
       "Bash(mollusk *)",
@@ -213,7 +200,6 @@
       "Bash(cross *)",
       "Bash(cargo-generate *)",
       "Bash(solana-install *)",
-
       "Read(*)",
       "Edit(*)",
       "Write(*)",
@@ -255,7 +241,6 @@
       "Bash(git push * --force*)",
       "Bash(git push * -f *)",
       "Bash(curl *convex.cloud*)",
-
       "Bash(cat *id.json)",
       "Bash(cat *keypair*.json)",
       "Bash(cat ~/.ssh/*)",
@@ -269,7 +254,6 @@
       "Bash(cat ~/.netrc)",
       "Bash(less *id.json)",
       "Bash(xxd *id.json)",
-
       "Read(~/.ssh/**)",
       "Read(~/.gnupg/**)",
       "Read(~/.aws/**)",
@@ -283,7 +267,6 @@
       "Read(~/.docker/config.json)",
       "Read(~/.pypirc)",
       "Read(~/.gem/credentials)",
-
       "Read(~/Library/Application Support/Google/Chrome/**)",
       "Read(~/Library/Application Support/BraveSoftware/Brave-Browser/**)",
       "Read(~/Library/Application Support/Microsoft Edge/**)",
@@ -307,7 +290,6 @@
       "Read(~/AppData/Local/Vivaldi/User Data/**)",
       "Read(~/AppData/Roaming/Opera Software/**)",
       "Read(**/Local Extension Settings/**)",
-
       "Bash(mkfs*)",
       "Bash(rm -rf ~)",
       "Bash(rm -rf ~/*)",
@@ -315,7 +297,6 @@
       "Bash(rm -rf .git/*)",
       "Bash(git clean -fdx*)",
       "Bash(git clean -fX*)",
-
       "Bash(solana program set-upgrade-authority *)",
       "Bash(spl-token set-authority *)",
       "Bash(solana program close *)",
@@ -323,7 +304,6 @@
       "Bash(solana withdraw-from-vote-account *)"
     ]
   },
-
   "hooks": {
     "SessionStart": [
       {
@@ -335,7 +315,6 @@
         ]
       }
     ],
-
     "Stop": [
       {
         "hooks": [
@@ -346,7 +325,6 @@
         ]
       }
     ],
-
     "SubagentStop": [
       {
         "hooks": [
@@ -357,7 +335,6 @@
         ]
       }
     ],
-
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
@@ -368,7 +345,6 @@
           }
         ]
       },
-
       {
         "matcher": "Bash",
         "hooks": [
@@ -378,7 +354,6 @@
           }
         ]
       },
-
       {
         "matcher": "Bash",
         "hooks": [
@@ -389,7 +364,6 @@
         ]
       }
     ],
-
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -400,7 +374,6 @@
           }
         ]
       },
-
       {
         "matcher": "Bash",
         "hooks": [
@@ -410,13 +383,12 @@
           }
         ]
       },
-
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'solana program deploy|anchor deploy' || exit 0\n\necho \"🚨 PRE-DEPLOY CHECKS\"\nNETWORK=$(solana config get 2>/dev/null | grep \"RPC URL\" | awk '{print $3}')\necho \"Network: $NETWORK\"\n\nif printf '%s\\n%s' \"$NETWORK\" \"$CMD\" | grep -q mainnet; then\n  if ! printf '%s' \"$CMD\" | grep -q 'CONFIRM_MAINNET=1'; then\n    echo \"⚠️ MAINNET DEPLOY blocked. Re-run with CONFIRM_MAINNET=1 prefixed to the command to confirm.\" >&2\n    exit 2\n  fi\n  echo \"⚠️ MAINNET DEPLOY confirmed via CONFIRM_MAINNET=1\"\nfi\n\nif [ -f \"Anchor.toml\" ]; then\n  ls target/deploy/*.so >/dev/null 2>&1 || { echo \"❌ No build found (target/deploy/*.so) — run anchor build first\" >&2; exit 2; }\nfi\n\necho \"✅ Pre-deploy checks passed\""
+            "command": "BIN=$( [ -d \"${CLAUDE_PROJECT_DIR:-.}/.claude/bin\" ] && echo \"${CLAUDE_PROJECT_DIR:-.}/.claude/bin\" || echo \"${CLAUDE_PROJECT_DIR:-.}/.agents/bin\" )\nexec bash \"$BIN/hooks/pre-deploy.sh\""
           }
         ]
       }

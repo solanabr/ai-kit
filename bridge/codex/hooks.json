@@ -1,0 +1,18 @@
+{
+  "description": "Solana AI Kit — pre-deploy gate. Blocks mainnet deploys unless the command is prefixed with CONFIRM_MAINNET=1. Run /hooks in Codex to review and trust it.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/bin/hooks/pre-deploy.sh\"",
+            "statusMessage": "Checking deploy command",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

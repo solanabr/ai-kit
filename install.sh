@@ -12,11 +12,11 @@ REPO_URL="https://github.com/solanabr/ai-kit.git"
 SCRIPT_VERSION="dev"
 
 # Parse flags
-AGENTS_ONLY=false
+BRIDGE=false
 TARGET_ARG=""
 for arg in "$@"; do
   case "$arg" in
-    --agents) AGENTS_ONLY=true ;;
+    --agents) BRIDGE=true ;;
     *) TARGET_ARG="$arg" ;;
   esac
 done
@@ -25,15 +25,12 @@ TARGET_DIR="${TARGET_ARG:-.}"
 mkdir -p "$TARGET_DIR"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
-# Set config directory and instruction file based on flag
-# (--agents targets AGENTS.md readers such as Codex and opencode)
-if [ "$AGENTS_ONLY" = true ]; then
-  CONFIG_DIR=".agents"
-  INSTR_FILE="AGENTS.md"
-else
-  CONFIG_DIR=".claude"
-  INSTR_FILE="CLAUDE.md"
-fi
+# The kit installs one .claude/ tree. --agents adds a bridge on top of it for
+# harnesses that read AGENTS.md and .agents/skills/ (Codex, Cursor, Copilot):
+# the instruction file plus a single router skill pointing at .claude/skills/.
+# Grok Build needs no bridge; it reads .claude/ natively.
+CONFIG_DIR=".claude"
+INSTR_FILE="CLAUDE.md"
 
 # ── Branding ──────────────────────────────────────────────────────────────
 # Solana gradient (purple → green), only on interactive truecolor terminals.
@@ -86,6 +83,7 @@ if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
   [ -f "$LOCAL_SRC/.mcp.json" ] && cp "$LOCAL_SRC/.mcp.json" "$TEMP_DIR/repo/.mcp.json"
   [ -f "$LOCAL_SRC/.env.example" ] && cp "$LOCAL_SRC/.env.example" "$TEMP_DIR/repo/.env.example"
   [ -f "$LOCAL_SRC/.gitmodules" ] && cp "$LOCAL_SRC/.gitmodules" "$TEMP_DIR/repo/.gitmodules"
+  [ -d "$LOCAL_SRC/bridge" ] && cp -r "$LOCAL_SRC/bridge" "$TEMP_DIR/repo/bridge"
   [ -f "$LOCAL_SRC/.claude/VERSION" ] && cp "$LOCAL_SRC/.claude/VERSION" "$TEMP_DIR/repo/.claude/VERSION"
   # CHANGELOG.md stays in the repo — not shipped to user projects
 else
@@ -107,24 +105,6 @@ if [ -d "$TEMP_DIR/repo/.claude/skills/ext" ]; then
   find "$TEMP_DIR/repo/.claude/skills/ext" -name .git -type f -exec rm -f {} +
 fi
 
-# --agents: the kit ships .claude/ paths in its docs, skills, settings and
-# .gitmodules. Point them at .agents/ so nothing references a directory this
-# mode never creates. Left alone: ~/.claude/ (user-global), paths inside the
-# vendored ext/ repos, bin/ (scripts resolve their own dir), and lines that
-# already name .agents/ (those are written to handle both modes).
-# Claude-Code-only files, not installed by --agents. /cleanup turns a fork of the
-# kit repo into a project (README Option 0, run as `claude -m /cleanup`); its paths
-# describe the kit's own repo, so in an .agents/ project every step of it is false.
-# Not shipping it beats rewriting it into something plausible but wrong.
-AGENTS_SKIP_FILES='commands/cleanup.md'
-agents_paths() {
-  local f
-  for f in "$@"; do
-    [ -f "$f" ] && grep -q '\.claude/' "$f" || continue
-    sed -E '/\.agents\//!{s#(^|[^[:alnum:]_./~-])\.claude/#\1.agents/#g;s#([$][{]CLAUDE_PROJECT_DIR:-[.][}])/\.claude/#\1/.agents/#g;}' \
-      "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
-  done
-}
 # Claude Code strips HTML comments before the model sees them; Codex and opencode
 # do not, so the maintainer notes in CLAUDE-solana.md would reach the model as
 # instructions on every request. Strip them from the AGENTS.md source instead.
@@ -150,17 +130,6 @@ strip_md_comments() {
             exit 1 } }
   ' "$1" > "$1.tmp" && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
 }
-if [ "$AGENTS_ONLY" = true ]; then
-  R="$TEMP_DIR/repo"
-  for f in $AGENTS_SKIP_FILES; do rm -f "$R/.claude/$f"; done
-  strip_md_comments "$R/CLAUDE-solana.md"
-  agents_paths "$R/CLAUDE-solana.md" "$R/.gitmodules" "$R/.claude/settings.json"
-  while IFS= read -r f; do agents_paths "$f"; done < <(
-    find "$R/.claude/agents" "$R/.claude/commands" "$R/.claude/rules" "$R/.claude/skills" \
-      -path "$R/.claude/skills/ext" -prune -o -type f -print 2>/dev/null
-  )
-fi
-
 step "Installing Solana AI Kit v$SCRIPT_VERSION to: $TARGET_DIR ($CONFIG_DIR/)"
 
 # Copy .claude/ as $CONFIG_DIR (selective — protects user files)
@@ -223,12 +192,34 @@ if [ -f "$TARGET_DIR/$INSTR_FILE" ] && ! cmp -s "$TEMP_DIR/repo/CLAUDE-solana.md
 fi
 cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TARGET_DIR/$INSTR_FILE"
 
-# Older --agents installs registered the ext/ skills under .claude/ paths; drop
-# those stale entries unless a regular .claude/ install still uses them.
-if [ "$AGENTS_ONLY" = true ] && [ -f "$TARGET_DIR/.gitmodules" ] && [ ! -d "$TARGET_DIR/.claude/skills/ext" ]; then
-  git config -f "$TARGET_DIR/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
-    | awk '$2 ~ /^\.claude\/skills\/ext\// { sub(/\.path$/, "", $1); print $1 }' \
-    | while IFS= read -r section; do git config -f "$TARGET_DIR/.gitmodules" --remove-section "$section"; done || true
+# --agents: bridge for harnesses that read AGENTS.md and .agents/skills/ (Codex,
+# Cursor, Copilot). AGENTS.md carries the same instructions as CLAUDE.md with the
+# maintainer HTML comments stripped — Claude Code drops those before the model
+# sees them, Codex does not, so they would arrive as instructions every request.
+if [ "$BRIDGE" = true ]; then
+  step "Installing the AGENTS.md bridge..."
+  cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/AGENTS.md"
+  strip_md_comments "$TEMP_DIR/repo/AGENTS.md"
+  if [ -f "$TARGET_DIR/AGENTS.md" ] && ! cmp -s "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md"; then
+    warn "Warning: AGENTS.md already exists, backing up to AGENTS.md.bak"
+    cp "$TARGET_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md.bak"
+  fi
+  cp "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+
+  # One router skill. Codex injects only name+description per skill and divides a
+  # fixed budget across them, so registering the ~230 vendored ext/ packs here
+  # would truncate every description to nothing. One entry keeps it readable.
+  mkdir -p "$TARGET_DIR/.agents/skills"
+  cp -r "$TEMP_DIR/repo/bridge/skills/solana-ai-kit" "$TARGET_DIR/.agents/skills/"
+
+  # Codex and Claude Code share the hook contract, so both call the same script.
+  mkdir -p "$TARGET_DIR/.codex"
+  if [ -f "$TARGET_DIR/.codex/hooks.json" ]; then
+    warn "Warning: .codex/hooks.json already exists, leaving it alone"
+  else
+    cp "$TEMP_DIR/repo/bridge/codex/hooks.json" "$TARGET_DIR/.codex/hooks.json"
+  fi
+  ok "Bridge installed — run /hooks in Codex once to trust the deploy gate"
 fi
 
 # Merge .gitmodules (don't overwrite — user may have their own submodules)
@@ -281,15 +272,15 @@ if ! grep -qF ">>> solana-ai-kit config" "$GITIGNORE"; then
     printf '%s/\n' "$CONFIG_DIR"
     printf '%s\n' "$INSTR_FILE"
     printf '.mcp.json\n'
+    [ "$BRIDGE" = true ] && printf 'AGENTS.md\n.agents/\n.codex/\n'
     printf '# <<< solana-ai-kit config <<<\n'
   } >> "$GITIGNORE"
   ok "Kit config gitignored by default — run /commit-claude-config to version it"
-elif [ "$AGENTS_ONLY" = true ]; then
-  # A block written by an earlier install can be missing this mode's entries: an
-  # older --agents install listed CLAUDE.md, and installing --agents next to an
-  # existing .claude/ install left .agents/ untracked (60MB of vendored trees).
+elif [ "$BRIDGE" = true ]; then
+  # An earlier default install wrote the block without the bridge entries, and an
+  # older --agents install listed .agents/ as the config dir. Top it up either way.
   ADDED_IGNORE=""
-  for entry in "$CONFIG_DIR/" "$INSTR_FILE"; do
+  for entry in "$CONFIG_DIR/" "$INSTR_FILE" "AGENTS.md" ".agents/" ".codex/"; do
     if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | grep -qxF "$entry"; then
       continue
     fi
@@ -333,10 +324,11 @@ BOX_LINES=(
   "  1. cd $TARGET_DIR"
   "  2. Edit .env to add your API keys (Helius, RPC, etc.)"
 )
-if [ "$AGENTS_ONLY" = true ]; then
+if [ "$BRIDGE" = true ]; then
   BOX_LINES+=(
-    "  3. Start Codex, opencode or another AGENTS.md-aware agent here;"
-    "     it reads AGENTS.md and the skills in $CONFIG_DIR/skills/"
+    "  3. Run 'claude', or start Codex/Cursor/Copilot here — they read"
+    "     AGENTS.md and the router skill in .agents/skills/"
+    "  4. In Codex, run /hooks once to trust the mainnet-deploy gate"
   )
 else
   BOX_LINES+=(
@@ -354,11 +346,11 @@ BOX_LINES+=(
   "by default to keep your repo clean. To version the kit config,"
   "run /commit-claude-config (or edit .gitignore)."
 )
-if [ "$AGENTS_ONLY" = true ]; then
+if [ "$BRIDGE" = true ]; then
   BOX_LINES+=("")
-  BOX_LINES+=("Note: Installed into $CONFIG_DIR/ (--agents mode). $CONFIG_DIR/agents/,")
-  BOX_LINES+=("$CONFIG_DIR/commands/ and .mcp.json keep Claude Code's format; other tools")
-  BOX_LINES+=("can use them as prompts or context.")
+  BOX_LINES+=("Bridge installed: AGENTS.md + one router skill in .agents/skills/,")
+  BOX_LINES+=("which points at .claude/skills/SKILL.md. Grok Build needs no bridge —")
+  BOX_LINES+=("it reads .claude/ natively.")
 fi
 BOX_W=0
 for line in "${BOX_LINES[@]}"; do

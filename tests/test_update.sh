@@ -151,17 +151,28 @@ json.dump(s, open(sys.argv[1], "w"), indent=2)' "$SETTINGS"
 assert_eq "true" "$(json_at "$SETTINGS" enableAllProjectMcpServers)" "newer installs keep the value (migration runs once)"
 
 # --- Agents mode ---
-echo "[agents mode]"
-AGENTS_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR" "$AGENTS_DIR"' EXIT
-(cd "$AGENTS_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
+echo "[bridge refresh]"
+BRIDGE_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR" "$BRIDGE_DIR"' EXIT
+(cd "$BRIDGE_DIR" && git init -q)
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$BRIDGE_DIR" >/dev/null 2>&1
 
-assert_dir_exists "$AGENTS_DIR/.agents" ".agents/ exists after --agents install"
-assert_file_exists "$AGENTS_DIR/.agents/bin/update.sh" ".agents/bin/update.sh exists"
+assert_file_exists "$BRIDGE_DIR/.claude/bin/update.sh" "--agents installs update.sh under .claude/bin"
+assert_file_exists "$BRIDGE_DIR/.agents/skills/solana-ai-kit/SKILL.md" "router skill installed"
 
-(cd "$AGENTS_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/update.sh) >/dev/null 2>&1
-assert_dir_exists "$AGENTS_DIR/.agents/agents" ".agents/agents/ valid after agents-mode update"
-assert_dir_exists "$AGENTS_DIR/.agents/commands" ".agents/commands/ valid after agents-mode update"
+# The kit owns these: a stale router and a missing Codex config are both restored.
+printf 'stale\n' > "$BRIDGE_DIR/.agents/skills/solana-ai-kit/SKILL.md"
+rm -f "$BRIDGE_DIR/.codex/hooks.json"
+(cd "$BRIDGE_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+assert_file_contains "$BRIDGE_DIR/.agents/skills/solana-ai-kit/SKILL.md" ".claude/skills/SKILL.md" \
+  "update restores the router skill"
+assert_file_exists "$BRIDGE_DIR/.codex/hooks.json" "update restores .codex/hooks.json"
+assert_dir_exists "$BRIDGE_DIR/.claude/agents" ".claude/agents/ intact after update"
+
+# A user-edited AGENTS.md is never overwritten; the new one lands beside it.
+printf '# mine\n' > "$BRIDGE_DIR/AGENTS.md"
+(cd "$BRIDGE_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+assert_file_contains "$BRIDGE_DIR/AGENTS.md" "# mine" "a user-edited AGENTS.md is preserved"
+assert_file_exists "$BRIDGE_DIR/AGENTS.md.upstream" "the new AGENTS.md lands as AGENTS.md.upstream"
 
 print_summary

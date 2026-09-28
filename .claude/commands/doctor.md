@@ -38,7 +38,7 @@ grep -E '^[A-Z_]+=$' .env 2>/dev/null | cut -d= -f1      # present but empty
 cat .claude/VERSION
 git ls-remote --tags --sort=-v:refname https://github.com/solanabr/ai-kit | head -3
 ```
-- WARN behind the latest tag: `bash .claude/bin/update.sh` (`.agents/bin/update.sh` for `--agents` installs); preview with `--dry-run`
+- WARN behind the latest tag: `bash .claude/bin/update.sh`; preview with `--dry-run`
 - FAIL no `VERSION` file (corrupted or pre-1.0 config): the same update command
 
 **7. MCP config.**

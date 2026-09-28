@@ -6,7 +6,6 @@ set -euo pipefail
 #
 # Usage:
 #   bash .claude/bin/resync.sh
-#   bash .agents/bin/resync.sh
 
 # Auto-detect config dir from script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

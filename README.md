@@ -41,7 +41,7 @@ claude -m "/cleanup"  # then start claude code running /cleanup so top-level dir
 curl -fsSL https://aikit.superteam.codes | bash
 # Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash
 
-# Option 2: One-liner installer (Codex, Opencode, everything else)
+# Option 2: One-liner installer + AGENTS.md bridge (Codex, Cursor, Copilot)
 curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
 # Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash -s -- --agents
 
@@ -65,17 +65,31 @@ claude
 
 ### `--agents` Flag
 
-Pass `--agents` to install everything into `.agents/` instead of `.claude/`, with the instructions in `AGENTS.md` instead of `CLAUDE.md`. Codex and opencode read `AGENTS.md` and the skills in `.agents/skills/`, and the installed files point at `.agents/` paths. Useful when `.claude/` is already taken or for non-Claude AI tools. `.agents/agents/`, `.agents/commands/` and `.mcp.json` keep Claude Code's format, so other tools can use them as prompts or context.
+Pass `--agents` to add a **bridge** on top of the normal install, for harnesses that read `AGENTS.md` and `.agents/skills/` — Codex, Cursor and GitHub Copilot. It does not create a second config tree: you get the usual `.claude/` install plus three small files.
+
+| File | Purpose |
+|---|---|
+| `AGENTS.md` | The same instructions as `CLAUDE.md`, with the maintainer HTML comments stripped — Claude Code drops those before the model sees them, Codex does not |
+| `.agents/skills/solana-ai-kit/SKILL.md` | One router skill pointing at `.claude/skills/SKILL.md` |
+| `.codex/hooks.json` | A `PreToolUse` gate blocking mainnet deploys unless the command is prefixed `CONFIRM_MAINNET=1` — the same script Claude Code uses |
 
 ```bash
 bash install.sh --agents /path/to/your-project
 ```
 
-To update an `--agents` install:
+**In Codex, run `/hooks` once to review and trust the deploy gate** — project hooks stay inactive until you do.
+
+Why one router instead of registering every skill: Codex divides a single metadata budget across all discovered skills and truncates each description to its share. Registering the ~230 vendored `ext/` packs drives that share to zero, so every description arrives empty. One entry keeps the hub readable and costs about 165 tokens per request.
+
+**Grok Build needs no bridge.** It reads `.claude/` natively — skills, agents, MCP servers, hooks and `CLAUDE.md` — with [`[compat.claude]` defaulting to true](https://docs.x.ai/build/features/skills-plugins-marketplaces). Install it from `x.ai/cli/install.sh`; the npm packages named `grok-cli` are community projects, not xAI's.
+
+opencode also reads `AGENTS.md` and `.agents/skills/`, so the bridge happens to work there, but it isn't tested or supported.
+
+Updates use the normal path, since there is only one tree:
 
 ```bash
 # Run from your project root:
-bash .agents/bin/update.sh
+bash .claude/bin/update.sh
 ```
 
 ### Config is gitignored by default
@@ -381,7 +395,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
 
 | Script | Purpose |
 |--------|---------|
-| `install.sh` | One-liner installer: copies config to your project (`--agents` for non-Claude tools) |
+| `install.sh` | One-liner installer: copies config to your project (`--agents` adds the AGENTS.md bridge) |
 | `update.sh` | Deprecation wrapper → `.claude/bin/update.sh` |
 | `validate.sh` | Validates all config integrity (agents, commands, skills, settings, versioning) |
 | `tests/run_all.sh` | Runs full test suite for config validation |

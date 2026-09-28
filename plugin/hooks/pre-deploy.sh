@@ -1,0 +1,1 @@
+../../.claude/bin/hooks/pre-deploy.sh

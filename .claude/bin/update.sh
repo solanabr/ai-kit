@@ -111,25 +111,9 @@ for f in anchor.md dotnet.md pinocchio.md rust.md typescript.md; do
 done
 [ "$DRY_RUN" = true ] || rmdir "$TARGET_DIR/$CONFIG_NAME/rules" 2>/dev/null || true
 
-# --agents installs: the kit ships .claude/ paths. Point what was just copied at
-# .agents/ (same rewrite as install.sh). Left alone: ~/.claude/, the vendored
-# ext/ repos, bin/, and lines that already name .agents/ (they handle both modes).
-# Claude-Code-only files, not installed by --agents. /cleanup turns a fork of the
-# kit repo into a project (README Option 0, run as `claude -m /cleanup`); its paths
-# describe the kit's own repo, so in an .agents/ project every step of it is false.
-# Not shipping it beats rewriting it into something plausible but wrong.
-AGENTS_SKIP_FILES='commands/cleanup.md'
-agents_paths() {
-  local f
-  for f in "$@"; do
-    [ -f "$f" ] && grep -q '\.claude/' "$f" || continue
-    sed -E '/\.agents\//!{s#(^|[^[:alnum:]_./~-])\.claude/#\1.agents/#g;s#([$][{]CLAUDE_PROJECT_DIR:-[.][}])/\.claude/#\1/.agents/#g;}' \
-      "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
-  done
-}
-# Codex and opencode do not strip HTML comments, so the maintainer notes in
-# CLAUDE-solana.md would reach the model as instructions. Strip them once here:
-# the later diff/cp both read this file and would otherwise always disagree.
+# Claude Code strips HTML comments before the model sees them; Codex does not, so
+# the maintainer notes in CLAUDE-solana.md would arrive as instructions. Used for
+# the bridge's AGENTS.md only — CLAUDE.md keeps them (they cost nothing there).
 strip_md_comments() {
   awk '
     { line = $0; cr = ""
@@ -151,26 +135,32 @@ strip_md_comments() {
   ' "$1" > "$1.tmp" && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
 }
 INSTR_FILE="CLAUDE.md"
-if [ "$CONFIG_NAME" = ".agents" ]; then
-  INSTR_FILE="AGENTS.md"
-  # the frozen copy loop above already wrote these; remove from the target
-  for f in $AGENTS_SKIP_FILES; do rm -f "$TARGET_DIR/$CONFIG_NAME/$f"; done
-  strip_md_comments "$TEMP_DIR/repo/CLAUDE-solana.md"
-  agents_paths "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/.gitmodules"
-  if [ "$DRY_RUN" = false ]; then
-    while IFS= read -r rel; do agents_paths "$TARGET_DIR/$CONFIG_NAME/$rel"; done < <(
-      cd "$TEMP_DIR/repo/.claude" && find agents commands rules skills -path skills/ext -prune -o -type f -print 2>/dev/null
-    )
-    # Older --agents installs registered ext/ under .claude/ paths; drop those
-    # stale entries unless a regular .claude/ install still uses them.
-    if [ -f "$TARGET_DIR/.gitmodules" ] && [ ! -d "$TARGET_DIR/.claude/skills/ext" ]; then
-      STALE="$(git config -f "$TARGET_DIR/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
-        | awk '$2 ~ /^\.claude\/skills\/ext\// { sub(/\.path$/, "", $1); print $1 }' || true)"
-      for section in $STALE; do git config -f "$TARGET_DIR/.gitmodules" --remove-section "$section"; done
-      if [ -n "$STALE" ]; then
-        CHANGES="$CHANGES  [migrated] .gitmodules ext/ entries now point at .agents/skills/ext/\n"
-      fi
+
+# Refresh the --agents bridge when the project has one. Additive: these are files
+# the kit owns, and a user-edited AGENTS.md is preserved the way CLAUDE.md is.
+if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/.agents/skills/solana-ai-kit" ]; then
+  # The frozen fetch block above doesn't copy bridge/ from a local source.
+  BRIDGE_SRC="$TEMP_DIR/repo/bridge"
+  if [ ! -d "$BRIDGE_SRC" ] && [ -n "${LOCAL_SRC:-}" ] && [ -d "$LOCAL_SRC/bridge" ]; then
+    BRIDGE_SRC="$LOCAL_SRC/bridge"
+  fi
+  if [ -d "$BRIDGE_SRC" ]; then
+    cp -r "$BRIDGE_SRC/skills/solana-ai-kit" "$TARGET_DIR/.agents/skills/"
+    CHANGES="$CHANGES  [updated] .agents/skills/solana-ai-kit/ (bridge router)\n"
+    if [ ! -f "$TARGET_DIR/.codex/hooks.json" ]; then
+      mkdir -p "$TARGET_DIR/.codex"
+      cp "$BRIDGE_SRC/codex/hooks.json" "$TARGET_DIR/.codex/hooks.json"
+      CHANGES="$CHANGES  [created] .codex/hooks.json — run /hooks in Codex to trust it\n"
     fi
+  fi
+  cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/AGENTS.md"
+  strip_md_comments "$TEMP_DIR/repo/AGENTS.md"
+  if [ ! -f "$TARGET_DIR/AGENTS.md" ]; then
+    cp "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md"
+    CHANGES="$CHANGES  [created] AGENTS.md\n"
+  elif ! diff -q "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md" >/dev/null 2>&1; then
+    cp "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md.upstream"
+    CHANGES="$CHANGES  [notice] New upstream AGENTS.md at AGENTS.md.upstream — review and merge manually\n"
   fi
 fi
 

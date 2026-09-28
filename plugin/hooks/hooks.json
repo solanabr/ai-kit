@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'solana program deploy|anchor deploy' || exit 0\n\necho \"\ud83d\udea8 PRE-DEPLOY CHECKS\"\nNETWORK=$(solana config get 2>/dev/null | grep \"RPC URL\" | awk '{print $3}')\necho \"Network: $NETWORK\"\n\nif printf '%s\\n%s' \"$NETWORK\" \"$CMD\" | grep -q mainnet; then\n  if ! printf '%s' \"$CMD\" | grep -q 'CONFIRM_MAINNET=1'; then\n    echo \"\u26a0\ufe0f MAINNET DEPLOY blocked. Re-run with CONFIRM_MAINNET=1 prefixed to the command to confirm.\" >&2\n    exit 2\n  fi\n  echo \"\u26a0\ufe0f MAINNET DEPLOY confirmed via CONFIRM_MAINNET=1\"\nfi\n\nif [ -f \"Anchor.toml\" ]; then\n  ls target/deploy/*.so >/dev/null 2>&1 || { echo \"\u274c No build found (target/deploy/*.so) \u2014 run anchor build first\" >&2; exit 2; }\nfi\n\necho \"\u2705 Pre-deploy checks passed\""
+            "command": "exec bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-deploy.sh\""
           }
         ]
       }

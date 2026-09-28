@@ -141,7 +141,19 @@ print(next((c for c in cmds if 'Blocked' in c), '__MISSING__'))
 " 2>/dev/null)"
 assert_contains "$GATE_CMD" "exit 2" "secrets-gate PreToolUse hook blocks with exit 2"
 assert_contains "$GATE_CMD" "tool_input.command" "secrets-gate hook reads the command from stdin JSON"
-assert_contains "$HOOKS" "CONFIRM_MAINNET=1" "pre-deploy hook gates mainnet deploys on CONFIRM_MAINNET=1"
+# The gate moved into a script so settings.json, the plugin and .codex/hooks.json
+# all call one copy. Assert the wiring AND that the script still gates.
+assert_contains "$HOOKS" "hooks/pre-deploy.sh" "pre-deploy hook calls the shared gate script"
+PRE_DEPLOY="$REPO_ROOT/.claude/bin/hooks/pre-deploy.sh"
+assert_file_exists "$PRE_DEPLOY" "shared pre-deploy gate script exists"
+assert_cmd_success "test -x '$PRE_DEPLOY'" "pre-deploy gate is executable"
+assert_file_contains "$PRE_DEPLOY" "CONFIRM_MAINNET=1" "gate script keys on CONFIRM_MAINNET=1"
+assert_eq "2" "$(printf '{\"tool_input\":{\"command\":\"solana program deploy p.so --url mainnet-beta\"}}' \
+  | bash "$PRE_DEPLOY" >/dev/null 2>&1; echo $?)" "gate blocks an unconfirmed mainnet deploy"
+assert_eq "0" "$(printf '{\"tool_input\":{\"command\":\"CONFIRM_MAINNET=1 solana program deploy p.so --url mainnet-beta\"}}' \
+  | bash "$PRE_DEPLOY" >/dev/null 2>&1; echo $?)" "gate allows a CONFIRM_MAINNET=1 mainnet deploy"
+assert_eq "0" "$(printf '{\"tool_input\":{\"command\":\"ls -la\"}}' \
+  | bash "$PRE_DEPLOY" >/dev/null 2>&1; echo $?)" "gate ignores unrelated commands"
 for legacy in command_matches CLAUDE_FILE_PATH CLAUDE_TOOL_EXIT_CODE CLAUDE_SUBAGENT_NAME "read -r"; do
   assert_file_not_contains "$SETTINGS" "$legacy" "hooks do not rely on unsupported '$legacy'"
 done

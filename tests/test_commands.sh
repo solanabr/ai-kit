@@ -53,7 +53,10 @@ fi
 
 echo ""
 echo "[test_commands] Checking --agents install-mode support..."
-assert_file_contains "$CMDS_DIR/resync.md" ".agents/bin" "resync.md supports --agents installs (.agents/bin)"
-assert_file_contains "$CMDS_DIR/update.md" ".agents/bin" "update.md supports --agents installs (.agents/bin)"
+# One config dir now: --agents adds a bridge, it does not relocate bin/.
+assert_file_contains "$CMDS_DIR/resync.md" ".claude/bin/resync.sh" "resync.md runs the kit's resync script"
+assert_file_contains "$CMDS_DIR/update.md" ".claude/bin/update.sh" "update.md runs the kit's update script"
+assert_file_not_contains "$CMDS_DIR/resync.md" ".agents/bin" "resync.md has no .agents/bin fallback"
+assert_file_not_contains "$CMDS_DIR/update.md" ".agents/bin" "update.md has no .agents/bin fallback"
 
 print_summary
