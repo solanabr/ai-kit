@@ -36,7 +36,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Transactions, Kit and web3.js boundary | [kit-web3-interop.md](ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md) |
 | web3.js to Kit migration | [solana-kit-migration/](ext/sendai/skills/solana-kit-migration/), [solana-kit/](ext/sendai/skills/solana-kit/) |
 | Clients generated from an IDL (Codama, Shank) | [idl-codegen.md](ext/solana-dev/skills/solana-dev/references/idl-codegen.md) |
-| Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md) |
+| Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md); Token-2022 stablecoins such as PYUSD: [integrating-mints.md](token-2022/integrating-mints.md) |
 | Official doc links | [resources.md](ext/solana-dev/skills/solana-dev/references/resources.md) |
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) |
 
@@ -44,7 +44,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 
 | Task | Read |
 |------|------|
-| Token-2022 extensions: hooks, fees, issuer controls (burn, pause, Token ACL, Mosaic), metadata and groups, display amounts, venue support, testing | [token-2022.md](token-2022.md), the index to per-topic files in [token-2022/](token-2022/) |
+| Token-2022 extensions: hooks, fees, issuer controls (burn, pause, Token ACL, Mosaic), metadata and groups, display amounts, venue support, testing | [token-2022.md](token-2022.md) (index to the per-topic files) |
 | Confidential transfers (current status, keys, Kit plans) | [confidential.md](token-2022/confidential.md) |
 | NFTs: Core, Token Metadata, Bubblegum, Candy Machine, Umi | [metaplex](ext/metaplex/skills/metaplex/SKILL.md) (official) |
 

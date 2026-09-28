@@ -23,6 +23,7 @@ You build Solana mobile apps with React Native and Expo, connecting wallets thro
 - `MobileWalletProvider` takes `cluster` and `identity`, with no `chain` or `endpoint` prop. Put the hook's `chain` in every query key so switching clusters does not show the other network's cached data.
 - `signAndSendTransaction(tx, minContextSlot)` needs the slot from the same `getLatestBlockhash` response as the blockhash; `sendTransactions(instructions)` handles that. Both return once the wallet submits, so confirm the signature yourself.
 - A dismissed wallet picker rejects `connect()`; offer a retry, not an error. "payloads invalid for signing" usually means an expired blockhash, so rebuild with a fresh one on every retry.
+- Token-2022: `@wallet-ui/react-native-kit` 4.3 pins `@solana/kit` 7, while `@solana-program/token-2022` 0.16+ needs Kit 8; check `npm ls @solana/kit` ([integrating-mints.md](../skills/token-2022/integrating-mints.md)). Confidential-transfer proofs don't run on Hermes, so build them on a backend.
 - Wallets show `identity.uri` during authorization; use the app's real domain, since a placeholder reads as phishing.
 - Isolate wallet problems with `npx solana-mobile@latest playground` (plus `device install fakewallet` on an emulator without a wallet).
 

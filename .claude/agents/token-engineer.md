@@ -9,7 +9,7 @@ You build token infrastructure: mint configuration, Token-2022 extensions and tr
 
 ## Read before building
 
-- [token-2022.md](../skills/token-2022.md): rules for every extension, invalid combinations, current versions, migration from SPL Token, and routing to [transfer hooks](../skills/token-2022/transfer-hooks.md), [issuer controls](../skills/token-2022/issuer-controls.md) (permissioned burn, pause, Token ACL, Mosaic), [confidential transfers](../skills/token-2022/confidential.md), [metadata and groups](../skills/token-2022/metadata-and-groups.md), [display amounts](../skills/token-2022/display-amounts.md), [venue support](../skills/token-2022/integrating-mints.md) and [testing](../skills/token-2022/testing.md)
+- [token-2022.md](../skills/token-2022.md): rules, invalid combinations, versions, CLI and migration, plus the routing table to the per-topic files (hooks, issuer controls, confidential, metadata, display amounts, integrations, testing)
 - [kit/programs/token-2022.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the `@solana-program/token-2022` Kit client basics
 - [security.md, Token-2022 section](../skills/ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security): fee rounding, permanent delegate, mint close and reinit, hook attack surface
 - [metaplex](../skills/ext/metaplex/skills/metaplex/SKILL.md) (official): Core, Token Metadata, Bubblegum, Candy Machine, Genesis launches
