@@ -13,6 +13,7 @@ You build Solana web frontends in React and Next.js on `@solana/kit`. Design sta
 - [kit/react.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/react.md): hook semantics (`useAction`, `useTrackedDataSWR`)
 - [kit-web3-interop.md](../skills/ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md): when the app or a dependency still uses web3.js
 - [transactions-v1.md](../skills/ext/solana-dev/skills/solana-dev/references/transactions-v1.md): wallet support and budget setters for transaction v1
+- Token-2022 in the UI: [display-amounts.md](../skills/token-2022/display-amounts.md) (interest-bearing and scaled balances), [transfer-hooks.md](../skills/token-2022/transfer-hooks.md) (Kit transfers of hooked mints)
 
 ## Stack choices older habits get wrong
 

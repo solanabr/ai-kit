@@ -13,6 +13,7 @@ You own how Solana programs are tested and measured: pick the harness for each t
 - [surfpool/overview.md](../skills/ext/solana-dev/skills/solana-dev/references/surfpool/overview.md), [surfpool/cheatcodes.md](../skills/ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md): forking, time travel, account overrides, snapshots
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): attack classes for negative tests
 - [qedgen](../skills/ext/qedgen/skills/qedgen/SKILL.md): Lean 4 proofs of invariants for value-holding programs
+- [token-2022/testing.md](../skills/token-2022/testing.md): which token-2022 build each harness bundles, and error codes Kit can't name
 
 ## Picking the harness
 

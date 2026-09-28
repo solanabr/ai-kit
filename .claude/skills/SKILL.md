@@ -26,7 +26,7 @@ When sources overlap: the program-code house rules in CLAUDE.md win; a protocol'
 | Formal verification (Lean 4) | [qedgen](ext/qedgen/skills/qedgen/SKILL.md) from [QEDGen](ext/qedgen/); needs the `qedgen` CLI and `MISTRAL_API_KEY` |
 | Port from Solidity/EVM | [eth-to-sol](ext/eth-to-sol/SKILL.md) from [eth-to-sol](ext/eth-to-sol/): [type-mapping](ext/eth-to-sol/translation/type-mapping.md), [pattern-mapping](ext/eth-to-sol/translation/pattern-mapping.md), [stdlib-mapping](ext/eth-to-sol/translation/stdlib-mapping.md), [mental-model](ext/eth-to-sol/translation/mental-model.md), [translation/](ext/eth-to-sol/translation/), [security/](ext/eth-to-sol/security/), [optimization/](ext/eth-to-sol/optimization/); concept map: [solana-vs-evm.md](ext/solana-new/skills/idea/solana-beginner/references/solana-vs-evm.md) |
 
-Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers through `token_interface::transfer_checked`, account space `T::DISCRIMINATOR.len() + T::INIT_SPACE`, Rust LiteSVM tests under `programs/<name>/tests/` (`anchor test` runs Surfpool).
+Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers through `token_interface::transfer_checked` (it drops `remaining_accounts`, so transfer-hook mints go through `spl_token_2022::onchain::invoke_transfer_checked`; see [transfer-hooks.md](token-2022/transfer-hooks.md)), account space `T::DISCRIMINATOR.len() + T::INIT_SPACE`, Rust LiteSVM tests under `programs/<name>/tests/` (`anchor test` runs Surfpool).
 
 ## Clients and frontend
 
@@ -44,8 +44,8 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 
 | Task | Read |
 |------|------|
-| Token-2022 extensions (hooks, fees, metadata, soulbound) | [token-2022.md](token-2022.md) |
-| Confidential transfers | [confidential-transfers.md](ext/solana-dev/skills/solana-dev/references/confidential-transfers.md) |
+| Token-2022 extensions: hooks, fees, issuer controls (burn, pause, Token ACL, Mosaic), metadata and groups, display amounts, venue support, testing | [token-2022.md](token-2022.md), the index to per-topic files in [token-2022/](token-2022/) |
+| Confidential transfers (current status, keys, Kit plans) | [confidential.md](token-2022/confidential.md) |
 | NFTs: Core, Token Metadata, Bubblegum, Candy Machine, Umi | [metaplex](ext/metaplex/skills/metaplex/SKILL.md) (official) |
 
 ## DeFi, RPC and data
