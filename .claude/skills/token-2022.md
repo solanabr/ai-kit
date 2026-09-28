@@ -1,107 +1,107 @@
 ---
 name: token-2022
-description: "Token-2022 (Token Extensions) gotchas: extension init order and sizing, transfer hooks and extra account metas, fees, metadata, venue compatibility, and supporting both token programs in Anchor 1.x."
+description: "Token-2022 (Token Extensions) index: rules for every extension, invalid combinations, current versions and SDK support, both token programs in Anchor 1.x, CLI, migration, and routing to per-extension files."
 ---
 
 # Token-2022 (Token Extensions)
 
-What goes wrong when creating or integrating Token-2022 mints. Related references:
-- Kit client API (sizes, ATA derivation, fetching): [kit/programs/token-2022.md](ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md)
-- Security review of extension mints (fee accounting, permanent delegate, mint close and reinit, `.closable()`, metadata spoofing): [security.md, Token-2022 section](ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security)
-- Confidential transfers: [confidential-transfers.md](ext/solana-dev/skills/solana-dev/references/confidential-transfers.md)
-- NFTs and collections usually fit Metaplex Core better than Token-2022 groups: [metaplex](ext/metaplex/skills/metaplex/SKILL.md)
+What goes wrong when creating or integrating Token-2022 mints, current to 2026-09-28. Official per-extension guides (Kit and Rust code) live under `https://solana.com/docs/tokens/extensions/`; the files below carry what those guides and model training get wrong.
+
+| Task | Read |
+|---|---|
+| Anchor 1.x: both token programs, extension constraints, mints with extensions that have no constraint | [token-2022/anchor.md](token-2022/anchor.md) |
+| Transfer hooks: writing a hook (Anchor, Pinocchio), moving hooked mints from clients and programs | [token-2022/transfer-hooks.md](token-2022/transfer-hooks.md) |
+| Issuer controls: permissioned burn, pause, permanent delegate, default frozen, mint close, fee collection, Token ACL, Mosaic | [token-2022/issuer-controls.md](token-2022/issuer-controls.md) |
+| Confidential transfers, confidential fees, confidential mint/burn | [token-2022/confidential.md](token-2022/confidential.md) |
+| Metadata, groups and members, creating mints with the Kit plan | [token-2022/metadata-and-groups.md](token-2022/metadata-and-groups.md) |
+| Interest-bearing and scaled UI amount display | [token-2022/display-amounts.md](token-2022/display-amounts.md) |
+| Accepting arbitrary mints (programs, frontends, payments, Unity, React Native); DEX and lending support | [token-2022/integrating-mints.md](token-2022/integrating-mints.md) |
+| Test harnesses, bundled program versions, error codes | [token-2022/testing.md](token-2022/testing.md) |
+
+Related: Kit client basics in [kit/programs/token-2022.md](ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md); security checklist in [security.md, Token-2022 section](ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security); NFTs in [metaplex](ext/metaplex/skills/metaplex/SKILL.md).
+
+Where those references are out of date (checked 2026-09-28):
+- security.md says `token_interface` handles all extensions; it doesn't forward transfer-hook accounts ([anchor.md](token-2022/anchor.md)).
+- kit/programs/token-2022.md says every extension instruction comes before mint initialization; TokenMetadata and TokenGroup/TokenGroupMember come after. Its `getMintSize([{ extension: 'TransferFeeConfig', ... }])` example throws in Kit 0.19; pass `extension('TransferFeeConfig', {...})` items.
+- [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md) section 17 moves programs to `spl-token-2022-interface` 2.1. That is right for `anchor-spl` compatibility, but PermissionedBurn needs interface 3.x and `onchain::invoke_transfer_checked` lives in `spl-token-2022` 11.x; both work alongside Anchor 1.2.
+- programs/pinocchio.md pins `pinocchio-token-2022` 0.3, which has no extension state; use 0.4 ([transfer-hooks.md](token-2022/transfer-hooks.md)).
+- confidential-transfers.md: see [confidential.md](token-2022/confidential.md).
+
+## Versions (checked 2026-09-28)
+
+Training data trails these by one to three majors. Re-check with `npm view <pkg> version` or crates.io before pinning.
+
+| Package | Version | Why it matters |
+|---|---|---|
+| Token-2022 program | 11.0.0 on mainnet per release notes (confirm with `solana program show`); 11.1.0 on devnet and testnet | 11.0.0 added PermissionedBurn and `Batch`; 11.1.0 (pending on mainnet) brings memo v4 and CPI Guard checks on `WithdrawExcessLamports` |
+| `spl-token-2022-interface` | 3.1.2 | state and builders; 3.x uses `MaybeNull<Address>` (`.get()`) instead of `OptionalNonZeroPubkey` |
+| `spl-token-2022` | 11.1.0 | only `onchain`/`offchain` helpers and the processor; its other modules are deprecated re-exports |
+| `@solana-program/token-2022` | 0.19.0 | Kit client; peer `@solana/kit` ^8.3, latest 8.4.0 (8.0–8.2 run but fail type-checking) |
+| `@solana/spl-token` | 0.4.15 | web3.js 1.x client; no ConfidentialMintBurn |
+| `anchor-lang` / `anchor-spl` | 1.2.0 | `anchor-spl` pins interface `^2` (no PermissionedBurn) |
+| `pinocchio-token-2022` | 0.4.0 | pinocchio 0.11 |
+| `solana-zk-sdk` | 7.x | the proof crates 0.6.1, `spl-token-client` 0.19.1 and the CLI need ^7; 8.x pulls a second, incompatible copy |
+| `@solana/zk-sdk` | 0.5.x | `deriveConfidentialKeys` works on 0.5.2 and 0.5.3; Kit 0.19's `...WithSeed` key helpers need 0.5.2, because 0.5.3 drops the seed ([confidential.md](token-2022/confidential.md#keys-one-pair-per-wallet)) |
+
+Support for the newest extensions:
+
+| | Pausable (26/27) | PermissionedBurn (28) | ScaledUiAmount (25) | ConfidentialMintBurn (24) |
+|---|---|---|---|---|
+| Kit `@solana-program/token-2022` 0.19 | yes | yes | yes | yes |
+| `@solana/spl-token` 0.4.15 | yes | yes | yes | no |
+| `spl-token` CLI 5.6.1 | yes | yes | yes | no |
+| `anchor-spl` 1.2 | constraint + CPI helpers | no (use interface 3.x) | no | no |
+| `pinocchio-token-2022` 0.4 | yes | yes | instruction builders only, no state | no |
 
 ## Rules for every extension
 
-- Mint extensions are fixed at creation. Allocate exactly `getMintLen([...])` / `ExtensionType::try_calculate_account_len::<Mint>(&[...])`, run every extension initializer, then `InitializeMint2`, in one transaction. A size mismatch fails with `InvalidAccountData`; a bad combination fails with `InvalidExtensionCombination`.
-- Variable-length TokenMetadata is not part of that allocation: fund lamports for the final size and let the metadata instruction realloc.
-- Token accounts carry extensions the mint requires (TransferFeeAmount, TransferHookAccount, PausableAccount, ...). The ATA program and Anchor `init` with `token::`/`associated_token::` size them; manual creation must use `getAccountLenForMint` or the `GetAccountDataSize` instruction. Owner toggles (MemoTransfer, CpiGuard) on an account created without room for them need `Reallocate` first.
-- ATAs are derived with the token program as a seed. Pass the Token-2022 ID (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`) to ATA derivation, `getMint`/`getAccount`, and ATA creation, or you get a different address.
-- Transfer with `transfer_checked`; plain `transfer` fails with `MintRequiredForTransfer` on fee and hook mints. `transfer_checked_with_fee` asserts the expected fee.
-- Integrations read the mint's extensions up front and allow-list what they support: `getExtensionTypes(mint.tlvData)` (web3.js), `mint.data.extensions` (Kit), `anchor_spl::token_interface::get_mint_extension_data::<T>(&mint_info)` on-chain.
+- Mint extensions are fixed at creation. Allocate exactly the fixed-size length (`getMintSize([...])`, `ExtensionType::try_calculate_account_len::<Mint>(&[...])`), run the pre-initialize instructions, then initialize the mint, in one transaction. TokenMetadata and TokenGroup/TokenGroupMember initialize _after_ the mint, need the mint authority's signature, and realloc into lamports you funded up front. A size mismatch fails with `InvalidAccountData`.
+- Token accounts carry extensions the mint requires (TransferFeeAmount, TransferHookAccount, PausableAccount, NonTransferableAccount). The ATA program and Anchor `init` with `token::`/`associated_token::` size them; manual creation uses `getAccountLenForMint` or `GetAccountDataSize`. Owner toggles (MemoTransfer, CpiGuard) on an account created without room need `Reallocate` first.
+- ATAs derive from the token program. Pass the Token-2022 ID (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`) to ATA derivation, fetches and ATA creation, or you get a different address.
+- Transfer with `transfer_checked`. Plain `transfer` fails with `MintRequiredForTransfer` when the source carries TransferFeeAmount, TransferHookAccount or PausableAccount.
+- Read a mint's extensions up front and allow-list what you support: `unwrapOption(mint.data.extensions)` (Kit), `getExtensionTypes(mint.tlvData)` (web3.js), `get_extension::<T>()` on-chain. Prefer targeted `get_extension::<T>()` over `get_extension_types()`: interface 2.x (what `anchor-spl` 1.2 uses) returns `InvalidAccountData` for the whole list on a mint carrying PermissionedBurn.
+- An authority set to `None` can't be set again, so a renounced extension stays as it is. A renounced fee authority still lets an already scheduled `newer_transfer_fee` take effect.
+- Program 11.x has a `Batch` instruction (discriminator 255) that runs several token instructions in one call; Kit `getBatchInstruction`. Batches can't nest.
 
-## Supporting both token programs (Anchor 1.x)
+## Invalid combinations
 
-```rust
-use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
+Mint initialization (`InitializeMint` or `InitializeMint2`; the Kit plan uses v1) rejects these with `InvalidExtensionCombination` (custom error 51). This is the complete list in `check_for_invalid_mint_extension_combinations` (interface crate, program 11.x); Pausable and PermissionedBurn combine with anything:
 
-#[derive(Accounts)]
-pub struct Pay<'info> {
-    #[account(mut, token::mint = mint, token::token_program = token_program)]
-    pub from: InterfaceAccount<'info, TokenAccount>,
-    #[account(mut, token::mint = mint, token::token_program = token_program)]
-    pub to: InterfaceAccount<'info, TokenAccount>,
-    #[account(mint::token_program = token_program)]
-    pub mint: InterfaceAccount<'info, Mint>,
-    pub authority: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>, // Token or Token-2022
-}
+| Rule | |
+|---|---|
+| ScaledUiAmount with InterestBearingConfig | pick one |
+| TransferFeeConfig with ConfidentialTransferMint | also needs ConfidentialTransferFeeConfig |
+| ConfidentialTransferFeeConfig | needs both TransferFeeConfig and ConfidentialTransferMint |
+| ConfidentialMintBurn | needs ConfidentialTransferMint |
+| NonTransferable with ConfidentialTransferMint | also needs ConfidentialMintBurn |
 
-pub fn pay(ctx: Context<Pay>, amount: u64) -> Result<()> {
-    let accounts = TransferChecked {
-        from: ctx.accounts.from.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        to: ctx.accounts.to.to_account_info(),
-        authority: ctx.accounts.authority.to_account_info(),
-    };
-    // 1.x: CpiContext takes the program Pubkey, not an AccountInfo
-    let cpi = CpiContext::new(ctx.accounts.token_program.key(), accounts);
-    token_interface::transfer_checked(cpi, amount, ctx.accounts.mint.decimals)
-}
-```
+Allowed despite what guides imply: NonTransferable with TransferFee or TransferHook, and ConfidentialTransfer with TransferHook (the hook receives `u64::MAX` as the amount). DefaultAccountState(Frozen) without a freeze authority fails with `MintCannotFreeze` (16).
 
-- `token::token_program`, `mint::token_program` and `associated_token::token_program` bind each account to the program that was passed in.
-- Credit what arrived, not `amount`: with a transfer fee the destination receives less. `.reload()` after the CPI and use the balance delta.
-- Extension constraints on `init`: `extensions::metadata_pointer::{authority, metadata_address}`, `extensions::transfer_hook::{authority, program_id}`, `extensions::group_pointer::{authority, group_address}`, `extensions::group_member_pointer::{authority, member_address}`, `extensions::close_authority::authority`, `extensions::permanent_delegate::delegate`. Extensions without a constraint (e.g. TransferFeeConfig, NonTransferable): create the account with `try_calculate_account_len::<PodMint>`, call the matching `anchor_spl::token_interface::*_initialize` CPIs, then `initialize_mint2`.
-- The `spl-token-2022` and `spl-tlv-account-resolution` versions that pair with anchor-lang 1.x still return `solana-program-error` 2.x errors (Anchor uses 3.x), so convert with `.map_err(...)` at the boundary. For direct `spl-*` dependencies see [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md), section 17.
+## Extensions the model already handles
 
-## Transfer hooks
+- **Transfer fee** ([transfer-fees](https://solana.com/docs/tokens/extensions/transfer-fees)): withheld in the destination account; the active fee is `get_epoch_fee(current_epoch)` because `SetTransferFee` applies two epochs later. Collection is in [issuer-controls.md](token-2022/issuer-controls.md).
+- **Non-transferable**: holders can still burn and close. Minting to an account requires ImmutableOwner on it (`NonTransferableNeedsImmutableOwnership`); ATAs have it.
+- **CPI Guard, required memo, immutable owner**: covered by the docs; the integrator impact is in [integrating-mints.md](token-2022/integrating-mints.md).
 
-```rust
-use spl_discriminator::SplDiscriminate;
-use spl_tlv_account_resolution::{account::ExtraAccountMeta, seeds::Seed, state::ExtraAccountMetaList};
-use spl_transfer_hook_interface::instruction::ExecuteInstruction;
+## spl-token CLI (5.6.1)
 
-// Anchor 1.x removed #[interface]; InitializeExtraAccountMetaListInstruction works the same way
-#[instruction(discriminator = ExecuteInstruction::SPL_DISCRIMINATOR_SLICE)]
-pub fn transfer_hook(ctx: Context<TransferHook>, amount: u64) -> Result<()> { /* ... */ }
+- Target Token-2022 with `--program-2022` (or `-p <ID>`; the two conflict).
+- `create-token` flags: `--transfer-fee-basis-points <BPS> --transfer-fee-maximum-fee <AMOUNT>` (a UI amount: `5` means 5 tokens), `--enable-metadata` (then `initialize-metadata`), `--enable-group` (then `initialize-group`), `--enable-pause`, `--enable-permissioned-burn`, `--ui-amount-multiplier`, `--interest-rate`, `--transfer-hook <PROGRAM>`, `--enable-permanent-delegate`, `--enable-non-transferable`, `--default-account-state frozen` (needs `--enable-freeze`).
+- Later changes: `pause`/`resume`, `update-ui-amount-multiplier`, `set-interest-rate`, `withdraw-withheld-tokens` (pass sources or `--include-mint`).
+- No ConfidentialMintBurn support. The `spl-token` bundled with Agave 3.1 is 5.5.0, which lacks the permissioned-burn flags.
 
-// Per-owner PDA: seeds reference Execute accounts by index (3 = source authority)
-let metas = vec![ExtraAccountMeta::new_with_seeds(
-    &[Seed::Literal { bytes: b"allow".to_vec() }, Seed::AccountKey { index: 3 }],
-    false, // is_signer
-    true,  // is_writable
-).map_err(|_| ProgramError::InvalidArgument)?];
-ExtraAccountMetaList::init::<ExecuteInstruction>(&mut meta_list.try_borrow_mut_data()?, &metas)
-    .map_err(|_| ProgramError::InvalidAccountData)?;
-```
+## Migrating from SPL Token
 
-- Execute account order: 0 source, 1 mint, 2 destination, 3 source authority, 4 the ExtraAccountMetaList PDA (seeds `["extra-account-metas", mint]` under the hook program), then the extras in list order. Seeds can also use `Seed::AccountData` and `Seed::InstructionData` (the amount).
-- The base accounts arrive read-only with signer privileges dropped. Anything the hook writes must be an extra account marked writable in the list.
-- Create and initialize the meta-list PDA before the first transfer. Changing it later (`UpdateExtraAccountMetaList`) breaks clients and programs that cached the old list.
-- The hook runs after balances move (it sees post-transfer state) and is skipped on self-transfers. Check the `transferring` flag on the source/destination `TransferHookAccount`, plus the mint and ownership checks in security.md.
-- Clients resolve extras with Kit `getTransferCheckedWithTransferHookInstructionAsync` (`@solana-program/token-2022`) or web3.js `createTransferCheckedWithTransferHookInstruction`. Simulate before sending: the hook can reject for its own reasons.
-- A program that CPIs a transfer of a hook mint needs the hook program, the meta-list PDA and the extras (take them as `remaining_accounts`). `token_interface::transfer_checked` passes only the four base accounts, so use the token-2022 crate's `onchain::invoke_transfer_checked` or add them with `spl_transfer_hook_interface::onchain::add_extra_accounts_for_execute_cpi`.
-- Every transfer pays the hook's compute; keep it small.
+There is no in-place upgrade; a mint belongs to one program. Options:
 
-## Extension notes
+- **New Token-2022 mint** plus a swap or claim program: full control of the extension set; you own the swap program's security and move liquidity and listings yourself. Claim tooling built on `anchor_spl::token` (for example Jito's merkle distributor) pays classic tokens only.
+- **token-upgrade** (`TkupDoNseygccBCjSsrSpMccjwHfTYwcrjpnDSrFDhC`): burns the holder's whole old balance and releases the same amount of the new mint from an escrow; decimals must match. It lives in the archived SPL repo and its mainnet deployment is unconfirmed.
+- **token-wrap** (`TwRapQCDhWkZRrDaHfZGuHxkZ91gHDRkyuzNqeU5MgR`, JS `@solana-program/token-wrap`): 1:1 escrowed wrapping, audited, copies decimals and the freeze authority. The wrapped mint only gets ConfidentialTransferMint unless you fork its `MintCustomizer`, and supply splits between wrapped and unwrapped. Mainnet deployment was unconfirmed on 2026-09-28 (`solana account TwRapQCDhWkZRrDaHfZGuHxkZ91gHDRkyuzNqeU5MgR -u mainnet-beta`).
 
-- **Transfer fee**: withheld in the destination account. The active fee is `get_epoch_fee(current_epoch)`, because `SetTransferFee` takes effect two epochs later; do not read `newer_transfer_fee` blindly. Collect with `harvest_withheld_tokens_to_mint` (permissionless), then `withdraw_withheld_tokens_from_mint` (withdraw authority). Accounts holding withheld fees cannot close.
-- **Metadata pointer + TokenMetadata**: initialize the pointer before `InitializeMint2`. TokenMetadata can only live in the mint itself and needs the mint authority's signature. Initialize and `update_field` realloc and assume the rent is already there: web3.js `tokenMetadataInitializeWithRentTransfer` / `tokenMetadataUpdateFieldWithRentTransfer`; in Anchor, top up to `Rent::minimum_balance(new_len)` before `token_metadata_initialize` / `token_metadata_update_field`. Readers check that pointer and `metadata.mint` reference each other.
-- **Default account state (Frozen)**: every new account, including ATAs other people create, starts frozen and only the freeze authority can thaw it. Build the thaw (KYC) path before launch.
-- **Permanent delegate**: can transfer or burn from any holder. Many venues and users treat such mints as custodial.
-- **Non-transferable**: holders can still burn and close. Pointless with fees, hooks or confidential transfers.
-- **Interest-bearing, scaled UI amount**: display-only; raw balances and supply never change (scaled UI can schedule a new multiplier at a timestamp). Show amounts through the extension-aware conversion (`amountToUiAmount`), not `amount / 10^decimals`.
-- **CPI Guard** (set by the owner): inside a CPI, transfers and burns need a delegate instead of the owner's signature, approve is blocked, and close must pay the owner. Protocols that pull tokens by CPI with the user's signature fail for these users; use a top-level approve plus a delegate transfer.
-- **Required memo** (set by the owner): an incoming transfer needs a memo immediately before it at the same level: a top-level memo for a top-level transfer, a memo CPI right before a CPI transfer.
-- **Immutable owner**: Token-2022 ATAs always have it; manually created accounts initialize it before `InitializeAccount`.
-- **Mint close authority**: closing needs zero supply; see the close-and-reinitialize risk in security.md.
-- **Pausable**: the pause authority halts transfers, mints and burns. Vaults holding the token must tolerate failed withdrawals while paused.
-- **Group / member**: `max_size` is enforced and adding a member needs the group update authority. Wallet and venue support is thin.
-- **Confidential transfers**: check which cluster has the ZK ElGamal proof program enabled before building (the reference tracks it). A transfer spans several transactions with proof context accounts, incoming amounts land in a pending balance until `ApplyPendingBalance`, a fee mint also needs ConfidentialTransferFeeConfig, and a transfer hook cannot see amounts.
+Holders need new token accounts under the Token-2022 program: about 0.0021 SOL each (more with account extensions), so budget rent for every holder.
 
 ## Before launch
 
-- Check every target venue's extension policy. Example: Orca Whirlpools requires an issuer TokenBadge for PermanentDelegate, TransferHook, MintCloseAuthority, DefaultAccountState and Pausable, and does not support NonTransferable or group/member mints.
-- Authorities (fee config, withdraw, metadata and hook pointers, pause) outlive the launch. Put the ones you may still need on a multisig and revoke the rest.
-- Tests: LiteSVM or Mollusk for hook and fee logic ([testing.md](ext/solana-dev/skills/solana-dev/references/testing.md)). On a Surfpool fork, `surfnet_setTokenAccount` takes the Token-2022 program ID as its last param, and `surfnet_timeTravel` with `absoluteEpoch` crosses the two-epoch fee delay ([cheatcodes.md](ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md)).
+- Check every target venue's extension policy before fixing the extension set ([integrating-mints.md](token-2022/integrating-mints.md)).
+- Authorities (fee config, withdraw, metadata and hook pointers, pause, permanent delegate, permissioned burn) outlive the launch. Put the ones you may still need on a multisig and revoke the rest. TokenMetadata, TokenGroup and confidential-transfer mint updates need a direct signature, so an SPL Token multisig can't hold those authorities; a Squads vault can, because it signs as a PDA.
+- Test against the program version mainnet runs; `solana-test-validator` bundles 10.0.0 and Mollusk a mid-2025 dump ([testing.md](token-2022/testing.md)).

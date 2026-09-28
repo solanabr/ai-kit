@@ -109,6 +109,24 @@ if [ -f .claude/skills/SKILL.md ]; then
   if [ "$broken" -eq 0 ]; then
     check "All SKILL.md links resolve" 0
   fi
+
+  # Local skills, agents and commands link relative to their own directory; #anchors are dropped
+  broken=0
+  while IFS= read -r file; do
+    dir="$(dirname "$file")"
+    while IFS= read -r link; do
+      target="$dir/${link%%#*}"
+      if [ ! -e "$target" ]; then
+        echo "  FAIL: Broken link in $file -> $link"
+        FAIL=$((FAIL + 1))
+        broken=$((broken + 1))
+      fi
+    done < <(grep -oE '\]\([^)]+\)' "$file" | sed 's/\](//' | sed 's/)$//' | grep -v '^http' | grep -v '^#')
+  done < <(find .claude/skills -name '*.md' -not -path '*/ext/*' -not -path '.claude/skills/SKILL.md'; find .claude/agents .claude/commands -name '*.md')
+
+  if [ "$broken" -eq 0 ]; then
+    check "All links in local skills, agents and commands resolve" 0
+  fi
 else
   check "SKILL.md exists" 1
 fi

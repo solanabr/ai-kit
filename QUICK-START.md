@@ -203,7 +203,8 @@ your-project/
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
-│   │   ├── token-2022.md     # Token Extensions guide
+│   │   ├── token-2022.md     # Token Extensions index
+│   │   ├── token-2022/       # Per-topic Token-2022 references
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   └── deployment.md     # Deploy workflows
 │   └── settings.json      # Permissions
