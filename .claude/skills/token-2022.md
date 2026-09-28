@@ -22,7 +22,7 @@ Related: Kit client basics in [kit/programs/token-2022.md](ext/solana-dev/skills
 
 Where those references are out of date (checked 2026-09-28):
 - security.md says `token_interface` handles all extensions; it doesn't forward transfer-hook accounts ([anchor.md](token-2022/anchor.md)).
-- kit/programs/token-2022.md says every extension instruction comes before mint initialization; TokenMetadata and TokenGroup/TokenGroupMember come after.
+- kit/programs/token-2022.md says every extension instruction comes before mint initialization; TokenMetadata and TokenGroup/TokenGroupMember come after. Its `getMintSize([{ extension: 'TransferFeeConfig', ... }])` example throws in Kit 0.19; pass `extension('TransferFeeConfig', {...})` items.
 - [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md) section 17 moves programs to `spl-token-2022-interface` 2.1. That is right for `anchor-spl` compatibility, but PermissionedBurn needs interface 3.x and `onchain::invoke_transfer_checked` lives in `spl-token-2022` 11.x; both work alongside Anchor 1.2.
 - programs/pinocchio.md pins `pinocchio-token-2022` 0.3, which has no extension state; use 0.4 ([transfer-hooks.md](token-2022/transfer-hooks.md)).
 - confidential-transfers.md: see [confidential.md](token-2022/confidential.md).
@@ -36,12 +36,12 @@ Training data trails these by one to three majors. Re-check with `npm view <pkg>
 | Token-2022 program | 11.0.0 on mainnet per release notes (confirm with `solana program show`); 11.1.0 on devnet and testnet | 11.0.0 added PermissionedBurn and `Batch`; 11.1.0 (pending on mainnet) brings memo v4 and CPI Guard checks on `WithdrawExcessLamports` |
 | `spl-token-2022-interface` | 3.1.2 | state and builders; 3.x uses `MaybeNull<Address>` (`.get()`) instead of `OptionalNonZeroPubkey` |
 | `spl-token-2022` | 11.1.0 | only `onchain`/`offchain` helpers and the processor; its other modules are deprecated re-exports |
-| `@solana-program/token-2022` | 0.19.0 | Kit client; peer `@solana/kit` ^8.3 (8.0–8.2 run but fail type-checking) |
+| `@solana-program/token-2022` | 0.19.0 | Kit client; peer `@solana/kit` ^8.3, latest 8.4.0 (8.0–8.2 run but fail type-checking) |
 | `@solana/spl-token` | 0.4.15 | web3.js 1.x client; no ConfidentialMintBurn |
 | `anchor-lang` / `anchor-spl` | 1.2.0 | `anchor-spl` pins interface `^2` (no PermissionedBurn) |
 | `pinocchio-token-2022` | 0.4.0 | pinocchio 0.11 |
 | `solana-zk-sdk` | 7.x | the proof crates 0.6.1, `spl-token-client` 0.19.1 and the CLI need ^7; 8.x pulls a second, incompatible copy |
-| `@solana/zk-sdk` | 0.5.x | 0.5.3 changed `signerMessage()`; Kit's own repo pins 0.5.2 |
+| `@solana/zk-sdk` | 0.5.x | `deriveConfidentialKeys` works on 0.5.2 and 0.5.3; Kit 0.19's `...WithSeed` key helpers need 0.5.2, because 0.5.3 drops the seed ([confidential.md](token-2022/confidential.md#keys-one-pair-per-wallet)) |
 
 Support for the newest extensions:
 

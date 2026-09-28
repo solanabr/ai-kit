@@ -18,7 +18,8 @@ The Rust walkthrough in [confidential-transfers.md](../ext/solana-dev/skills/sol
 
 ## Keys: one pair per wallet
 
-- Rust: `solana_zk_sdk::encryption::derivation::derive_confidential_keys(&signer)`. JS: `deriveConfidentialKeys({ signer })` from `@solana-program/token-2022/confidential`. Both have the wallet sign the fixed message `solana-conf-bal/v1` and derive the ElGamal keypair and AE key from it.
+- Rust: `solana_zk_sdk::encryption::derivation::derive_confidential_keys(&signer)`. JS: `deriveConfidentialKeys({ signer })` from `@solana-program/token-2022/confidential`. Both have the wallet sign the fixed message `solana-conf-bal/v1` and derive the ElGamal keypair and AE key from it. It works with `@solana/zk-sdk` 0.5.2 and 0.5.3.
+- Seed-scoped keys (PDA wallets, custom keying): Kit 0.19's `deriveElGamalKeypairWithSeed` and `deriveAeKeyWithSeed` call `ConfidentialKeys.signerMessage(seed)`, which `@solana/zk-sdk` 0.5.3 turned into a no-argument function. The seed is dropped and they return the wallet's standard keys without an error. Pin 0.5.2 for them, or on 0.5.3 build the message with `signerMessageWithSeed(seed)`.
 - The signer must produce deterministic Ed25519 signatures (RFC 8032). Wallets should refuse generic `signMessage` requests that start with `solana-conf-bal/v1`, because that signature is the key.
 - The per-account derivation (`ElGamalKeypair::new_from_signer(&signer, &token_account)`, now `new_from_signer_legacy`) and the JS `deriveElGamalKeypairForOwnerMint` / `deriveAeKeyForOwnerMint` are deprecated. Keys made that way don't match standard clients; use them only to migrate old balances.
 

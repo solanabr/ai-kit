@@ -50,7 +50,7 @@ React Native: `@wallet-ui/react-native-kit` 4.3 pins `@solana/kit` 7, while `@so
 
 ## Venue support (read from each program's source, 2026-09-28)
 
-"Badge" means the venue's admin must approve the specific mint; "rejected" means no path.
+"Badge" means the venue's admin must approve the specific mint (a `TokenBadge` account on Orca and Meteora DAMM v2, `SupportMintAssociated` on Raydium CPMM and CLMM); "rejected" means no path.
 
 | Extension | Orca Whirlpools | Raydium CPMM / CLMM | Meteora DAMM v2 | Kamino (klend) | marginfi v2 |
 |---|---|---|---|---|---|

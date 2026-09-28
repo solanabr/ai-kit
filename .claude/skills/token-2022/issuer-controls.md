@@ -59,7 +59,8 @@ invoke_signed(&ix, &[token_account, mint, burn_authority, owner], signer_seeds)?
 
 ## Pausable (26, 27)
 
-- While paused, `transfer_checked`, `mint_to` and `burn` fail with `MintPaused` (custom error 67), and so do permanent-delegate transfers and confidential-transfer instructions. Kit: `getPauseInstruction`, `getResumeInstruction`; Kit extension kind `PausableConfig`.
+- While paused, `transfer_checked`, `mint_to` and `burn` (permissioned burns included) fail with `MintPaused` (custom error 67), and so do permanent-delegate transfers and confidential-transfer instructions. Kit: `getPauseInstruction`, `getResumeInstruction`; Kit extension kind `PausableConfig`.
+- Still allowed while paused: approve and revoke, freeze and thaw, closing accounts, authority changes, and withdrawing or harvesting withheld transfer fees, which moves tokens to the withdraw authority's destination.
 - Anchor 1.2 has `extensions::pausable::authority` on `init` and `pausable_initialize`, `pausable_pause` and `pausable_resume` CPIs in `anchor_spl::token_2022_extensions`. Interface 2.x (what `anchor-spl` uses) has `PausableConfig`, so `get_extension::<PausableConfig>()` works in Anchor programs.
 - Protocols that hold the token must not let a paused mint block shared instructions (liquidations, other assets' withdrawals). Check `PausableConfig.paused` before acting and isolate per-mint paths.
 
