@@ -37,4 +37,27 @@ done < <(grep -oE '\]\([^)]+\)' "$SKILL_FILE" | sed 's/\](//' | sed 's/)//' | gr
 echo ""
 echo "Checked $CHECKED links, $BROKEN broken."
 
+echo ""
+echo "[test_skills] Checking links in local skills, agents and commands (relative to each file, #anchors dropped)..."
+
+LOCAL_CHECKED=0
+LOCAL_BROKEN=0
+while IFS= read -r file; do
+  dir="$(dirname "$file")"
+  rel="${file#"$REPO_ROOT"/}"
+  while IFS= read -r link; do
+    LOCAL_CHECKED=$((LOCAL_CHECKED + 1))
+    TOTAL=$((TOTAL + 1))
+    if [ -e "$dir/${link%%#*}" ]; then
+      PASS=$((PASS + 1))
+    else
+      echo "  FAIL: Broken link in $rel -> $link"
+      FAIL=$((FAIL + 1))
+      LOCAL_BROKEN=$((LOCAL_BROKEN + 1))
+    fi
+  done < <(grep -oE '\]\([^)]+\)' "$file" | sed 's/\](//' | sed 's/)$//' | grep -v '^http' | grep -v '^#')
+done < <(find "$SKILLS_DIR" -name '*.md' -not -path '*/ext/*' -not -path "$SKILL_FILE"; find "$REPO_ROOT/.claude/agents" "$REPO_ROOT/.claude/commands" -name '*.md')
+
+echo "Checked $LOCAL_CHECKED local links, $LOCAL_BROKEN broken."
+
 print_summary
