@@ -1,0 +1,21 @@
+[package]
+name = "pino_hook"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+pinocchio = "0.11"
+pinocchio-token-2022 = "0.4"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+[dev-dependencies]
+spl-transfer-hook-interface = "2.1"
+spl-discriminator = "0.5"

@@ -1,0 +1,21 @@
+[package]
+name = "itests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+litesvm = "=0.16.0"
+anchor-lang = "1.2.0"
+vault = { path = "../programs/vault", features = ["no-entrypoint"] }
+hook = { path = "../programs/hook", features = ["no-entrypoint"] }
+pburn = { path = "../programs/pburn", features = ["no-entrypoint"] }
+onchain_xfer = { path = "../programs/onchain_xfer", features = ["no-entrypoint"] }
+t22v3 = { package = "spl-token-2022-interface", version = "3.1" }
+spl-associated-token-account-interface = "2"
+spl-transfer-hook-interface = "2.1"
+solana-keypair = "3"
+solana-signer = "3"
+solana-transaction = "4"
+solana-system-interface = { version = "3", features = ["bincode"] }
+solana-program-pack = "3"

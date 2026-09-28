@@ -1,0 +1,8 @@
+[workspace]
+members = ["programs/vault", "programs/hook", "programs/pino_hook", "programs/pburn", "programs/onchain_xfer", "itests"]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
