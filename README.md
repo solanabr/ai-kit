@@ -302,7 +302,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
     │   ├── token-2022.md            # Token Extensions index: rules, combos, versions (local)
-    │   ├── token-2022/              # Per-topic: hooks, issuer controls, confidential, metadata, venues, testing
+    │   ├── token-2022/              # Per-topic: Anchor, hooks, issuer controls, confidential, metadata, venues, testing
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
     └── settings.json            # Sandbox, permissions, hooks

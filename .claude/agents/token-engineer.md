@@ -9,7 +9,7 @@ You build token infrastructure: mint configuration, Token-2022 extensions and tr
 
 ## Read before building
 
-- [token-2022.md](../skills/token-2022.md): rules, invalid combinations, versions, CLI and migration, plus the routing table to the per-topic files (hooks, issuer controls, confidential, metadata, display amounts, integrations, testing)
+- [token-2022.md](../skills/token-2022.md): rules, invalid combinations, versions, CLI and migration, plus the routing table to the per-topic files (Anchor, hooks, issuer controls, confidential, metadata, display amounts, integrations, testing)
 - [kit/programs/token-2022.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the `@solana-program/token-2022` Kit client basics
 - [security.md, Token-2022 section](../skills/ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security): fee rounding, permanent delegate, mint close and reinit, hook attack surface
 - [metaplex](../skills/ext/metaplex/skills/metaplex/SKILL.md) (official): Core, Token Metadata, Bubblegum, Candy Machine, Genesis launches
