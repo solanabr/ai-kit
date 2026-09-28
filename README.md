@@ -223,7 +223,7 @@ The kit used to list `memsearch` too, but its `memsearch-mcp` package is not pub
 | Layer | Stack |
 |-------|-------|
 | Programs | Anchor 1.0+, Pinocchio, Rust 1.82+ |
-| Token Extensions | Token-2022 (transfer hooks, confidential transfers, metadata) |
+| Token Extensions | Token-2022: all 28 extension types (transfer hooks, permissioned burn, pausable, confidential transfers, metadata), Token ACL, Mosaic |
 | Testing | Mollusk, LiteSVM, Surfpool, Trident |
 | Frontend | @solana/kit, Next.js 15, React 19 |
 | Mobile | React Native, Expo, Mobile Wallet Adapter |
@@ -301,7 +301,8 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
-    │   ├── token-2022.md            # Token Extensions guide (local)
+    │   ├── token-2022.md            # Token Extensions index: rules, combos, versions (local)
+    │   ├── token-2022/              # Per-topic: hooks, issuer controls, confidential, metadata, venues, testing
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
     └── settings.json            # Sandbox, permissions, hooks
