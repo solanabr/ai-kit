@@ -53,6 +53,12 @@ assert_eq "1" "$(find "$B/.agents/skills" -name SKILL.md | wc -l | tr -d ' ')" \
 ROUTER="$B/.agents/skills/solana-ai-kit/SKILL.md"
 assert_file_contains "$ROUTER" "name: solana-ai-kit" "router declares a name (Codex requires it)"
 assert_file_contains "$ROUTER" ".claude/skills/SKILL.md" "router points at the kit hub"
+# The router's body is the only place these rules live. A router that drops them
+# sends the model to 133 unresolvable links, or tells it to run commands it has
+# not got — and greps for the hub path alone would not notice.
+assert_file_contains "$ROUTER" "prefix them with that" "router explains the .claude/skills/ link prefix"
+assert_file_contains "$ROUTER" "written for Claude Code" "router warns the hub is Claude Code's"
+assert_file_contains "$ROUTER" "trusted" "router hedges that the Codex gate needs /hooks trust"
 ROUTER_DESC="$(awk -F'description: ' '/^description: /{print $2; exit}' "$ROUTER")"
 assert_cmd_success "[ ${#ROUTER_DESC} -gt 0 ] && [ ${#ROUTER_DESC} -le 1024 ]" \
   "router description is present and within Codex's 1024-char cap"
@@ -92,7 +98,9 @@ assert_file_contains "$B/.codex/hooks.json" "pre-deploy.sh" "Codex config calls 
 
 echo "[gitignore]"
 BLOCK="$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$B/.gitignore")"
-for e in ".claude/" "CLAUDE.md" "AGENTS.md" ".agents/" ".codex/"; do
+# Narrow on purpose: the kit owns one file in each of .agents/ and .codex/, so a
+# user's own .codex/config.toml or .agents/skills/mine/ must not be swept up.
+for e in ".claude/" "CLAUDE.md" "AGENTS.md" ".agents/skills/solana-ai-kit/" ".codex/hooks.json"; do
   assert_contains "$BLOCK" "$e" "gitignore config block covers $e"
 done
 assert_eq "" "$(cd "$B" && git status --porcelain | grep -E '\.agents|\.codex|AGENTS\.md' || true)" \
@@ -103,7 +111,7 @@ DUAL="$WORK/dual"
 install_kit "$DUAL"
 install_kit "$DUAL" --agents
 DBLOCK="$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$DUAL/.gitignore")"
-for e in "AGENTS.md" ".agents/" ".codex/"; do
+for e in "AGENTS.md" ".agents/skills/solana-ai-kit/" ".codex/hooks.json"; do
   assert_contains "$DBLOCK" "$e" "second --agents run tops up the existing block with $e"
 done
 assert_file_exists "$DUAL/.agents/skills/solana-ai-kit/SKILL.md" "bridge added on top of a default install"

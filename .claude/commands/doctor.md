@@ -36,6 +36,8 @@ grep -E '^[A-Z_]+=$' .env 2>/dev/null | cut -d= -f1      # present but empty
 **6. Kit version vs upstream.**
 ```bash
 cat .claude/VERSION
+# The mainnet gate is a file now; a missing one disarms every deploy check.
+test -r .claude/bin/hooks/pre-deploy.sh && echo "GATE ok" || echo "GATE MISSING"
 git ls-remote --tags --sort=-v:refname https://github.com/solanabr/ai-kit | head -3
 ```
 - WARN behind the latest tag: `bash .claude/bin/update.sh`; preview with `--dry-run`

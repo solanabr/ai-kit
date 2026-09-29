@@ -22,10 +22,15 @@ if "routing hub is" in raw:
     problems.append("router BODY leaked into the prompt (only name+description should)")
 
 entries = re.findall(r"- ([\w:.\-]+): (.*?)\(file:", raw)
-empty = [n for n, d in entries if not d.strip()]
-if empty:
+# Codex does not drop excess skills; it shrinks every description toward zero.
+# The observed regime before emptiness is mid-word stumps of ~31-37 chars, so
+# asserting "not empty" alone would pass a prompt where nothing is readable.
+MIN = 60
+short = [(n, len(d.strip())) for n, d in entries if len(d.strip()) < MIN]
+if short:
     problems.append(
-        f"{len(empty)}/{len(entries)} skills have an empty description: {empty[:5]}"
+        f"{len(short)}/{len(entries)} skill descriptions are under {MIN} chars "
+        f"(truncated by Codex's metadata budget): {short[:5]}"
     )
 
 if problems:
@@ -34,4 +39,4 @@ if problems:
     print(raw[:3000])
     sys.exit(1)
 
-print(f"OK: AGENTS.md loaded, router listed, {len(entries)} skills, 0 empty descriptions")
+print(f"OK: AGENTS.md loaded, router listed, {len(entries)} skills, none truncated")

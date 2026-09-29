@@ -21,12 +21,12 @@ Open the matching entry in `.claude/skills/SKILL.md`. It routes to current refer
 ## Workflow
 
 - Branches: `<type>/<scope>-<description>-<DD-MM-YYYY>` (`/quick-commit` automates this).
-- Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. (Claude Code adds one: a hook blocks mainnet deploys unless the command is prefixed with `CONFIRM_MAINNET=1`. Other runtimes have no such gate.)
+- Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. A hook blocks mainnet deploys unless the command is prefixed with `CONFIRM_MAINNET=1`; in Codex it only applies once `/hooks` has trusted it.
 - Before finishing a branch: build, `cargo fmt`, clippy and tests pass, `/diff-review` is clean, and docs that describe the change are updated. For program changes also run `/audit-solana` and `/profile-cu`, and `anchor build --verifiable` before any deploy.
 
 ## MCP
 
-Helius, solana-dev and Context7 are configured in `.mcp.json`; Playwright, Surfpool and context-mode are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers.
+Helius, solana-dev and Context7 are configured in `.mcp.json` for Claude Code; Playwright, Surfpool and context-mode are opt-in. Other harnesses configure MCP their own way (Codex: `~/.codex/config.toml`), so do not assume these tools exist. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers.
 
 ## Project Learnings
 

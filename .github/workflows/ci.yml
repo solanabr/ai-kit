@@ -47,14 +47,19 @@ jobs:
           python3 -c "import json; json.load(open('$TEMP_DIR/.claude/settings.json'))"
           echo "✓ Fresh install smoke test passed"
 
-      - name: Smoke test — agents mode
+      - name: Smoke test — AGENTS.md bridge
         run: |
           TEMP_DIR=$(mktemp -d)
           (cd "$TEMP_DIR" && git init -q)
           SOLANA_AI_KIT_LOCAL_SRC="$GITHUB_WORKSPACE" bash install.sh --agents "$TEMP_DIR"
-          test -d "$TEMP_DIR/.agents/agents"
-          test ! -d "$TEMP_DIR/.claude"
-          echo "✓ Agents mode smoke test passed"
+          # One config tree plus the bridge — not a second copy of everything.
+          test -d "$TEMP_DIR/.claude/agents"
+          test -f "$TEMP_DIR/AGENTS.md"
+          test -f "$TEMP_DIR/.agents/skills/solana-ai-kit/SKILL.md"
+          test -f "$TEMP_DIR/.codex/hooks.json"
+          test ! -d "$TEMP_DIR/.agents/agents"
+          test ! -d "$TEMP_DIR/.agents/commands"
+          echo "✓ Bridge smoke test passed"
 
   # The real clients discover the --agents install (no API key, no model calls).
   codex-bridge:

@@ -145,14 +145,18 @@ if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/.agents/skills/solana-ai-kit" ]; 
     BRIDGE_SRC="$LOCAL_SRC/bridge"
   fi
   if [ -d "$BRIDGE_SRC" ]; then
-    cp -r "$BRIDGE_SRC/skills/solana-ai-kit" "$TARGET_DIR/.agents/skills/"
-    CHANGES="$CHANGES  [updated] .agents/skills/solana-ai-kit/ (bridge router)\n"
+    if ! diff -rq "$BRIDGE_SRC/skills/solana-ai-kit" "$TARGET_DIR/.agents/skills/solana-ai-kit" >/dev/null 2>&1; then
+      cp -r "$BRIDGE_SRC/skills/solana-ai-kit" "$TARGET_DIR/.agents/skills/"
+      CHANGES="$CHANGES  [updated] .agents/skills/solana-ai-kit/ (bridge router)\n"
+    fi
     if [ ! -f "$TARGET_DIR/.codex/hooks.json" ]; then
       mkdir -p "$TARGET_DIR/.codex"
       cp "$BRIDGE_SRC/codex/hooks.json" "$TARGET_DIR/.codex/hooks.json"
       CHANGES="$CHANGES  [created] .codex/hooks.json — run /hooks in Codex to trust it\n"
     fi
   fi
+  # A failed fetch leaves no CLAUDE-solana.md; skip rather than abort mid-update.
+  if [ -f "$TEMP_DIR/repo/CLAUDE-solana.md" ]; then
   cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/AGENTS.md"
   strip_md_comments "$TEMP_DIR/repo/AGENTS.md"
   if [ ! -f "$TARGET_DIR/AGENTS.md" ]; then
@@ -161,6 +165,7 @@ if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/.agents/skills/solana-ai-kit" ]; 
   elif ! diff -q "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md" >/dev/null 2>&1; then
     cp "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md.upstream"
     CHANGES="$CHANGES  [notice] New upstream AGENTS.md at AGENTS.md.upstream — review and merge manually\n"
+  fi
   fi
 fi
 
@@ -186,8 +191,17 @@ if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/$CONFIG_NAME/skills/ext" ]; then
   done < <(find "$TARGET_DIR/$CONFIG_NAME/skills/ext" -name .git -type f)
 fi
 
+# A retired --agents layout (.agents/ config dir, no bridge) is not migrated: the
+# user reinstalls. Skip the steps that would half-convert it — merging .gitmodules
+# would register ext/ paths this layout does not have, and writing the instruction
+# file would leave two of them.
+LEGACY_AGENTS=false
+if [ "$CONFIG_NAME" = ".agents" ] && [ ! -d "$TARGET_DIR/.agents/skills/solana-ai-kit" ]; then
+  LEGACY_AGENTS=true
+fi
+
 # Merge .gitmodules (don't overwrite — user may have their own submodules)
-if [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
+if [ "$LEGACY_AGENTS" = false ] && [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
   if [ ! -f "$TARGET_DIR/.gitmodules" ]; then
     if ! diff -q "$TEMP_DIR/repo/.gitmodules" "$TARGET_DIR/.gitmodules" >/dev/null 2>&1; then
       CHANGES="$CHANGES  [updated] .gitmodules\n"

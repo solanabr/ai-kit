@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "exec bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-deploy.sh\""
+            "command": "S=\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-deploy.sh\"; if [ ! -r \"$S\" ]; then echo \"pre-deploy gate missing \u2014 refusing to run deploy commands\" >&2; exit 2; fi; exec bash \"$S\""
           }
         ]
       }

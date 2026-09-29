@@ -196,10 +196,21 @@ cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TARGET_DIR/$INSTR_FILE"
 # Cursor, Copilot). AGENTS.md carries the same instructions as CLAUDE.md with the
 # maintainer HTML comments stripped — Claude Code drops those before the model
 # sees them, Codex does not, so they would arrive as instructions every request.
+if [ "$BRIDGE" = true ] && [ ! -d "$TEMP_DIR/repo/bridge" ]; then
+  warn "Warning: this release predates the AGENTS.md bridge — installed without it."
+  warn "         Re-run once a release containing bridge/ is tagged."
+  BRIDGE=false
+fi
 if [ "$BRIDGE" = true ]; then
   step "Installing the AGENTS.md bridge..."
   cp "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/AGENTS.md"
   strip_md_comments "$TEMP_DIR/repo/AGENTS.md"
+  if [ -e "$TARGET_DIR/AGENTS.md" ] && [ ! -f "$TARGET_DIR/AGENTS.md" ]; then
+    fail "AGENTS.md exists and is not a regular file — leaving it alone, bridge not installed"
+    BRIDGE=false
+  fi
+fi
+if [ "$BRIDGE" = true ]; then
   if [ -f "$TARGET_DIR/AGENTS.md" ] && ! cmp -s "$TEMP_DIR/repo/AGENTS.md" "$TARGET_DIR/AGENTS.md"; then
     warn "Warning: AGENTS.md already exists, backing up to AGENTS.md.bak"
     cp "$TARGET_DIR/AGENTS.md" "$TARGET_DIR/AGENTS.md.bak"
@@ -272,7 +283,7 @@ if ! grep -qF ">>> solana-ai-kit config" "$GITIGNORE"; then
     printf '%s/\n' "$CONFIG_DIR"
     printf '%s\n' "$INSTR_FILE"
     printf '.mcp.json\n'
-    [ "$BRIDGE" = true ] && printf 'AGENTS.md\n.agents/\n.codex/\n'
+    [ "$BRIDGE" = true ] && printf 'AGENTS.md\n.agents/skills/solana-ai-kit/\n.codex/hooks.json\n'
     printf '# <<< solana-ai-kit config <<<\n'
   } >> "$GITIGNORE"
   ok "Kit config gitignored by default — run /commit-claude-config to version it"
@@ -280,7 +291,7 @@ elif [ "$BRIDGE" = true ]; then
   # An earlier default install wrote the block without the bridge entries, and an
   # older --agents install listed .agents/ as the config dir. Top it up either way.
   ADDED_IGNORE=""
-  for entry in "$CONFIG_DIR/" "$INSTR_FILE" "AGENTS.md" ".agents/" ".codex/"; do
+  for entry in "$CONFIG_DIR/" "$INSTR_FILE" "AGENTS.md" ".agents/skills/solana-ai-kit/" ".codex/hooks.json"; do
     if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | grep -qxF "$entry"; then
       continue
     fi
