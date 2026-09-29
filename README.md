@@ -24,7 +24,7 @@ If you installed manually, remember to rename ./CLAUDE-solana.md back to ./CLAUD
 A complete `.claude/` configuration that turns Claude into a Solana development expert with:
 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research)
-- **30 workflow commands** for building, testing, deploying, profiling, migrating, and committing
+- **31 workflow commands** for building, testing, deploying, profiling, migrating, and committing
 - **3 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev) and library docs (Context7), plus opt-in browser automation (Playwright), local-validator / mainnet-fork control (Surfpool) and context optimization (context-mode)
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
@@ -104,7 +104,7 @@ solana-ai-kit is also its own Claude Code marketplace serving one **core plugin*
 /plugin install solana-ai-kit@stbr
 ```
 
-The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
@@ -275,7 +275,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     ├── bin/
     │   ├── update.sh                # In-place update from upstream
     │   └── resync.sh                # Submodule resync script
-    ├── commands/                # 30 workflow commands
+    ├── commands/                # 31 workflow commands
     ├── skills/                  # Progressive-loading knowledge
     │   ├── SKILL.md                 # Unified hub routing to all skills
     │   ├── ext/                     # External skill submodules
@@ -354,6 +354,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
 | `/profile-cu` | CU profiling per instruction with optimization suggestions |
 | `/benchmark` | CU benchmarks with before/after comparison |
 | `/debug-user-tx` | Replay a user's failing tx against forked state, map error to source |
+| `/inspect-mint` | Decode a mint's extensions and live authorities, flag integration and venue risks |
 
 ### Deployment & Migration
 | Command | Purpose |

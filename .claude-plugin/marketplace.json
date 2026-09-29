@@ -13,7 +13,7 @@
     {
       "name": "solana-ai-kit",
       "source": "./plugin",
-      "description": "Core Solana dev kit: 15 agents, 30 commands, idea→pitch→hackathon→registry skills, 3 MCP servers, and dev hooks. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and 18 ext/ submodules.)",
+      "description": "Core Solana dev kit: 15 agents, 31 commands, idea→pitch→hackathon→registry skills, 3 MCP servers, and dev hooks. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and 18 ext/ submodules.)",
       "category": "Development",
       "strict": true
     }

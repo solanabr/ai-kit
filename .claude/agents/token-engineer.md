@@ -39,4 +39,4 @@ You build token infrastructure: mint configuration, Token-2022 extensions and tr
 
 ## Before handing back
 
-Create and exercise the mint on devnet or Surfpool with the exact extension set, and run `/audit-solana` on hook programs. Report the mint address, its extensions, and who holds each authority.
+Create and exercise the mint on devnet or Surfpool with the exact extension set, and run `/audit-solana` on hook programs. Report the mint address, its extensions, and who holds each authority; `/inspect-mint <mint>` reads them from chain.

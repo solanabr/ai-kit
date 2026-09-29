@@ -50,7 +50,7 @@ assert_eq "15" "$AGENT_COUNT" "Agent count is 15"
 
 # Count commands (should match full install)
 CMD_COUNT=$(find "$TEMP_DIR/.agents/commands" -name "*.md" | wc -l | tr -d ' ')
-assert_eq "30" "$CMD_COUNT" "Command count is 30"
+assert_eq "31" "$CMD_COUNT" "Command count is 31"
 
 # CLAUDE.md should exist at project root
 assert_file_exists "$TEMP_DIR/CLAUDE.md" "CLAUDE.md exists at project root"

@@ -78,7 +78,7 @@ Plugins are plain git clones, so they can't carry the 18 `ext/` submodules, the 
 
 Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [README → Agents](README.md#agents) for the routing.
 
-### 30 Slash Commands
+### 31 Slash Commands
 
 **Building:**
 - `/build-program` - Build Anchor or native programs
@@ -98,6 +98,7 @@ Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable
 - `/profile-cu` - CU profiling per instruction
 - `/benchmark` - CU benchmarks before/after
 - `/debug-user-tx` - Replay failing user tx, map error to source
+- `/inspect-mint` - Decode a mint's extensions and authorities, flag risks
 
 **Deployment & Migration:**
 - `/deploy` - Deploy to devnet/mainnet
@@ -177,7 +178,7 @@ your-project/
 ├── CLAUDE.md              # ← Main config (copied from CLAUDE-solana.md)
 ├── .claude/
 │   ├── agents/            # 15 specialized AI agents
-│   ├── commands/          # 30 slash commands
+│   ├── commands/          # 31 slash commands
 │   ├── skills/            # Progressive knowledge
 │   │   ├── SKILL.md           # Unified hub (start here)
 │   │   ├── ext/               # External skill submodules
