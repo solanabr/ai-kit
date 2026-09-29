@@ -2,6 +2,33 @@
 
 All notable changes to solana-ai-kit.
 
+## [2.2.0] - 2026-09-29
+
+### Added
+- **AGENTS.md bridge (`install.sh --agents`)** — replaces the parallel `.agents/` config tree. A normal `.claude/` install plus three files: `AGENTS.md` (the same instructions with HTML comments stripped, which Claude Code drops for free but Codex does not), one router skill at `.agents/skills/solana-ai-kit/SKILL.md` pointing at the kit hub, and `.codex/hooks.json` carrying the mainnet gate. Reaches Codex, Cursor and GitHub Copilot; Grok Build needs no bridge because it reads `.claude/` natively.
+- **A real mainnet gate outside Claude Code.** `--agents` installs previously had none — `settings.json` is Claude Code's alone. The inline hook is now `.claude/bin/hooks/pre-deploy.sh`, shared by `settings.json`, the plugin and `.codex/hooks.json`, since both harnesses use the same contract (`.tool_input.command` on stdin, exit 2 to block).
+- `tests/test_bridge.sh` (46 checks) and `tests/check_codex_prompt.py`, which asserts against real Codex output that no skill description was truncated.
+- `/doctor` reports a missing pre-deploy gate.
+
+### Changed
+- **Model routing** (#65) — agents and commands route to `opus`, `sonnet`, or the session model. No `fable` is ever pinned.
+- **Always-loaded context cut ~91%** (#66), from ~20.4K to ~1.7K tokens. The five shipped rules used `globs:`, which Claude Code ignores, so all 69KB loaded in every session and every subagent.
+- **`settings.json` no longer pins session behaviour** (#69) — `CLAUDE_CODE_EFFORT_LEVEL`, `enableAllProjectMcpServers`, `defaultMode`, the LSP `enabledPlugins` and the invented `modelDefaults` are gone. Default MCP servers trimmed 7 → 3 (Helius, solana-dev, Context7); the rest are opt-in.
+- Repo renamed `solanabr/solana-ai-kit` → `solanabr/ai-kit` everywhere except `.claude/bin/update.sh:16`, which sits inside the frozen byte range that keeps existing installs self-updating. GitHub's redirect covers it.
+
+### Fixed
+- **The mainnet gate was bypassable.** The confirmation was an unanchored grep, so `echo CONFIRM_MAINNET=1 && <deploy>` passed and any variable merely ending in the token disarmed it. The trigger missed `anchor upgrade`, `write-buffer`, `set-upgrade-authority --final`, `close` and `extend`; mainnet was detected by grepping for the literal word, so `-u m` and unnamed RPC hosts read as safe. All closed.
+- **A copied submodule gitfile was kept whenever its gitdir merely existed**, which with a local source resolved back into the kit checkout. Only a gitdir inside the target project counts now — and one inside the repo's git *common* dir, so reinstalling into a git worktree no longer deletes live submodules.
+- `--agents` path rewriting made `/cleanup` false (it describes the kit's own repo) and never touched `CLAUDE.md`, so `/dream` and `/diff-review` wrote to a file Codex never reads (#67).
+- `/commit-claude-config` now stages the instruction file and the bridge.
+- Installing `--agents` beside an existing `.claude/` left `.agents/` untracked.
+- Plugin load error from a duplicate `hooks` declaration in `plugin.json` (#64, issue #50).
+
+### Removed
+- The `.agents/` parallel config tree, the `.claude/` → `.agents/` path-rewrite regex, and `tests/test_install_agents_only.sh`. Existing `--agents` installs should reinstall; `update.sh` no longer half-migrates them.
+- The five eager `.claude/rules/*.md` files (#66) and the duplicated `agents-mode` CI job.
+- opencode is no longer tested or supported. It still works via `AGENTS.md`.
+
 ## [2.1.0] - 2026-06-26
 
 ### Added
