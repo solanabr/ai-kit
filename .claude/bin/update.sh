@@ -86,11 +86,7 @@ for dir in $UPDATE_DIRS; do
       if ! diff -rq "$SRC" "$DST" >/dev/null 2>&1; then
         CHANGES="$CHANGES  [updated] $CONFIG_NAME/$dir/\n"
       fi
-      # Copy contents (src/.) into a pre-created destination so an existing
-      # symlink (e.g. .agents/skills -> ../.claude/skills) is followed and
-      # merged into, instead of cp failing with "cannot overwrite non-directory".
-      mkdir -p "$DST"
-      cp -r "$SRC/." "$DST/"
+      cp -r "$SRC" "$TARGET_DIR/$CONFIG_NAME/"
     fi
   fi
 done
