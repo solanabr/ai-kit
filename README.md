@@ -207,7 +207,7 @@ If you use the plugin anyway, keep the exposure small:
    claude plugin update solana-ai-kit@stbr --scope local
    ```
 
-The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the token-extensions skill, the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
@@ -451,7 +451,7 @@ The pin moves by hand, not through Dependabot: review the upstream diff of the t
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
-    │   ├── token-2022.md            # Token Extensions guide (local)
+    │   ├── token-extensions/        # Token-2022 extensions: pick, combine, create (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
     └── settings.json            # Sandbox, permissions, hooks, stbr marketplace + safe-ai-skill@stbr
