@@ -2,18 +2,35 @@
 
 ## TL;DR
 
+Each code block holds one command. The installer installs into the current directory, so go to your project's root first (replace `your-project` with its path):
+
 ```bash
-# Option 1: One-liner installer (recommended)
+cd your-project
+```
+
+Download the installer, read it, then run it:
+
+```bash
+curl -fsSL https://aikit.superteam.codes/install.sh -o /tmp/solana-ai-kit-install.sh
+```
+
+```bash
+less /tmp/solana-ai-kit-install.sh
+```
+
+```bash
+bash /tmp/solana-ai-kit-install.sh
+```
+
+Or run the same installer in one line, without the review step:
+
+```bash
 curl -fsSL https://aikit.superteam.codes | bash
-# Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash
+```
 
-# Option 2: Manual setup
-git clone --recurse-submodules https://github.com/solanabr/ai-kit.git solana-ai-kit
-cp -r solana-ai-kit/.claude /path/to/your-project/
-cp solana-ai-kit/CLAUDE-solana.md /path/to/your-project/CLAUDE.md
-cd /path/to/your-project && git submodule update --init --recursive
+Then start Claude Code:
 
-# Start Claude Code
+```bash
 claude
 ```
 
@@ -22,6 +39,24 @@ That's it. Claude now has Solana superpowers.
 > The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
 
 > The kit's security firewall, [safe-ai-skill](https://github.com/solanabr/safe-ai-skill), is a Claude Code plugin that `.claude/settings.json` enables. After you trust the folder, install it once with `claude plugin install safe-ai-skill@stbr --scope project`. The README's "Security firewall: safe-ai-skill" section covers what it gates and how to opt out.
+
+---
+
+## Other ways to use the kit
+
+- **Codex, opencode and other agents that read `AGENTS.md`:** install into `.agents/` instead, from your project's root:
+
+  ```bash
+  cd your-project
+  ```
+
+  ```bash
+  curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
+  ```
+
+- **Pin a release or review every file first:** clone the kit and run the installer from the clone, as in [README → Installer](README.md#installer-recommended).
+- **No install:** point any agent that can fetch URLs at https://aikit.superteam.codes/CLAUDE-solana.md and the skill hub at https://aikit.superteam.codes/.claude/skills/SKILL.md. [README → No install](README.md#no-install-read-the-kit-from-aikitsuperteamcodes) has a copy-paste prompt and the trade-offs.
+- **Claude Code plugin marketplace: not recommended.** A plugin runs hooks and MCP servers with your user permissions and can update from a remote repository, so every marketplace you add widens your supply-chain attack surface. If you use it anyway, [README → Install as a Claude Code plugin](README.md#install-as-a-claude-code-plugin-not-recommended) shows how to pin a release, install at local scope and keep auto-update off.
 
 ---
 
@@ -38,21 +73,6 @@ Opt-in, because each needs a browser, a CLI or a workflow choice. Run `/setup-mc
 - **context-mode** — Keeps large tool output out of the context window
 
 The kit pins no effort level, agent teams or LSP plugins; README's "Settings the kit leaves to you" shows how to turn them on.
-
----
-
-## Install as a plugin
-
-Prefer Claude Code's plugin system? solana-ai-kit is its own marketplace. From inside Claude Code:
-
-```text
-/plugin marketplace add https://github.com/solanabr/ai-kit.git
-/plugin install solana-ai-kit@stbr
-```
-
-The plugin ships the core kit — agents, commands, the local go-to-market + registry skills, the 3 default MCP servers, and the dev hooks — and installs the safe-ai-skill security firewall with it as a declared dependency. Commands namespace as `/solana-ai-kit:<name>` (e.g. `/solana-ai-kit:deploy`).
-
-Plugins are plain git clones, so they can't carry the `ext/` skill packs, the project `CLAUDE.md` with its program-code house rules, or the permissions/sandbox policy — those need the **full install** (the `install.sh` one-liner above). For protocol-skill depth in plugin form, add the upstream marketplaces instead (`/plugin marketplace add sendaifun/skills`, etc.). Running both the plugin and the full install in one project double-loads commands/hooks/MCP — `/doctor` flags it; pick one.
 
 ---
 
@@ -278,15 +298,32 @@ Edit `.env` to add API keys for MCP servers (Helius). Run `/setup-mcp` for guide
 
 ## Updating
 
+Inside Claude Code:
+
+```text
+/update
+```
+
+Or from your project's root (replace `your-project` with its path):
+
 ```bash
-# Preferred: use /update in Claude Code, or run directly:
+cd your-project
+```
+
+```bash
 bash .claude/bin/update.sh
+```
 
-# Or resync submodules only
+Install a skill extension when a task needs one. `/add-skill` with no id lists them; replace `sendai` with the id you need:
+
+```text
+/add-skill sendai
+```
+
+Check that every link in the skill hub resolves (in a fork of the kit repo, this also moves the `ext/` submodules to their latest upstream commits):
+
+```text
 /resync
-
-# Install a skill extension when a task needs one (list them: bash .claude/bin/skills.sh list)
-/add-skill <id>
 ```
 
 ---
@@ -310,9 +347,9 @@ bash .claude/bin/update.sh
 - Run `/setup-mcp` to verify configuration
 - Check API keys are set in environment
 
-**Submodules empty:**
-- Run `git submodule update --init --recursive`
-- Or run `/resync`
+**Skill packs in `.claude/skills/ext/` missing or empty:**
+- In an installed project they are plain copies: run `bash .claude/bin/update.sh` to fetch the core packs and the extensions you installed
+- In a fork of the kit repo they are git submodules: run `git submodule update --init --recursive`
 
 **A skill link points to a missing `ext/` folder:**
 - It is an extension: run the `bash .claude/bin/skills.sh add <id>` command given next to the link, or `/add-skill <id>`
