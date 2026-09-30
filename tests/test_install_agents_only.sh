@@ -134,18 +134,32 @@ assert_no_dangling_refs() {
   fi
 }
 
+# Packs a default install carries (skill-registry.json tier "core"). Extensions stay
+# registered in .gitmodules but install on demand, recorded in skills/extensions.txt.
+CORE_PACKS="$(python3 -c '
+import json, sys
+reg = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" ".join(e["id"] for e in reg["entries"] if e.get("tier") == "core"))
+' "$REPO_ROOT/.claude/skills/skill-registry.json")"
+
 assert_submodules_under_agents() {
-  local d="$1" paths bad="" p
+  local d="$1" paths bad="" p installed
+  # Every path must sit under .agents/skills/ext/; only installed packs (core plus
+  # the extensions this project recorded) must be populated.
+  installed=" $CORE_PACKS $(grep -vE '^[[:space:]]*(#|$)' "$d/.agents/skills/extensions.txt" 2>/dev/null | tr '\n' ' ' || true) "
   paths="$(git config -f "$d/.gitmodules" --get-regexp '\.path$' 2>/dev/null | awk '{print $2}')"
   for p in $paths; do
     case "$p" in
-      .agents/skills/ext/*) [ -n "$(ls -A "$d/$p" 2>/dev/null)" ] || bad="$bad $p(empty)" ;;
+      .agents/skills/ext/*)
+        case "$installed" in
+          *" ${p##*/} "*) [ -n "$(ls -A "$d/$p" 2>/dev/null)" ] || bad="$bad $p(empty)" ;;
+        esac ;;
       *) bad="$bad $p" ;;
     esac
   done
   assert_eq "$(git config -f "$REPO_ROOT/.gitmodules" --get-regexp '\.path$' | wc -l | tr -d ' ')" \
     "$(printf '%s\n' "$paths" | grep -c .)" "$2: every kit submodule is registered"
-  assert_eq "" "$bad" "$2: .gitmodules paths are populated dirs under .agents/skills/ext/"
+  assert_eq "" "$bad" "$2: .gitmodules paths are under .agents/skills/ext/ and installed packs are populated"
   assert_eq "0" "$(find "$d/.agents/skills/ext" -name .git -type f | wc -l | tr -d ' ')" \
     "$2: no dangling submodule gitfiles in .agents/skills/ext/"
 }
