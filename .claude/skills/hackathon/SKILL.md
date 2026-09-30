@@ -20,8 +20,8 @@ At start, read `.claude/context/idea.md` and `.claude/context/build.md` if prese
 
 Winning a thin track beats placing in a fat one. Per candidate track: estimate entry volume, fit with what's actually built, and judge appetite (sponsor tracks often have the fewest serious entries).
 
-- Winner patterns + track history: [hackathon-winners.md](../ext/solana-new/skills/data/colosseum/hackathon-winners.md) — every Colosseum grand champion and track winner, with what they built
-- Live crowdedness check: [ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — query 5,400+ past submissions for cluster density and gaps (requires `COLOSSEUM_COPILOT_PAT`)
+- Winner patterns + track history: [hackathon-winners.md](../ext/solana-new/skills/data/colosseum/hackathon-winners.md) — every Colosseum grand champion and track winner, with what they built (install first: `bash .claude/bin/skills.sh add solana-new`)
+- Live crowdedness check: [ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — query 5,400+ past submissions for cluster density and gaps (requires `COLOSSEUM_COPILOT_PAT`; install first: `bash .claude/bin/skills.sh add colosseum`)
 
 ### 2. Write a scannable description
 
@@ -33,7 +33,7 @@ Winning a thin track beats placing in a fat one. Per candidate track: estimate e
 - "What works today" list — demo-able claims only, never roadmap dressed as product
 - Why Solana (one concrete reason: speed, fees, composability with X)
 
-Full structure (200–500 words, paragraph-by-paragraph): [hackathon-submission-guide.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/hackathon-submission-guide.md). Score the draft against [judging-criteria.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/judging-criteria.md) before submitting.
+Full structure (200–500 words, paragraph-by-paragraph): [hackathon-submission-guide.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/hackathon-submission-guide.md). Score the draft against [judging-criteria.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/judging-criteria.md) before submitting (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ### 3. Demo script (<3 minutes)
 
@@ -45,7 +45,7 @@ Full structure (200–500 words, paragraph-by-paragraph): [hackathon-submission-
 | 2:10–2:40 | The novel part — the thing competitors don't have |
 | 2:40–3:00 | Traction/team one-liner + the ask |
 
-Shot-by-shot template and recording tips: [demo-video-script.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/demo-video-script.md). Rule: if the demo can fail live, record it.
+Shot-by-shot template and recording tips: [demo-video-script.md](../ext/solana-new/skills/launch/submit-to-hackathon/references/demo-video-script.md) (install first: `bash .claude/bin/skills.sh add solana-new`). Rule: if the demo can fail live, record it.
 
 ### 4. Submission checklist
 
@@ -64,4 +64,4 @@ Losing the track doesn't mean losing the funding. Same artifacts (description, d
 
 - **Superteam Earn** (earn.superteam.fun) — bounties + grants up to ~$10k USDC equivalent, fast cycles, regional Superteams
 - **Solana Foundation grants** — milestone-based, public-good angle; reuse the scannable description with an ecosystem-benefit paragraph
-- Grant-shaped ideas dataset: [superteam-ideas.json](../ext/solana-new/skills/data/ideas/superteam-ideas.json)
+- Grant-shaped ideas dataset: [superteam-ideas.json](../ext/solana-new/skills/data/ideas/superteam-ideas.json) (install first: `bash .claude/bin/skills.sh add solana-new`)

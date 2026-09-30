@@ -64,7 +64,7 @@ assert_contains "$GITIGNORE_CONTENT" ".agents/skills/ext/" ".gitignore contains 
 assert_contains "$GITIGNORE_CONTENT" ".gitmodules" ".gitignore contains .gitmodules (config gitignored by default)"
 assert_contains "$GITIGNORE_CONTENT" "solana-ai-kit config" ".gitignore has config markers for /commit-claude-config"
 
-# ── Agents-mode layout checks (mirrors the agents-mode job in .github/workflows/ci.yml) ──
+# ── Agents-mode layout checks (CI runs them on ubuntu and macOS via run_all.sh) ──
 WORK="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR" "$WORK"' EXIT
 export SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" NO_COLOR=1
@@ -108,7 +108,8 @@ sys.stdout.write(m.group(1) if m else "<<missing>>")
 }
 SKIP_FILES_INSTALL="$(skip_value "$REPO_ROOT/install.sh")"
 SKIP_FILES_UPDATE="$(skip_value "$REPO_ROOT/.claude/bin/update.sh")"
-BOTH_MODE_EXPECTED='commands/commit-claude-config.md
+BOTH_MODE_EXPECTED='commands/add-skill.md
+commands/commit-claude-config.md
 commands/doctor.md
 commands/resync.md
 commands/scaffold.md
@@ -134,18 +135,32 @@ assert_no_dangling_refs() {
   fi
 }
 
+# Packs a default install carries (skill-registry.json tier "core"). Extensions stay
+# registered in .gitmodules but install on demand, recorded in skills/extensions.txt.
+CORE_PACKS="$(python3 -c '
+import json, sys
+reg = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" ".join(e["id"] for e in reg["entries"] if e.get("tier") == "core"))
+' "$REPO_ROOT/.claude/skills/skill-registry.json")"
+
 assert_submodules_under_agents() {
-  local d="$1" paths bad="" p
+  local d="$1" paths bad="" p installed
+  # Every path must sit under .agents/skills/ext/; only installed packs (core plus
+  # the extensions this project recorded) must be populated.
+  installed=" $CORE_PACKS $(grep -vE '^[[:space:]]*(#|$)' "$d/.agents/skills/extensions.txt" 2>/dev/null | tr '\n' ' ' || true) "
   paths="$(git config -f "$d/.gitmodules" --get-regexp '\.path$' 2>/dev/null | awk '{print $2}')"
   for p in $paths; do
     case "$p" in
-      .agents/skills/ext/*) [ -n "$(ls -A "$d/$p" 2>/dev/null)" ] || bad="$bad $p(empty)" ;;
+      .agents/skills/ext/*)
+        case "$installed" in
+          *" ${p##*/} "*) [ -n "$(ls -A "$d/$p" 2>/dev/null)" ] || bad="$bad $p(empty)" ;;
+        esac ;;
       *) bad="$bad $p" ;;
     esac
   done
   assert_eq "$(git config -f "$REPO_ROOT/.gitmodules" --get-regexp '\.path$' | wc -l | tr -d ' ')" \
     "$(printf '%s\n' "$paths" | grep -c .)" "$2: every kit submodule is registered"
-  assert_eq "" "$bad" "$2: .gitmodules paths are populated dirs under .agents/skills/ext/"
+  assert_eq "" "$bad" "$2: .gitmodules paths are under .agents/skills/ext/ and installed packs are populated"
   assert_eq "0" "$(find "$d/.agents/skills/ext" -name .git -type f | wc -l | tr -d ' ')" \
     "$2: no dangling submodule gitfiles in .agents/skills/ext/"
 }
@@ -197,6 +212,9 @@ assert_eq "$SKIP_FILES_INSTALL" "$SKIP_FILES_UPDATE" \
   "AGENTS_SKIP_FILES is identical in install.sh and bin/update.sh"
 assert_file_not_exists "$TEMP_DIR/.agents/commands/cleanup.md" \
   "/cleanup is not installed in --agents mode (it describes a Claude Code fork flow)"
+assert_file_exists "$TEMP_DIR/.agents/commands/add-skill.md" \
+  "/add-skill is installed in --agents mode (it resolves .claude/bin or .agents/bin)"
+assert_file_exists "$TEMP_DIR/.agents/bin/skills.sh" ".agents/bin/skills.sh exists for /add-skill"
 assert_contains "$(cat "$TEMP_DIR/.agents/commands/commit-claude-config.md")" 'INSTR_FILE' \
   "/commit-claude-config resolves the instruction file so it stages AGENTS.md"
 assert_submodules_under_agents "$TEMP_DIR" "fresh install"
@@ -266,8 +284,8 @@ assert_contains "$RESYNC_OUT" "Not a git repository" "resync.sh explains it skip
 assert_dir_not_exists "$NOGIT/.claude" "nothing written under .claude/ outside git"
 
 # ── Upgrade an install made by an older --agents installer ──────────────────
-# Older installers wrote CLAUDE.md, kept .claude/skills/ext/ paths in .gitmodules
-# and copied dangling submodule gitfiles.
+# Older installers wrote CLAUDE.md, kept .claude/skills/ext/ paths in .gitmodules,
+# copied dangling submodule gitfiles and shipped the Claude-Code-only /cleanup.
 echo "[upgrade from an older --agents install]"
 for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   mkdir -p "$OLD"; git -C "$OLD" init -q
@@ -276,11 +294,15 @@ for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   sed 's#\.agents/skills/ext/#.claude/skills/ext/#g' "$OLD/.gitmodules" > "$WORK/gm" && cat "$WORK/gm" > "$OLD/.gitmodules"
   sed 's#^AGENTS\.md$#CLAUDE.md#' "$OLD/.gitignore" > "$WORK/gi" && cat "$WORK/gi" > "$OLD/.gitignore"
   echo "gitdir: ../../../../.git/modules/.claude/skills/ext/solana-dev" > "$OLD/.agents/skills/ext/solana-dev/.git" 2>/dev/null || true
+  cp "$REPO_ROOT/.claude/commands/cleanup.md" "$OLD/.agents/commands/cleanup.md"
 done
 assert_cmd_success "cd '$WORK/old-update' && bash .agents/bin/update.sh" "update.sh upgrades an older --agents install"
 assert_cmd_success "install_agents '$WORK/old-reinstall'" "install.sh --agents re-install upgrades an older --agents install"
+assert_file_contains "$WORK/last.log" "Removed .agents/commands/cleanup.md" \
+  "install.sh --agents reports removing the older install's /cleanup"
 for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   NAME="$(basename "$OLD")"
+  assert_file_not_exists "$OLD/.agents/commands/cleanup.md" "$NAME: the older install's /cleanup is removed"
   assert_file_exists "$OLD/AGENTS.md" "$NAME: AGENTS.md created"
   assert_eq "AGENTS.md" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$OLD/.gitignore" | grep -x 'AGENTS.md' || true)" \
     "$NAME: AGENTS.md added to the .gitignore config block"
@@ -320,5 +342,32 @@ assert_contains "$DUAL_BLOCK" "AGENTS.md" "dual install gitignores AGENTS.md too
 assert_eq "" "$(cd "$DUAL" && git status --porcelain --untracked-files=normal | grep '\.agents' || true)" \
   "dual install leaves no untracked .agents/ tree"
 rm -rf "$DUAL"
+
+# ── Reverse order: .claude/ must join an existing --agents gitignore block ───
+echo "[dual install gitignore, --agents first]"
+REV="$WORK/dual-agents-first"; mkdir -p "$REV"; git -C "$REV" init -q
+install_agents "$REV" || true
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+for entry in .claude/ CLAUDE.md .agents/ AGENTS.md; do
+  assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$REV/.gitignore" | grep -cxF "$entry" || true)" \
+    "--agents first: $entry is listed once in the gitignore config block"
+done
+assert_eq "" "$(cd "$REV" && git status --porcelain --untracked-files=normal | grep -E '\.claude|CLAUDE\.md|\.agents|AGENTS\.md' || true)" \
+  "--agents first: no kit path left untracked"
+cp "$REV/.gitignore" "$WORK/gitignore.before"
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+install_agents "$REV" || true
+assert_cmd_success "cmp -s '$WORK/gitignore.before' '$REV/.gitignore'" "re-running both installs leaves .gitignore unchanged"
+# /commit-claude-config deletes the marked block, so every config entry must sit inside it
+assert_eq "1 1" "$(grep -c '^# >>> solana-ai-kit config' "$REV/.gitignore") $(grep -c '^# <<< solana-ai-kit config <<<$' "$REV/.gitignore")" \
+  "one pair of /commit-claude-config markers"
+assert_eq "" "$(sed '/# >>> solana-ai-kit config/,/# <<< solana-ai-kit config <<</d' "$REV/.gitignore" \
+    | grep -xE '\.claude/|CLAUDE\.md|\.agents/|AGENTS\.md|\.mcp\.json|\.gitmodules' || true)" \
+  "every kit config entry sits inside the /commit-claude-config markers"
+# Git for Windows checks a tracked .gitignore out with CRLF endings
+awk '{ printf "%s\r\n", $0 }' "$REV/.gitignore" > "$WORK/gitignore.crlf" && cat "$WORK/gitignore.crlf" > "$REV/.gitignore"
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$REV/.gitignore" | tr -d '\r' | grep -cxF '.claude/' || true)" \
+  "a CRLF .gitignore gets no second .claude/ entry on re-install"
 
 print_summary

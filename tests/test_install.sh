@@ -33,7 +33,7 @@ assert_eq "15" "$AGENT_COUNT" "Agent count is 15"
 
 # Count commands
 CMD_COUNT=$(find "$TEMP_DIR/.claude/commands" -name "*.md" | wc -l | tr -d ' ')
-assert_eq "30" "$CMD_COUNT" "Command count is 30"
+assert_eq "31" "$CMD_COUNT" "Command count is 31"
 
 # Check .gitignore was updated
 assert_file_exists "$TEMP_DIR/.gitignore" ".gitignore exists"
@@ -51,5 +51,7 @@ assert_file_exists "$TEMP_DIR/.claude/VERSION" ".claude/VERSION file exists"
 # Check .claude/bin scripts exist
 assert_file_exists "$TEMP_DIR/.claude/bin/update.sh" ".claude/bin/update.sh exists"
 assert_file_exists "$TEMP_DIR/.claude/bin/resync.sh" ".claude/bin/resync.sh exists"
+assert_file_exists "$TEMP_DIR/.claude/bin/skills.sh" ".claude/bin/skills.sh exists for /add-skill"
+assert_file_exists "$TEMP_DIR/.claude/commands/add-skill.md" "/add-skill is installed"
 
 print_summary

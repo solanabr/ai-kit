@@ -71,13 +71,13 @@ solana program extend <PROGRAM_ID> <BYTES> -u mainnet-beta  # only if the .so ou
 - `solana-verify get-program-hash -um <PROGRAM_ID>` equals the executable hash.
 - Refresh verification through the multisig: `solana-verify export-pda-tx <REPO_URL> --program-id <PROGRAM_ID> --uploader <VAULT_PDA> --encoding base58 --compute-unit-price 0`, import it into the Squads transaction builder, execute, then `solana-verify remote submit-job --program-id <PROGRAM_ID> --uploader <VAULT_PDA>`.
 
-Squads SDK details (vault PDA, proposals): [squads skill](ext/sendai/skills/squads/SKILL.md).
+Squads SDK details (vault PDA, proposals): [squads skill](ext/sendai/skills/squads/SKILL.md) (install first: `bash .claude/bin/skills.sh add sendai`).
 
 ## Rollback
 
 - Before every upgrade: `solana program dump <PROGRAM_ID> backup-<version>.so -u mainnet-beta`, and keep each release's verified `.so` and hash.
 - Rolling back is another upgrade to the previous binary through the same buffer and multisig flow (devnet: `anchor upgrade <old>.so --program-id <PROGRAM_ID> --provider.cluster devnet`).
-- The previous binary must still read current account layouts. Ship layout changes additively (version field, `realloc`) so rollback stays possible; strategies in [program-upgrade-guide.md](ext/solana-new/skills/launch/deploy-to-mainnet/references/program-upgrade-guide.md).
+- The previous binary must still read current account layouts. Ship layout changes additively (version field, `realloc`) so rollback stays possible; strategies in [program-upgrade-guide.md](ext/solana-new/skills/launch/deploy-to-mainnet/references/program-upgrade-guide.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 - An emergency pause exists only if every instruction already checks a pause flag; design it in before launch. A `--final` program cannot be rolled back.
 
 ## CI jobs

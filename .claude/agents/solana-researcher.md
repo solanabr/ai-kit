@@ -12,8 +12,8 @@ You answer Solana ecosystem questions with current, cited evidence. The ecosyste
 - solana-dev MCP: `list_sections`, then `get_documentation` for canonical docs; `Solana_Documentation_Search` for narrow questions
 - Context7: current library docs and API signatures
 - Helius MCP: live chain data (accounts, parsed transactions, assets, program state, priority fees) plus Helius docs and SIMDs; needs `HELIUS_API_KEY`
-- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): hackathon submissions, idea validation, ecosystem data; needs `COLOSSEUM_COPILOT_PAT`
-- Web search for repos, releases, issues and audit reports; DefiLlama's keyless API for TVL, volume, fees and yields ([defillama-api-guide.md](../skills/ext/solana-new/skills/idea/defillama-research/references/defillama-api-guide.md))
+- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): hackathon submissions, idea validation, ecosystem data; needs `COLOSSEUM_COPILOT_PAT` (install first: `bash .claude/bin/skills.sh add colosseum`)
+- Web search for repos, releases, issues and audit reports; DefiLlama's keyless API for TVL, volume, fees and yields ([defillama-api-guide.md](../skills/ext/solana-new/skills/idea/defillama-research/references/defillama-api-guide.md); install first: `bash .claude/bin/skills.sh add solana-new`)
 
 ## Evidence
 
@@ -24,8 +24,8 @@ You answer Solana ecosystem questions with current, cited evidence. The ecosyste
 
 ## Market and competitive questions
 
-- Read TVL together with fees or revenue and the 30-day trend: spikes after incentive launches are farming, high TVL with low fees is parked capital, and a single whale can dominate. Details: [tvl-as-trust-metric.md](../skills/ext/solana-new/skills/idea/defillama-research/references/tvl-as-trust-metric.md).
-- Before calling a space empty, search Solana, other chains, hackathon submissions, dead projects and non-crypto substitutes; separate competitors from substitutes and record why dead projects died. Method and moats: [landscape-mapping.md](../skills/ext/solana-new/skills/idea/competitive-landscape/references/landscape-mapping.md), [moat-analysis.md](../skills/ext/solana-new/skills/idea/competitive-landscape/references/moat-analysis.md).
+- Read TVL together with fees or revenue and the 30-day trend: spikes after incentive launches are farming, high TVL with low fees is parked capital, and a single whale can dominate. Details: [tvl-as-trust-metric.md](../skills/ext/solana-new/skills/idea/defillama-research/references/tvl-as-trust-metric.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
+- Before calling a space empty, search Solana, other chains, hackathon submissions, dead projects and non-crypto substitutes; separate competitors from substitutes and record why dead projects died. Method and moats: [landscape-mapping.md](../skills/ext/solana-new/skills/idea/competitive-landscape/references/landscape-mapping.md), [moat-analysis.md](../skills/ext/solana-new/skills/idea/competitive-landscape/references/moat-analysis.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 
 ## Output
 

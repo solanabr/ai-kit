@@ -9,11 +9,11 @@ You build Solana mobile apps with React Native and Expo, connecting wallets thro
 
 ## Read before coding
 
-- [solana-mobile](../skills/ext/solana-mobile/skills/solana-mobile/SKILL.md): scaffolding (`npx solana-mobile@latest create`), development builds, emulators, test wallets
-- [solana-mobile-wallet](../skills/ext/solana-mobile/skills/solana-mobile-wallet/SKILL.md): connect, sign, send and sign-in with Solana through `@wallet-ui/react-native-kit`
-- [seeker-genesis-token](../skills/ext/solana-mobile/skills/seeker-genesis-token/SKILL.md) for Seeker-owner gating (verified server-side); [seeker-domains](../skills/ext/solana-mobile/skills/seeker-domains/SKILL.md) for `.skr` names
-- [solana-mobile-publishing](../skills/ext/solana-mobile/skills/solana-mobile-publishing/SKILL.md): dApp Store signing and release
-- [mobile.md](../skills/ext/solana-game/skill/mobile.md): offline queues, storage and deep-link routing for games; its wallet code uses the older web3.js MWA API, so take wallet setup from solana-mobile-wallet
+- [solana-mobile](../skills/ext/solana-mobile/skills/solana-mobile/SKILL.md): scaffolding (`npx solana-mobile@latest create`), development builds, emulators, test wallets (install first: `bash .claude/bin/skills.sh add solana-mobile`)
+- [solana-mobile-wallet](../skills/ext/solana-mobile/skills/solana-mobile-wallet/SKILL.md): connect, sign, send and sign-in with Solana through `@wallet-ui/react-native-kit` (same pack: `bash .claude/bin/skills.sh add solana-mobile`)
+- [seeker-genesis-token](../skills/ext/solana-mobile/skills/seeker-genesis-token/SKILL.md) for Seeker-owner gating (verified server-side); [seeker-domains](../skills/ext/solana-mobile/skills/seeker-domains/SKILL.md) for `.skr` names (same pack: `bash .claude/bin/skills.sh add solana-mobile`)
+- [solana-mobile-publishing](../skills/ext/solana-mobile/skills/solana-mobile-publishing/SKILL.md): dApp Store signing and release (same pack: `bash .claude/bin/skills.sh add solana-mobile`)
+- [mobile.md](../skills/ext/solana-game/skill/mobile.md): offline queues, storage and deep-link routing for games; its wallet code uses the older web3.js MWA API, so take wallet setup from solana-mobile-wallet (install first: `bash .claude/bin/skills.sh add solana-game`)
 
 ## MWA and Expo details that are easy to get wrong
 
@@ -28,7 +28,7 @@ You build Solana mobile apps with React Native and Expo, connecting wallets thro
 
 ## Deep links
 
-- iOS has no MWA, so signing goes through a wallet's deeplink protocol or SDK; Phantom universal links carry an encrypted session and a `redirect_link` back to your scheme. See the [Phantom React Native SDK](../skills/ext/helius/helius-skills/helius-phantom/references/react-native-sdk.md) reference.
+- iOS has no MWA, so signing goes through a wallet's deeplink protocol or SDK; Phantom universal links carry an encrypted session and a `redirect_link` back to your scheme. See the [Phantom React Native SDK](../skills/ext/helius/helius-skills/helius-phantom/references/react-native-sdk.md) reference (install first: `bash .claude/bin/skills.sh add helius`).
 - Redirects need the app `scheme` registered; Android App Links need verified intent filters and iOS universal links need associated domains.
 - Treat inbound link parameters as untrusted: show the transaction for review and do not sign automatically from a link.
 

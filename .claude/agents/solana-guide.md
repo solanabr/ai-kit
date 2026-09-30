@@ -19,8 +19,8 @@ You teach Solana development so the learner can solve the next problem without y
 
 - [concepts.md](../skills/ext/solana-dev/skills/solana-dev/references/concepts.md): runtime facts (rent, off-curve PDAs, entrypoint dispatch, transaction format)
 - [programs/anchor.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/anchor.md), [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md), [frontend.md](../skills/ext/solana-dev/skills/solana-dev/references/frontend.md): take example code from these. The solana-new material below is good for concepts, but some of its code predates Anchor 1.x.
-- [solana-vs-evm.md](../skills/ext/solana-new/skills/idea/solana-beginner/references/solana-vs-evm.md): EVM to Solana concept map and gotchas; [mental-model.md](../skills/ext/eth-to-sol/translation/mental-model.md) when an EVM developer wants to port a contract
-- [incubator-curriculum.md](../skills/ext/solana-new/skills/build/virtual-solana-incubator/references/incubator-curriculum.md): tracks and exercises for multi-session mentoring
+- [solana-vs-evm.md](../skills/ext/solana-new/skills/idea/solana-beginner/references/solana-vs-evm.md): EVM to Solana concept map and gotchas; [mental-model.md](../skills/ext/eth-to-sol/translation/mental-model.md) when an EVM developer wants to port a contract (install first: `bash .claude/bin/skills.sh add solana-new eth-to-sol`)
+- [incubator-curriculum.md](../skills/ext/solana-new/skills/build/virtual-solana-incubator/references/incubator-curriculum.md): tracks and exercises for multi-session mentoring (install first: `bash .claude/bin/skills.sh add solana-new`)
 
 ## Mentoring over several sessions
 

@@ -11,9 +11,9 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 
 ## Read before integrating
 
-- [integrating-jupiter](../skills/ext/jupiter/skills/integrating-jupiter/SKILL.md) for every Jupiter API; [jupiter-swap-migration](../skills/ext/jupiter/skills/jupiter-swap-migration/SKILL.md) when code still calls `quote-api.jup.ag`, `/swap/v1` or `ultra-api.jup.ag`
-- Lending and liquidity: [kamino](../skills/ext/sendai/skills/kamino/SKILL.md), [marginfi](../skills/ext/sendai/skills/marginfi/SKILL.md), [raydium](../skills/ext/sendai/skills/raydium/SKILL.md), [orca](../skills/ext/sendai/skills/orca/SKILL.md), [meteora](../skills/ext/sendai/skills/meteora/SKILL.md), [sanctum](../skills/ext/sendai/skills/sanctum/SKILL.md)
-- Oracles: [pyth](../skills/ext/sendai/skills/pyth/SKILL.md), [switchboard](../skills/ext/sendai/skills/switchboard/SKILL.md)
+- [integrating-jupiter](../skills/ext/jupiter/skills/integrating-jupiter/SKILL.md) for every Jupiter API; [jupiter-swap-migration](../skills/ext/jupiter/skills/jupiter-swap-migration/SKILL.md) when code still calls `quote-api.jup.ag`, `/swap/v1` or `ultra-api.jup.ag` (install first: `bash .claude/bin/skills.sh add jupiter`)
+- Lending and liquidity (install first: `bash .claude/bin/skills.sh add sendai`): [kamino](../skills/ext/sendai/skills/kamino/SKILL.md), [marginfi](../skills/ext/sendai/skills/marginfi/SKILL.md), [raydium](../skills/ext/sendai/skills/raydium/SKILL.md), [orca](../skills/ext/sendai/skills/orca/SKILL.md), [meteora](../skills/ext/sendai/skills/meteora/SKILL.md), [sanctum](../skills/ext/sendai/skills/sanctum/SKILL.md)
+- Oracles (install first: `bash .claude/bin/skills.sh add sendai`): [pyth](../skills/ext/sendai/skills/pyth/SKILL.md), [switchboard](../skills/ext/sendai/skills/switchboard/SKILL.md)
 - [transactions-v1.md](../skills/ext/solana-dev/skills/solana-dev/references/transactions-v1.md) for size and budget limits when composing; [surfpool/overview.md](../skills/ext/solana-dev/skills/solana-dev/references/surfpool/overview.md) for mainnet-fork tests
 
 ## Jupiter details older code gets wrong

@@ -10,7 +10,7 @@ You build Rust services that read from and write to Solana (APIs, indexers, webh
 ## Read before building
 
 - [backend-async.md](../skills/backend-async.md): the kit's Axum, SQLx, caching and indexer patterns
-- [helius](../skills/ext/helius/helius-skills/helius/SKILL.md): webhooks, WebSockets, Laserstream gRPC, DAS, priority fees, and Sender (requires `skipPreflight`, a tip and a priority fee)
+- [helius](../skills/ext/helius/helius-skills/helius/SKILL.md): webhooks, WebSockets, Laserstream gRPC, DAS, priority fees, and Sender (requires `skipPreflight`, a tip and a priority fee) (install first: `bash .claude/bin/skills.sh add helius`)
 - [transactions-v1.md](../skills/ext/solana-dev/skills/solana-dev/references/transactions-v1.md): reading, indexing and sending transaction v1 (on mainnet since 2026-09-15)
 
 ## Details that are easy to get wrong

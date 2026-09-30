@@ -4,7 +4,7 @@ description: "Run C# tests: Unity Test Framework in batchmode, or dotnet test"
 
 Run the C# test suites and summarize failures. `$ARGUMENTS` can name a platform (`editmode`, `playmode`) and a filter (class, method, or category).
 
-Unity test structure, naming, test doubles and async patterns: [solana-game testing.md](../skills/ext/solana-game/skill/testing.md).
+Unity test structure, naming, test doubles and async patterns: [solana-game testing.md](../skills/ext/solana-game/skill/testing.md) (install first: `bash .claude/bin/skills.sh add solana-game`).
 
 ## Unity
 

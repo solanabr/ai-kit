@@ -7,6 +7,7 @@ set -euo pipefail
 #   (fallback if DNS not yet live: curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash)
 #   bash install.sh /path/to/project
 #   bash install.sh --agents /path/to/project   # installs into .agents/ instead of .claude/
+#   bash install.sh --with sendai,jupiter /path/to/project   # core skill packs plus these extensions (--with all: every one)
 
 REPO_URL="https://github.com/solanabr/ai-kit.git"
 SCRIPT_VERSION="dev"
@@ -14,9 +15,14 @@ SCRIPT_VERSION="dev"
 # Parse flags
 AGENTS_ONLY=false
 TARGET_ARG=""
+WITH_SKILLS=""
+WITH_NEXT=false
 for arg in "$@"; do
+  if [ "$WITH_NEXT" = true ]; then WITH_SKILLS="$WITH_SKILLS,$arg"; WITH_NEXT=false; continue; fi
   case "$arg" in
     --agents) AGENTS_ONLY=true ;;
+    --with) WITH_NEXT=true ;;
+    --with=*) WITH_SKILLS="$WITH_SKILLS,${arg#--with=}" ;;
     *) TARGET_ARG="$arg" ;;
   esac
 done
@@ -171,12 +177,29 @@ if [ -d "$TARGET_DIR/$CONFIG_DIR/agents" ]; then
   warn "Warning: $CONFIG_DIR/ already exists, merging..."
 fi
 
+# Skill packs: keep the core ext/ packs, plus extensions named with --with or already
+# installed here (skills/skill-registry.json tiers). Releases without skills.sh vendor every pack.
+if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+  bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
+fi
+
 # Directories: always overwrite with upstream (same as update.sh)
 for dir in agents skills rules commands bin; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
     cp -r "$TEMP_DIR/repo/.claude/$dir" "$TARGET_DIR/$CONFIG_DIR/"
   fi
 done
+
+# The copy merges, so it never removes the Claude-Code-only files an older --agents
+# install shipped. Remove them here.
+if [ "$AGENTS_ONLY" = true ]; then
+  for f in $AGENTS_SKIP_FILES; do
+    if [ -f "$TARGET_DIR/$CONFIG_DIR/$f" ]; then
+      rm -f "$TARGET_DIR/$CONFIG_DIR/$f"
+      ok "Removed $CONFIG_DIR/$f (Claude Code only)"
+    fi
+  done
+fi
 
 # Older installs also copied the ext/ submodule gitfiles. Keep only a gitfile whose
 # gitdir lives inside this project (a real submodule the user checked out); a copied
@@ -284,13 +307,15 @@ if ! grep -qF ">>> solana-ai-kit config" "$GITIGNORE"; then
     printf '# <<< solana-ai-kit config <<<\n'
   } >> "$GITIGNORE"
   ok "Kit config gitignored by default — run /commit-claude-config to version it"
-elif [ "$AGENTS_ONLY" = true ]; then
+else
   # A block written by an earlier install can be missing this mode's entries: an
-  # older --agents install listed CLAUDE.md, and installing --agents next to an
-  # existing .claude/ install left .agents/ untracked (60MB of vendored trees).
+  # older --agents install listed CLAUDE.md, and a second install in the other mode
+  # (--agents next to .claude/, or the reverse) left its config dir and instruction
+  # file untracked (.agents/ alone is 60MB of vendored trees). Ignore CRs when
+  # matching: Git for Windows checks a tracked .gitignore out with CRLF endings.
   ADDED_IGNORE=""
   for entry in "$CONFIG_DIR/" "$INSTR_FILE"; do
-    if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | grep -qxF "$entry"; then
+    if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF "$entry"; then
       continue
     fi
     awk -v f="$entry" '/^# <<< solana-ai-kit config <<</ { print f } { print }' "$GITIGNORE" > "$GITIGNORE.tmp" \

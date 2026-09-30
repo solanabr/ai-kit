@@ -9,7 +9,7 @@ What goes wrong when creating or integrating Token-2022 mints. Related reference
 - Kit client API (sizes, ATA derivation, fetching): [kit/programs/token-2022.md](ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md)
 - Security review of extension mints (fee accounting, permanent delegate, mint close and reinit, `.closable()`, metadata spoofing): [security.md, Token-2022 section](ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security)
 - Confidential transfers: [confidential-transfers.md](ext/solana-dev/skills/solana-dev/references/confidential-transfers.md)
-- NFTs and collections usually fit Metaplex Core better than Token-2022 groups: [metaplex](ext/metaplex/skills/metaplex/SKILL.md)
+- NFTs and collections usually fit Metaplex Core better than Token-2022 groups: [metaplex](ext/metaplex/skills/metaplex/SKILL.md) (install first: `bash .claude/bin/skills.sh add metaplex`)
 
 ## Rules for every extension
 

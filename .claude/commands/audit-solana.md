@@ -7,7 +7,7 @@ Audit the program(s) in $ARGUMENTS (default: every program in the workspace) for
 ## Read before auditing
 
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): vulnerability classes plus the program-side and Token-2022 checklists
-- [solana-vulnerability-scanner](../skills/ext/trailofbits/plugins/building-secure-contracts/skills/solana-vulnerability-scanner/): CPI, PDA, account-validation and instruction-introspection sweeps
+- [solana-vulnerability-scanner](../skills/ext/trailofbits/plugins/building-secure-contracts/skills/solana-vulnerability-scanner/) (install first: `bash .claude/bin/skills.sh add trailofbits`): CPI, PDA, account-validation and instruction-introspection sweeps
 - [safe-solana-builder](../skills/ext/safe-solana-builder/SKILL.md): audit-derived rules
 - [programs/anchor.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/anchor.md) and [programs/pinocchio.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/pinocchio.md): framework-specific patterns
 

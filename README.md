@@ -24,7 +24,7 @@ If you installed manually, remember to rename ./CLAUDE-solana.md back to ./CLAUD
 A complete `.claude/` configuration that turns Claude into a Solana development expert with:
 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research)
-- **30 workflow commands** for building, testing, deploying, profiling, migrating, and committing
+- **31 workflow commands** for building, testing, deploying, profiling, migrating, and committing
 - **3 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev) and library docs (Context7), plus opt-in browser automation (Playwright), local-validator / mainnet-fork control (Surfpool) and context optimization (context-mode)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
@@ -47,7 +47,7 @@ curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
 # Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash -s -- --agents
 
 # Option 3: Manual setup
-git clone --recurse-submodules https://github.com/solanabr/ai-kit.git
+git clone --recurse-submodules https://github.com/solanabr/ai-kit.git solana-ai-kit
 cp -r solana-ai-kit/.claude /path/to/your-project/
 cp solana-ai-kit/CLAUDE-solana.md /path/to/your-project/CLAUDE.md
 cd /path/to/your-project && git submodule update --init --recursive
@@ -57,7 +57,8 @@ cd /path/to/your-project && git submodule update --init --recursive
 /plugin install solana-ai-kit@stbr
 # Commands then namespace as /solana-ai-kit:<name>. The plugin is the CORE kit
 # (agents/commands/local skills/MCP/hooks); the curl one-liner (Option 1) is the
-# FULL install, adding CLAUDE.md + permissions/sandbox + the 18 ext/ submodules.
+# FULL install, adding CLAUDE.md + permissions/sandbox + the ext/ skill packs
+# (core packs by default, extensions on demand).
 # Details: see "Install as a Claude Code plugin" below.
 
 # Start Claude Code
@@ -81,7 +82,7 @@ bash .agents/bin/update.sh
 
 ### Config is gitignored by default
 
-To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.json`, and `.gitmodules` to `.gitignore` — the kit reads as ignorable infrastructure, not your app code (the `ext/` skill submodules are ignored too, re-fetched via `git submodule update`).
+To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.json`, and `.gitmodules` to `.gitignore` — the kit reads as ignorable infrastructure, not your app code (the `ext/` skill packs are ignored too; `bash .claude/bin/update.sh` re-fetches the core packs and the project's extensions).
 
 Want the config tracked in git (team setup, reproducible config)? Run `/commit-claude-config` — it un-ignores those files and commits them (or edit `.gitignore` by hand). If your project already commits `.claude/` or its own `.gitmodules`, the new ignore lines are a no-op — git keeps tracking files it already tracks.
 
@@ -115,13 +116,13 @@ solana-ai-kit is also its own Claude Code marketplace, serving the **core plugin
 /plugin install solana-ai-kit@stbr
 ```
 
-The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
 - the project `CLAUDE.md` with the program-code house rules
 - the curated permissions allowlist + sandbox policy
-- the 18 `ext/` skill submodules (protocol, security, infra, ecosystem depth)
+- the `ext/` skill packs: the core packs by default, extensions on demand (protocol, security, infra, ecosystem depth)
 
 For protocol-skill depth in plugin form, add the upstream marketplaces instead (routing, not copying) — e.g. `/plugin marketplace add sendaifun/skills`, `ghostsecurity/skills`, `trailofbits/skills`, `cloudflare/skills`. The plugin's skill hub and `skill-registry.json` list the current targets.
 
@@ -129,26 +130,36 @@ The two paths are complementary: individuals wanting Solana agents/commands acro
 
 ## External Skill Submodules
 
-| Submodule | Source | Purpose |
-|-----------|--------|---------|
-| `ext/solana-dev` | [solana-foundation/solana-dev-skill](https://github.com/solana-foundation/solana-dev-skill) | Core Solana development (programs, frontend, testing, security) |
-| `ext/sendai` | [sendaifun/skills](https://github.com/sendaifun/skills) | DeFi protocol integrations (Jupiter, Raydium, Kamino, perps, cross-chain, oracles, etc.) |
-| `ext/solana-game` | [solanabr/solana-game-skill](https://github.com/solanabr/solana-game-skill) | Game development (Unity, PlaySolana, PSG1) |
-| `ext/cloudflare` | [cloudflare/skills](https://github.com/cloudflare/skills) | Infrastructure (Workers, Agents SDK, MCP servers) |
-| `ext/trailofbits` | [trailofbits/skills](https://github.com/trailofbits/skills) | Security auditing and vulnerability scanning |
-| `ext/qedgen` | [QEDGen/solana-skills](https://github.com/QEDGen/solana-skills) | Formal verification with Lean 4 theorem proving |
-| `ext/solana-mobile` | [solana-mobile/solana-mobile-dev-skill](https://github.com/solana-mobile/solana-mobile-dev-skill) | Mobile Wallet Adapter, Genesis Token, SKR address resolution |
-| `ext/colosseum` | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon projects |
-| `ext/safe-solana-builder` | [frankcastleauditor/safe-solana-builder](https://github.com/frankcastleauditor/safe-solana-builder) | Security-first code generation (70+ audit-derived rules) |
-| `ext/vercel` | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | Vercel deployment, Next.js, AI SDK, v0, edge functions |
-| `ext/solana-new` | [sendaifun/solana-new](https://github.com/sendaifun/solana-new) | 32 idea→launch journey skills + idea datasets/knowledge base; routed via local wrappers |
-| `ext/ghostsecurity` | [ghostsecurity/skills](https://github.com/ghostsecurity/skills) | 7 AppSec skills: SAST criteria, SCA, secrets, validation |
-| `ext/defending-code` | [anthropics/defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) | Anthropic vuln-discovery reference harness + 6 skills |
-| `ext/jupiter` | [jup-ag/agent-skills](https://github.com/jup-ag/agent-skills) | Official Jupiter skills: Ultra swap, Lend, swap migration, VRFD |
-| `ext/metaplex` | [metaplex-foundation/skill](https://github.com/metaplex-foundation/skill) | Official Metaplex: Core, Token Metadata, Bubblegum, Candy Machine, Genesis |
-| `ext/helius` | [helius-labs/core-ai](https://github.com/helius-labs/core-ai) | Official Helius infra skill + unique SVM internals skill |
-| `ext/quicknode-anchor` | [quiknode-labs/solana-anchor-claude-skill](https://github.com/quiknode-labs/solana-anchor-claude-skill) | Anchor/financial-math/Quasar reference files (quarantined — refs only) |
-| `ext/eth-to-sol` | [solana-foundation/eth-to-sol-skill](https://github.com/solana-foundation/eth-to-sol-skill) | EVM/Solidity → Anchor two-pass porting |
+The kit pins every skill pack below as a git submodule. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
+
+| Submodule | Tier | Source | Purpose |
+|-----------|------|--------|---------|
+| `ext/solana-dev` | Core | [solana-foundation/solana-dev-skill](https://github.com/solana-foundation/solana-dev-skill) | Core Solana development (programs, frontend, testing, security) |
+| `ext/safe-solana-builder` | Core | [frankcastleauditor/safe-solana-builder](https://github.com/frankcastleauditor/safe-solana-builder) | Security-first code generation (70+ audit-derived rules) |
+| `ext/trailofbits` | Extension | [trailofbits/skills](https://github.com/trailofbits/skills) | Security auditing and vulnerability scanning |
+| `ext/ghostsecurity` | Extension | [ghostsecurity/skills](https://github.com/ghostsecurity/skills) | 7 AppSec skills: SAST criteria, SCA, secrets, validation |
+| `ext/defending-code` | Extension | [anthropics/defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) | Anthropic vuln-discovery reference harness + 6 skills |
+| `ext/qedgen` | Extension | [QEDGen/solana-skills](https://github.com/QEDGen/solana-skills) | Formal verification with Lean 4 theorem proving |
+| `ext/sendai` | Extension | [sendaifun/skills](https://github.com/sendaifun/skills) | DeFi protocol integrations (Jupiter, Raydium, Kamino, perps, cross-chain, oracles, etc.) |
+| `ext/jupiter` | Extension | [jup-ag/agent-skills](https://github.com/jup-ag/agent-skills) | Official Jupiter skills: Ultra swap, Lend, swap migration, VRFD |
+| `ext/metaplex` | Extension | [metaplex-foundation/skill](https://github.com/metaplex-foundation/skill) | Official Metaplex: Core, Token Metadata, Bubblegum, Candy Machine, Genesis |
+| `ext/magicblock` | Extension | [magicblock-labs/magicblock-dev-skill](https://github.com/magicblock-labs/magicblock-dev-skill) | Official MagicBlock: Ephemeral Rollups, private payments, VRF, cranks |
+| `ext/helius` | Extension | [helius-labs/core-ai](https://github.com/helius-labs/core-ai) | Official Helius infra skill + unique SVM internals skill |
+| `ext/alchemy` | Extension | [alchemyplatform/skills](https://github.com/alchemyplatform/skills) | Official Alchemy: Solana RPC, DAS, Yellowstone gRPC, x402 gateway |
+| `ext/quicknode-anchor` | Extension | [quicknode/solana-finance-claude-plugin](https://github.com/quicknode/solana-finance-claude-plugin) | Anchor/financial-math/Quasar reference files (quarantined — refs only) |
+| `ext/eth-to-sol` | Extension | [solana-foundation/eth-to-sol-skill](https://github.com/solana-foundation/eth-to-sol-skill) | EVM/Solidity → Anchor two-pass porting |
+| `ext/solana-game` | Extension | [solanabr/solana-game-skill](https://github.com/solanabr/solana-game-skill) | Game development (Unity, PlaySolana, PSG1) |
+| `ext/solana-mobile` | Extension | [solana-mobile/solana-mobile-skills](https://github.com/solana-mobile/solana-mobile-skills) | Mobile Wallet Adapter, Genesis Token, SKR address resolution |
+| `ext/cloudflare` | Extension | [cloudflare/skills](https://github.com/cloudflare/skills) | Infrastructure (Workers, Agents SDK, MCP servers) |
+| `ext/vercel` | Extension | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | Vercel deployment, Next.js, AI SDK, v0, edge functions |
+| `ext/solana-new` | Extension | [sendaifun/solana-new](https://github.com/sendaifun/solana-new) | 32 idea→launch journey skills + idea datasets/knowledge base; routed via local wrappers |
+| `ext/colosseum` | Extension | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon projects |
+
+**Installing extensions.** At install time: `bash install.sh --with sendai,jupiter` (`--with all` installs every pack). Later: `/add-skill <id>` or `bash .claude/bin/skills.sh add <id>` (`.agents/bin/` for `--agents` installs); `skills.sh list` shows every pack and when to use it. Agents do the same on their own: each hub row, agent and command line that links into an extension names its install command. `/update` keeps the extensions a project installed (recorded in `.claude/skills/extensions.txt`); installs made before the core/extension split keep every pack.
+
+**Updates.** Dependabot opens one grouped pull request a week that bumps the pins (`.github/dependabot.yml`, with a 7-day cooldown on upstream commits). CI runs `validate.sh` on it, which resolves every `ext/` link in the hub, agents, commands and local skills against the new pins, so a path an upstream pack moved fails the PR instead of a user's session.
+
+**Adding a pack.** `git submodule add <url> .claude/skills/ext/<id>`, then an entry in [`skill-registry.json`](.claude/skills/skill-registry.json) with `tier`, `path`, `triggers` and the install command, a hub route, and a row in the hub's Extensions table; `tests/test_skill_extensions.sh` checks they agree. New packs come in as extensions from official or organization-owned repos with a permissive license and recent activity.
 
 ### Agent Teams
 
@@ -209,7 +220,7 @@ The kit used to list `memsearch` too, but its `memsearch-mcp` package is not pub
 
 #### Settings the kit leaves to you
 
-`.claude/settings.json` ships the sandbox, permission rules, hooks and attribution, and nothing that pins how Claude works. Turn these on yourself with the command shown or in `.claude/settings.local.json`, which `/update` never touches:
+`.claude/settings.json` ships the sandbox, permission rules, hooks and attribution, registers the `stbr` marketplace (`extraKnownMarketplaces`) and enables `safe-ai-skill@stbr`, and pins nothing about how Claude works. Turn these on yourself with the command shown or in `.claude/settings.local.json`, which `/update` never touches:
 
 - **Effort**: `/effort` (the kit no longer forces `max`)
 - **Agent teams**: `{"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}}`, see [Agent Teams](#agent-teams)
@@ -259,9 +270,9 @@ Featured add-ons by domain:
 
 **Where we scout** new tools (aggregators, not installable): [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) · [travisvn/awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills) · [davepoon/buildwithclaude](https://github.com/davepoon/buildwithclaude) · [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) · [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents).
 
-For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos).
+For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos; install the solana-new extension first).
 
-See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats.
+See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats. The same file records the tier and triggers of each pinned pack above; entries without a tier are these opt-in add-ons.
 
 ## Repository Structure
 
@@ -275,6 +286,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
 ├── validate.sh                  # Config integrity checker
 ├── LICENSE                      # MIT
 ├── tests/                       # Config integrity test suite
+├── .github/dependabot.yml       # Weekly grouped PR bumping the ext/ skill pins
 ├── .github/workflows/
 │   ├── ci.yml                       # PR validation
 │   └── claude.yml                   # @claude mention responder (issues/PRs)
@@ -285,12 +297,14 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     ├── agents/                  # 15 specialized agents
     ├── bin/
     │   ├── update.sh                # In-place update from upstream
-    │   └── resync.sh                # Submodule resync script
-    ├── commands/                # 30 workflow commands
+    │   ├── resync.sh                # Submodule resync script
+    │   └── skills.sh                # List skill packs, install extensions on demand
+    ├── commands/                # 31 workflow commands
     ├── skills/                  # Progressive-loading knowledge
     │   ├── SKILL.md                 # Unified hub routing to all skills
-    │   ├── ext/                     # External skill submodules
+    │   ├── ext/                     # External skill submodules (core: installed; others: extensions)
     │   │   ├── solana-dev/              # Solana Foundation dev skill (core)
+    │   │   ├── safe-solana-builder/   # Security-first code generation (core)
     │   │   ├── sendai/                  # SendAI protocol skills (DeFi)
     │   │   ├── solana-game/             # Solana game skill (Unity, PSG1)
     │   │   ├── cloudflare/              # Cloudflare Workers, Agents SDK
@@ -298,24 +312,25 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     │   │   ├── qedgen/                # QEDGen formal verification (Lean 4)
     │   │   ├── solana-mobile/           # Mobile Wallet Adapter, Genesis Token
     │   │   ├── colosseum/              # Colosseum Copilot (startup research)
-    │   │   ├── safe-solana-builder/   # Security-first code generation
     │   │   ├── vercel/                # Vercel deployment, Next.js, AI SDK
     │   │   ├── solana-new/            # SendAI idea→launch journey skills + datasets
     │   │   ├── ghostsecurity/         # Ghost Security AppSec skills
     │   │   ├── defending-code/        # Anthropic vuln-discovery reference harness
     │   │   ├── jupiter/               # Official Jupiter skills (swap, lend, VRFD)
     │   │   ├── metaplex/              # Official Metaplex (NFT, candy machine)
+    │   │   ├── magicblock/            # Official MagicBlock (Ephemeral Rollups)
     │   │   ├── helius/                # Official Helius infra + SVM internals
+    │   │   ├── alchemy/               # Official Alchemy (Solana RPC, DAS, gRPC)
     │   │   ├── quicknode-anchor/      # Anchor/Quasar reference files (quarantined)
     │   │   └── eth-to-sol/            # EVM/Solidity → Anchor porting
-    │   ├── skill-registry.json     # Opt-in add-on catalog (repos/skills/MCPs)
+    │   ├── skill-registry.json     # Pack tiers (core/extension) + opt-in add-on catalog
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
     │   ├── token-2022.md            # Token Extensions guide (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
-    └── settings.json            # Sandbox, permissions, hooks
+    └── settings.json            # Sandbox, permissions, hooks, stbr marketplace + safe-ai-skill@stbr
 ```
 
 ## Agents
@@ -380,6 +395,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
 | `/setup-ci-cd` | Configure GitHub Actions pipeline |
 | `/setup-mcp` | Configure MCP server API keys and connections |
 | `/resync` | Resync external skill submodules to latest |
+| `/add-skill` | Install a pinned skill extension on demand, or list core packs and extensions |
 | `/write-docs` | Generate documentation for programs, APIs, components |
 | `/explain-code` | Explain complex code with visual diagrams |
 | `/plan-feature` | Plan feature implementation with specifications |
@@ -392,7 +408,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
 
 | Script | Purpose |
 |--------|---------|
-| `install.sh` | One-liner installer: copies config to your project (`--agents` for non-Claude tools) |
+| `install.sh` | One-liner installer: copies config to your project (`--agents` for non-Claude tools, `--with <ids>` for skill extensions) |
 | `update.sh` | Deprecation wrapper → `.claude/bin/update.sh` |
 | `validate.sh` | Validates all config integrity (agents, commands, skills, settings, versioning) |
 | `tests/run_all.sh` | Runs full test suite for config validation |
@@ -463,6 +479,9 @@ bash .claude/bin/update.sh
 
 # Preview changes without applying:
 bash .claude/bin/update.sh --dry-run
+
+# Install a skill extension (or /add-skill <id>); list them with: bash .claude/bin/skills.sh list
+bash .claude/bin/skills.sh add <id>
 
 # Resync skill submodules only:
 bash .claude/bin/resync.sh

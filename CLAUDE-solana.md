@@ -11,6 +11,8 @@ Be direct: no filler, code before explanation, say so when unsure.
 
 Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data.
 
+Only the core skill packs ship installed. A link into a missing `.claude/skills/ext/<id>/` folder is an extension the kit pins: run the `bash .claude/bin/skills.sh add <id>` command given next to it, then read the link.
+
 ## Program code
 
 - Checked arithmetic; no `unwrap()` or `expect()` outside tests.

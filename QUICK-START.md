@@ -8,7 +8,7 @@ curl -fsSL https://aikit.superteam.codes | bash
 # Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash
 
 # Option 2: Manual setup
-git clone --recurse-submodules https://github.com/solanabr/ai-kit.git
+git clone --recurse-submodules https://github.com/solanabr/ai-kit.git solana-ai-kit
 cp -r solana-ai-kit/.claude /path/to/your-project/
 cp solana-ai-kit/CLAUDE-solana.md /path/to/your-project/CLAUDE.md
 cd /path/to/your-project && git submodule update --init --recursive
@@ -52,7 +52,7 @@ Prefer Claude Code's plugin system? solana-ai-kit is its own marketplace. From i
 
 The plugin ships the core kit — agents, commands, the local go-to-market + registry skills, the 3 default MCP servers, and the dev hooks — and installs the safe-ai-skill security firewall with it as a declared dependency. Commands namespace as `/solana-ai-kit:<name>` (e.g. `/solana-ai-kit:deploy`).
 
-Plugins are plain git clones, so they can't carry the 18 `ext/` submodules, the project `CLAUDE.md` with its program-code house rules, or the permissions/sandbox policy — those need the **full install** (the `install.sh` one-liner above). For protocol-skill depth in plugin form, add the upstream marketplaces instead (`/plugin marketplace add sendaifun/skills`, etc.). Running both the plugin and the full install in one project double-loads commands/hooks/MCP — `/doctor` flags it; pick one.
+Plugins are plain git clones, so they can't carry the `ext/` skill packs, the project `CLAUDE.md` with its program-code house rules, or the permissions/sandbox policy — those need the **full install** (the `install.sh` one-liner above). For protocol-skill depth in plugin form, add the upstream marketplaces instead (`/plugin marketplace add sendaifun/skills`, etc.). Running both the plugin and the full install in one project double-loads commands/hooks/MCP — `/doctor` flags it; pick one.
 
 ---
 
@@ -80,7 +80,7 @@ Plugins are plain git clones, so they can't carry the 18 `ext/` submodules, the 
 
 Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [README → Agents](README.md#agents) for the routing.
 
-### 30 Slash Commands
+### 31 Slash Commands
 
 **Building:**
 - `/build-program` - Build Anchor or native programs
@@ -112,6 +112,7 @@ Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable
 - `/setup-ci-cd` - Setup CI/CD pipeline
 - `/setup-mcp` - Configure MCP servers
 - `/resync` - Resync external skill submodules
+- `/add-skill` - Install a pinned skill extension on demand, or list them
 - `/write-docs` - Generate documentation
 - `/explain-code` - Explain complex code
 - `/plan-feature` - Plan feature implementation
@@ -141,6 +142,8 @@ Knowledge loads on-demand:
 - Unity SDK patterns
 - PlaySolana/PSG1 integration
 - Security auditing
+
+Only the core skill packs (solana-dev, safe-solana-builder) install by default. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack.
 
 Need a capability the kit doesn't bundle? See [`.claude/skills/skill-registry.json`](.claude/skills/skill-registry.json) — a curated catalog of opt-in skills/MCPs/repos the agent can install on request, at your own expense (not bundled by default).
 
@@ -179,29 +182,18 @@ your-project/
 ├── CLAUDE.md              # ← Main config (copied from CLAUDE-solana.md)
 ├── .claude/
 │   ├── agents/            # 15 specialized AI agents
-│   ├── commands/          # 30 slash commands
+│   ├── commands/          # 31 slash commands
 │   ├── skills/            # Progressive knowledge
 │   │   ├── SKILL.md           # Unified hub (start here)
-│   │   ├── ext/               # External skill submodules
-│   │   │   ├── solana-dev/        # Core Solana (Foundation)
-│   │   │   ├── sendai/            # DeFi protocols
-│   │   │   ├── solana-game/       # Game dev (Unity, PSG1)
-│   │   │   ├── cloudflare/        # Infrastructure
-│   │   │   ├── trailofbits/       # Security auditing
-│   │   │   ├── qedgen/            # Formal verification (Lean 4)
-│   │   │   ├── solana-mobile/     # Mobile Wallet Adapter
-│   │   │   ├── colosseum/         # Startup research (Colosseum)
-│   │   │   ├── safe-solana-builder/ # Security-first code gen
-│   │   │   ├── vercel/             # Vercel, Next.js, AI SDK
-│   │   │   ├── solana-new/         # SendAI idea→launch skills + datasets
-│   │   │   ├── ghostsecurity/      # Ghost Security AppSec skills
-│   │   │   ├── defending-code/     # Anthropic vuln-discovery harness
-│   │   │   ├── jupiter/            # Official Jupiter skills
-│   │   │   ├── metaplex/           # Official Metaplex (NFT)
-│   │   │   ├── helius/             # Official Helius + SVM internals
-│   │   │   ├── quicknode-anchor/   # Anchor/Quasar refs (quarantined)
-│   │   │   └── eth-to-sol/         # EVM/Solidity → Anchor porting
-│   │   ├── skill-registry.json # Opt-in add-on catalog (repos/skills/MCPs)
+│   │   ├── ext/               # Skill packs: core by default, extensions as installed
+│   │   │   ├── solana-dev/        # Core Solana (Foundation) (core)
+│   │   │   ├── safe-solana-builder/ # Security-first code gen (core)
+│   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
+│   │   │   │                      # helius, alchemy, trailofbits, ghostsecurity, defending-code,
+│   │   │   │                      # qedgen, quicknode-anchor, eth-to-sol, solana-game,
+│   │   │   │                      # solana-mobile, cloudflare, vercel, solana-new, colosseum
+│   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
+│   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
@@ -292,6 +284,9 @@ bash .claude/bin/update.sh
 
 # Or resync submodules only
 /resync
+
+# Install a skill extension when a task needs one (list them: bash .claude/bin/skills.sh list)
+/add-skill <id>
 ```
 
 ---
@@ -318,6 +313,9 @@ bash .claude/bin/update.sh
 **Submodules empty:**
 - Run `git submodule update --init --recursive`
 - Or run `/resync`
+
+**A skill link points to a missing `ext/` folder:**
+- It is an extension: run the `bash .claude/bin/skills.sh add <id>` command given next to the link, or `/add-skill <id>`
 
 ---
 

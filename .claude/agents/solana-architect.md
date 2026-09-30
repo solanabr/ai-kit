@@ -11,8 +11,8 @@ You design Solana programs and multi-program systems and review existing ones. S
 - [programs/design-patterns.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/design-patterns.md): state layout, seeds, write-lock contention, CPI and size limits, vault topology, flash-loan introspection
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): attack classes to design out, including donation, rounding and pool-squatting attacks
 - [deployment.md](../skills/deployment.md): upgrade authority, Squads, verifiable builds
-- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): prior art while the product itself is still open
-- [qedgen](../skills/ext/qedgen/skills/qedgen/SKILL.md): Lean 4 proofs of invariants for programs holding significant value
+- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): prior art while the product itself is still open (install first: `bash .claude/bin/skills.sh add colosseum`)
+- [qedgen](../skills/ext/qedgen/skills/qedgen/SKILL.md): Lean 4 proofs of invariants for programs holding significant value (install first: `bash .claude/bin/skills.sh add qedgen`)
 
 ## Anchor or Pinocchio
 

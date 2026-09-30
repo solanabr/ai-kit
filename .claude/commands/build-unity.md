@@ -2,7 +2,7 @@
 description: "Build the Unity project in batchmode for WebGL, desktop, Android or PSG1"
 ---
 
-Build the Unity project for the target in $ARGUMENTS: `webgl` (default), `win64`, `osx`, `android` or `psg1`. References: [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md), [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md) (wallet login per platform), [playsolana.md](../skills/ext/solana-game/skill/playsolana.md) (PSG1 build configuration).
+Build the Unity project for the target in $ARGUMENTS: `webgl` (default), `win64`, `osx`, `android` or `psg1`. References: [solana-game SKILL.md](../skills/ext/solana-game/skill/SKILL.md), [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md) (wallet login per platform), [playsolana.md](../skills/ext/solana-game/skill/playsolana.md) (PSG1 build configuration); install them first with `bash .claude/bin/skills.sh add solana-game`.
 
 ## Steps
 

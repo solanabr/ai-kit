@@ -68,7 +68,7 @@ When X changes, also update Y:
 | Change an agent/command **`model:`** | README.md Agents table Model column + routing note (`tests/test_model_routing.sh` enforces allowed values, no Fable, README drift) |
 | Add/remove **MCP server** | README.md MCP table, CLAUDE-solana.md MCP list, QUICK-START.md MCP list, .env.example, .claude/commands/setup-mcp.md |
 | Add/remove **.env.example key** | `.claude/commands/setup-mcp.md` |
-| Add/remove **submodule** | .gitmodules, README.md submodules table + tree, QUICK-START.md tree, .claude/skills/SKILL.md routing |
+| Add/remove **submodule** | .gitmodules, `.claude/skills/skill-registry.json` entry (`tier` core/extension, `path`, `triggers`, install command), README.md submodules table + tree, QUICK-START.md tree, .claude/skills/SKILL.md routing. For an extension, every line that links into it names `bash .claude/bin/skills.sh add <id>`, and the hub's Extensions table gets a row (`tests/test_skill_extensions.sh` enforces both) |
 | Re-pin or change **safe-ai-skill** (core plugin from its own repo, not a submodule) | `.claude-plugin/marketplace.json` entry `sha` (a commit whose `plugins/safe-ai-skill/bin/` has every platform binary), `plugin.json` `dependencies`, `.claude/settings.json` `enabledPlugins` + `extraKnownMarketplaces`, README "Security firewall" section, `tests/test_plugin.sh` + `tests/test_settings_deep.sh` |
 | Modify **install.sh** | Test: `bash tests/test_install.sh` in temp dir |
 | Change the **repo URL** | Update everywhere EXCEPT `.claude/bin/update.sh:16` — that line is inside the frozen 1-93 region (see the NOTE at line 94) and editing it breaks self-update for every existing install. GitHub's rename redirect covers it. |
@@ -137,7 +137,7 @@ All changes on feature branches: `git checkout -b <type>/<scope>-<description>-<
 
 - `.claude/VERSION` follows semver; bump on every release. `.claude/CHANGELOG.md` tracks what changed.
 - `/dream` triggers memory consolidation (merges, prunes, deduplicates MEMORY.md). Run after major refactors.
-- `settings.json` ships security policy (sandbox, permissions, hooks) and attribution only. Don't pin session behavior (effort, env toggles, LSP plugins, MCP auto-approval); `validate.sh` rejects the retired keys, and a key you retire needs a matching entry in update.sh's retired-defaults migration. Default MCP servers must start with no key and no extra install; the rest are opt-in in README.
+- `settings.json` ships only security policy (sandbox, permissions, hooks), attribution, and the `stbr` marketplace (`extraKnownMarketplaces`) with `safe-ai-skill@stbr` enabled. Don't pin session behavior (effort, env toggles, LSP plugins, MCP auto-approval); `validate.sh` rejects the retired keys, and a key you retire needs a matching entry in update.sh's retired-defaults migration. Default MCP servers must start with no key and no extra install; the rest are opt-in in README.
 - Model routing: `model: opus` = deep reasoning, `model: sonnet` = implementation/mechanical/docs, no `model:` line = inherit the session model (strongest-model work). Commands get `model: sonnet` only when mechanical and run at session start (a mid-session switch drops the prompt cache). Never hardcode `fable`/`claude-fable-*`; `modelDefaults` is not a Claude Code setting.
 
 ---

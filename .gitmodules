@@ -52,3 +52,9 @@
 [submodule ".claude/skills/ext/eth-to-sol"]
 	path = .claude/skills/ext/eth-to-sol
 	url = https://github.com/solana-foundation/eth-to-sol-skill
+[submodule ".claude/skills/ext/magicblock"]
+	path = .claude/skills/ext/magicblock
+	url = https://github.com/magicblock-labs/magicblock-dev-skill
+[submodule ".claude/skills/ext/alchemy"]
+	path = .claude/skills/ext/alchemy
+	url = https://github.com/alchemyplatform/skills
