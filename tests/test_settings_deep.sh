@@ -156,6 +156,24 @@ p = json.load(open('$SETTINGS'))['permissions']
 print(' '.join(sorted(set(p.get('ask', [])) & set(p['deny']))) or 'none')
 " 2>/dev/null)"
 assert_eq "none" "$OVERLAP" "no rule sits in both permissions.ask and permissions.deny"
+# solana-keygen new/recover default to ~/.config/solana/id.json. The sandbox blocks that write,
+# but a retry outside it (or a machine without the sandbox) runs under the Bash(solana-keygen *)
+# allow rule, so --force/-f must ask. A different -o path without --force stays prompt-free.
+# ask_matches <command>: does any Bash(...) ask rule match it (* matches any text)?
+ask_matches() {
+  python3 -c "
+import fnmatch, json, sys
+ask = json.load(open('$SETTINGS'))['permissions'].get('ask', [])
+cmd = sys.argv[1]
+print('yes' if any(fnmatch.fnmatchcase(cmd, r[5:-1]) for r in ask if r.startswith('Bash(') and r.endswith(')')) else 'no')
+" "$1" 2>/dev/null
+}
+for c in "solana-keygen new --force" "solana-keygen new -f" "solana-keygen new --no-bip39-passphrase -f" \
+         "solana-keygen new -o target/deploy/x-keypair.json --force" "solana-keygen recover --force" \
+         "solana-keygen recover -f" "solana-keygen recover ASK --force"; do
+  assert_eq "yes" "$(ask_matches "$c")" "an ask rule covers: $c"
+done
+assert_eq "no" "$(ask_matches "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" "a new keypair at another path without --force doesn't ask"
 
 # --- Hooks ---
 echo "[hooks]"

@@ -371,7 +371,14 @@
       "Bash(git fetch *--upload-pack*)",
       "Bash(git clean *)",
       "Bash(gh pr merge *)",
-      "Bash(gh issue delete *)"
+      "Bash(gh issue delete *)",
+
+      "Bash(solana-keygen new *--force*)",
+      "Bash(solana-keygen new -f*)",
+      "Bash(solana-keygen new * -f*)",
+      "Bash(solana-keygen recover *--force*)",
+      "Bash(solana-keygen recover -f*)",
+      "Bash(solana-keygen recover * -f*)"
     ]
   },
 

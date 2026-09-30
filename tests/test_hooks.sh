@@ -84,6 +84,8 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
   assert_contains "$ERR" "solana address" "the block message says what to do instead"
   run "$SECRETS" "$WORK" "gh auth token"
   assert_eq "2" "$RC" "secrets gate blocks gh auth token"
+  run "$SECRETS" "$WORK" "solana-keygen new --force -o ~/.config/solana/id.json"
+  assert_eq "2" "$RC" "secrets gate blocks overwriting the default wallet with -o"
 
   # On-chain writes ask the user, and the prompt names the cluster and where it came from.
   run "$CHAIN" "$WORK/mainnet" "anchor deploy"
