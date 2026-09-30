@@ -284,8 +284,8 @@ assert_contains "$RESYNC_OUT" "Not a git repository" "resync.sh explains it skip
 assert_dir_not_exists "$NOGIT/.claude" "nothing written under .claude/ outside git"
 
 # ── Upgrade an install made by an older --agents installer ──────────────────
-# Older installers wrote CLAUDE.md, kept .claude/skills/ext/ paths in .gitmodules
-# and copied dangling submodule gitfiles.
+# Older installers wrote CLAUDE.md, kept .claude/skills/ext/ paths in .gitmodules,
+# copied dangling submodule gitfiles and shipped the Claude-Code-only /cleanup.
 echo "[upgrade from an older --agents install]"
 for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   mkdir -p "$OLD"; git -C "$OLD" init -q
@@ -294,11 +294,15 @@ for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   sed 's#\.agents/skills/ext/#.claude/skills/ext/#g' "$OLD/.gitmodules" > "$WORK/gm" && cat "$WORK/gm" > "$OLD/.gitmodules"
   sed 's#^AGENTS\.md$#CLAUDE.md#' "$OLD/.gitignore" > "$WORK/gi" && cat "$WORK/gi" > "$OLD/.gitignore"
   echo "gitdir: ../../../../.git/modules/.claude/skills/ext/solana-dev" > "$OLD/.agents/skills/ext/solana-dev/.git" 2>/dev/null || true
+  cp "$REPO_ROOT/.claude/commands/cleanup.md" "$OLD/.agents/commands/cleanup.md"
 done
 assert_cmd_success "cd '$WORK/old-update' && bash .agents/bin/update.sh" "update.sh upgrades an older --agents install"
 assert_cmd_success "install_agents '$WORK/old-reinstall'" "install.sh --agents re-install upgrades an older --agents install"
+assert_file_contains "$WORK/last.log" "Removed .agents/commands/cleanup.md" \
+  "install.sh --agents reports removing the older install's /cleanup"
 for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   NAME="$(basename "$OLD")"
+  assert_file_not_exists "$OLD/.agents/commands/cleanup.md" "$NAME: the older install's /cleanup is removed"
   assert_file_exists "$OLD/AGENTS.md" "$NAME: AGENTS.md created"
   assert_eq "AGENTS.md" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$OLD/.gitignore" | grep -x 'AGENTS.md' || true)" \
     "$NAME: AGENTS.md added to the .gitignore config block"
