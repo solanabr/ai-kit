@@ -29,6 +29,14 @@ sorted() { printf '%s\n' "$@" | awk 'NF' | sort | tr '\n' ' ' | sed 's/ $//'; }
 
 CORE="$(tier_ids core)"
 EXTENSIONS="$(tier_ids extension)"
+# Extensions vendored from a kit submodule into ext/. A pack with a "commit" is fetched
+# from its upstream repo into top-level skill folders instead (tests/test_anthropic_skills.sh).
+KIT_EXTENSIONS="$(python3 - "$REGISTRY" <<'PY'
+import json, sys
+reg = json.load(open(sys.argv[1]))
+print(" ".join(sorted(e["id"] for e in reg["entries"] if e.get("tier") == "extension" and "commit" not in e)))
+PY
+)"
 
 # --- The registry and .gitmodules describe the same packs ---
 echo "[registry]"
@@ -46,7 +54,10 @@ for e in kit:
     i = e["id"]
     if e["tier"] not in ("core", "extension"):
         out.append(f"{i}: tier must be core or extension")
-    if e.get("path") != f".claude/skills/ext/{i}":
+    if "commit" in e:
+        if e["tier"] != "extension" or e.get("path") != ".claude/skills" or not e.get("skills"):
+            out.append(f"{i}: a pack pinned by commit must be an extension with path .claude/skills and a skills list")
+    elif e.get("path") != f".claude/skills/ext/{i}":
         out.append(f"{i}: path must be .claude/skills/ext/{i}")
     if e.get("default_installed") is not (e["tier"] == "core"):
         out.append(f"{i}: default_installed must be true for core, false for extensions")
@@ -59,7 +70,7 @@ for p in paths:
     if p not in [e.get("path") for e in kit]:
         out.append(f".gitmodules path {p} has no registry entry with a tier")
 for e in kit:
-    if e.get("path") not in paths:
+    if "commit" not in e and e.get("path") not in paths:
         out.append(f"{e['id']}: not a submodule in .gitmodules")
 print("\n".join(out) or "OK")
 PY
@@ -169,8 +180,8 @@ echo "[legacy install]"
 cp -R "$REPO_ROOT/.claude/skills/ext/." "$P1/.claude/skills/ext/"
 rm -f "$P1/.claude/skills/extensions.txt"
 (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
-assert_eq "$(sorted $CORE $EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
-assert_eq "$(sorted $EXTENSIONS)" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" | sort | tr '\n' ' ' | sed 's/ $//')" "...and records them as its extensions"
+assert_eq "$(sorted $CORE $KIT_EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
+assert_eq "$(sorted $KIT_EXTENSIONS)" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" | sort | tr '\n' ' ' | sed 's/ $//')" "...and records them as its extensions"
 
 # --- install.sh --with ---
 echo "[--with]"

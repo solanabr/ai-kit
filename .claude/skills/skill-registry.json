@@ -1,9 +1,9 @@
 {
   "version": "1.1",
-  "updated": "2026-09-25",
+  "updated": "2026-09-30",
   "tiers": {
     "core": "Pinned by the kit as a git submodule under .claude/skills/ext/ and installed by default.",
-    "extension": "Pinned by the kit the same way and installed on demand: bash .claude/bin/skills.sh add <id>",
+    "extension": "Pinned by the kit the same way and installed on demand: bash .claude/bin/skills.sh add <id>. An entry with a commit is not a submodule: skills.sh fetches the skills it lists from its source at that commit into .claude/skills/<name>/.",
     "add-on": "Entries without a tier are opt-in tools the kit does not pin. Install one only when the user asks."
   },
   "entries": [
@@ -369,18 +369,23 @@
     },
     {
       "id": "anthropic-skills",
-      "name": "Anthropic Skills",
+      "name": "Anthropic Skills (Apache-2.0 subset)",
       "type": "skill",
-      "domain": "productivity",
-      "description": "Anthropic's official skill collection; net-new sub-skills not in the bundled office set: theme-factory, mcp-builder, webapp-testing, canvas-design, algorithmic-art, web-artifacts-builder.",
+      "tier": "extension",
+      "domain": "frontend-design",
+      "path": ".claude/skills",
+      "commit": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
+      "skills": ["frontend-design", "webapp-testing", "mcp-builder"],
+      "description": "Anthropic's frontend-design (distinctive UI direction), webapp-testing (Playwright tests of a local web app) and mcp-builder (MCP servers for a program or API), installed as top-level skills in .claude/skills/<name>/, which agents load natively (Claude Code, Codex, Grok Build and other Agent Skills clients). skills.sh fetches only these folders at the pinned commit and copies them unchanged, LICENSE.txt included.",
+      "triggers": ["UI design direction", "Playwright tests of a local web app", "building an MCP server"],
       "source": "https://github.com/anthropics/skills",
-      "install": { "method": "plugin-marketplace", "command": "/plugin marketplace add anthropics/skills", "env": [] },
-      "license": "mixed: example-skills Apache-2.0; docx/pdf/pptx/xlsx source-available (not OSS)",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add anthropic-skills", "env": [] },
+      "license": "Apache-2.0 (these three); the repo's docx, pdf, pptx and xlsx skills are proprietary and doc-coauthoring has no license, so skills.sh refuses them",
       "maintainer": "anthropics",
-      "signal": { "stars": 151000, "last_commit": "2026-06-09", "reputability": "official" },
+      "signal": { "stars": 179151, "last_commit": "2026-09-28", "reputability": "official" },
       "default_installed": false,
-      "safety": "clean (curl references are Claude-API doc examples, not installers); doc set is source-available — note the license split",
-      "tags": ["theme-factory", "mcp-builder", "webapp-testing", "canvas-design", "algorithmic-art", "web-artifacts-builder", "official"]
+      "safety": "caution: webapp-testing's scripts/with_server.py runs the server commands it is given through a shell, and mcp-builder's evaluation script calls the Anthropic API (ANTHROPIC_API_KEY) with unpinned pip requirements; the skills' guidance is agent-neutral",
+      "tags": ["frontend", "design", "playwright", "testing", "mcp", "cross-agent", "official"]
     },
     {
       "id": "anthropic-claude-code-plugins",
