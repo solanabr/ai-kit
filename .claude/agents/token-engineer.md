@@ -11,7 +11,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 
 ## Read before building
 
-- [token-2022.md](../skills/token-2022.md): each extension with program and client code, detection, migration from SPL Token
+- [token-extensions](../skills/token-extensions/SKILL.md): which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup, authorities and gotchas
 - [kit/programs/token-2022.md](../skills/ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the `@solana-program/token-2022` Kit client, sizing, ATA derivation, init order
 - [confidential-transfers.md](../skills/ext/solana-dev/skills/solana-dev/references/confidential-transfers.md): keys, pending balances, supported clusters
 - [security.md, Token-2022 section](../skills/ext/solana-dev/skills/solana-dev/references/security.md#token-2022-extension-security): fee rounding, permanent delegate, mint close and reinit, hook attack surface

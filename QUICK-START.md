@@ -198,7 +198,7 @@ your-project/
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
 │   │   ├── frontend-design/  # With the anthropic-skills extension, also webapp-testing/, mcp-builder/
-│   │   ├── token-2022.md     # Token Extensions guide
+│   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   └── deployment.md     # Deploy workflows
 │   └── settings.json      # Permissions
@@ -248,7 +248,7 @@ Claude: [Deploys to devnet, provides program ID]
 ### Token Launch
 ```
 You: Create a Token-2022 token with transfer fees
-Claude: [Uses token-engineer with token-2022.md skill]
+Claude: [Uses token-engineer with the token-extensions skill]
 ```
 
 ---

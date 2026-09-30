@@ -6,7 +6,7 @@ user-invocable: true
 
 # Solana AI Kit plugin skill hub
 
-This is the plugin variant of the kit's skill hub. It ships only the skills that travel cleanly in a plugin: the go-to-market skills and the opt-in add-on catalog. The protocol, security and ecosystem skills, the project CLAUDE.md with the program-code house rules, and the curated permissions and sandbox policy come with the full install (see "Getting more depth").
+This is the plugin variant of the kit's skill hub. It ships only the skills that travel cleanly in a plugin: the go-to-market skills, the Token Extensions skill and the opt-in add-on catalog. The protocol, security and ecosystem skills, the project CLAUDE.md with the program-code house rules, and the curated permissions and sandbox policy come with the full install (see "Getting more depth").
 
 When sources overlap: a protocol's official skill wins for its own SDK (Jupiter, Metaplex, Helius); the Solana Foundation `solana-dev` skill wins for general Solana work (Anchor, Pinocchio, testing, clients); community skills such as sendai fill gaps only. In plugin form, add the relevant upstream marketplace first.
 
@@ -20,6 +20,8 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 - [skill-registry.json](skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Entries with a `tier` are the full install's pinned skill packs; their `source` is the upstream repo.
 
 These three skills are adapted from sendaifun/solana-new (MIT, telemetry removed).
+
+The kit's own [token-extensions/SKILL.md](token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the full install (Option B).
 
 ## Security firewall (core)
 
@@ -60,3 +62,4 @@ The project README ("External Skill Submodules" and "Install as a Claude Code pl
 | An add-on skill, plugin or MCP that isn't bundled | skill-registry.json |
 | A safe-ai-skill ask or deny, skill or MCP supply-chain checks | Security firewall (core) above |
 | Protocol SDK depth, security audits, infra | Option A marketplaces or the Option B full install |
+| Token-2022 extensions: fees, hooks, metadata, pausable, confidential | token-extensions/SKILL.md |

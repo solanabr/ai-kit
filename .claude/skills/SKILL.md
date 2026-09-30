@@ -47,7 +47,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 
 | Task | Read |
 |------|------|
-| Token-2022 extensions (hooks, fees, metadata, soulbound) | [token-2022.md](token-2022.md) |
+| Token-2022 extensions: pick, combine and create them (CLI, Kit, Anchor); fees, hooks, metadata, pausable, soulbound | [token-extensions](token-extensions/SKILL.md) |
 | Confidential transfers | [confidential-transfers.md](ext/solana-dev/skills/solana-dev/references/confidential-transfers.md) |
 | NFTs: Core, Token Metadata, Bubblegum, Candy Machine, Umi | [metaplex](ext/metaplex/skills/metaplex/SKILL.md) (official; install: `bash .claude/bin/skills.sh add metaplex`) |
 
