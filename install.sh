@@ -295,13 +295,15 @@ if ! grep -qF ">>> solana-ai-kit config" "$GITIGNORE"; then
     printf '# <<< solana-ai-kit config <<<\n'
   } >> "$GITIGNORE"
   ok "Kit config gitignored by default — run /commit-claude-config to version it"
-elif [ "$AGENTS_ONLY" = true ]; then
+else
   # A block written by an earlier install can be missing this mode's entries: an
-  # older --agents install listed CLAUDE.md, and installing --agents next to an
-  # existing .claude/ install left .agents/ untracked (60MB of vendored trees).
+  # older --agents install listed CLAUDE.md, and a second install in the other mode
+  # (--agents next to .claude/, or the reverse) left its config dir and instruction
+  # file untracked (.agents/ alone is 60MB of vendored trees). Ignore CRs when
+  # matching: Git for Windows checks a tracked .gitignore out with CRLF endings.
   ADDED_IGNORE=""
   for entry in "$CONFIG_DIR/" "$INSTR_FILE"; do
-    if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | grep -qxF "$entry"; then
+    if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF "$entry"; then
       continue
     fi
     awk -v f="$entry" '/^# <<< solana-ai-kit config <<</ { print f } { print }' "$GITIGNORE" > "$GITIGNORE.tmp" \
