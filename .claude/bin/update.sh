@@ -115,7 +115,7 @@ done
 # .agents/ (same rewrite as install.sh). Left alone: ~/.claude/, the vendored
 # ext/ repos, bin/, and lines that already name .agents/ (they handle both modes).
 # Claude-Code-only files, not installed by --agents. /cleanup turns a fork of the
-# kit repo into a project (README Option 0, run as `claude -m /cleanup`); its paths
+# kit repo into a project (README "Using as a GitHub Template"); its paths
 # describe the kit's own repo, so in an .agents/ project every step of it is false.
 # Not shipping it beats rewriting it into something plausible but wrong.
 AGENTS_SKIP_FILES='commands/cleanup.md'
