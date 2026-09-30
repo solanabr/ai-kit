@@ -64,7 +64,7 @@ assert_contains "$GITIGNORE_CONTENT" ".agents/skills/ext/" ".gitignore contains 
 assert_contains "$GITIGNORE_CONTENT" ".gitmodules" ".gitignore contains .gitmodules (config gitignored by default)"
 assert_contains "$GITIGNORE_CONTENT" "solana-ai-kit config" ".gitignore has config markers for /commit-claude-config"
 
-# ── Agents-mode layout checks (mirrors the agents-mode job in .github/workflows/ci.yml) ──
+# ── Agents-mode layout checks (CI runs them on ubuntu and macOS via run_all.sh) ──
 WORK="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR" "$WORK"' EXIT
 export SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" NO_COLOR=1
