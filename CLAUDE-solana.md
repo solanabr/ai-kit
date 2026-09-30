@@ -21,7 +21,7 @@ Open the matching entry in `.claude/skills/SKILL.md`. It routes to current refer
 ## Workflow
 
 - Branches: `<type>/<scope>-<description>-<DD-MM-YYYY>` (`/quick-commit` automates this).
-- Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. (Claude Code adds one: a hook blocks mainnet deploys unless the command is prefixed with `CONFIRM_MAINNET=1`. Other runtimes have no such gate.)
+- Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. (Claude Code adds one: deploys, upgrades and authority changes stop for the user's approval on every cluster, and irreversible ones such as `--final` or a program close are left for the user to run. Other runtimes have no such gate.)
 - Before finishing a branch: build, `cargo fmt`, clippy and tests pass, `/diff-review` is clean, and docs that describe the change are updated. For program changes also run `/audit-solana` and `/profile-cu`, and `anchor build --verifiable` before any deploy.
 
 ## MCP

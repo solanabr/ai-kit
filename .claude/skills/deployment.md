@@ -5,7 +5,7 @@ description: "Program deployment runbook: devnet then mainnet, verifiable builds
 
 # Deployment
 
-The runbook behind `/deploy`; `/setup-ci-cd` owns the CI workflow. Kit policy: devnet first, and mainnet only with the user's explicit go-ahead. Get that go-ahead yourself; do not rely on a tool gate to stop you. Claude Code adds one — a PreToolUse hook matching only the literal `anchor deploy` and `solana program deploy`, blocking them when the command or the configured cluster says mainnet unless prefixed with `CONFIRM_MAINNET=1`. Even there, `anchor program deploy|upgrade`, `anchor upgrade`, `solana program write-buffer`, `set-upgrade-authority` and `--final` pass unchecked. Runtimes that do not read `settings.json` (Codex, opencode) have no gate at all, so every mainnet command needs explicit confirmation first.
+The runbook behind `/deploy`; `/setup-ci-cd` owns the CI workflow. Kit policy: devnet first, and mainnet only with the user's explicit go-ahead. Get that go-ahead yourself; do not rely on a tool gate to stop you. Claude Code adds one: every command below that writes a program, buffer or authority (`solana program`, `anchor deploy|upgrade`, `anchor program`) stops for the user's approval on any cluster, with the cluster it resolved in the prompt, and `--final`, `close --bypass-warning` and `program-v4 finalize` are blocked, so the user runs them. Runtimes that do not read `settings.json` (Codex, opencode) have no gate at all, so every mainnet command needs explicit confirmation first.
 
 ## Anchor 1.x changes that affect deploys
 
@@ -42,7 +42,7 @@ Rehearse the exact mainnet flow here, including a multisig upgrade through a dev
 ## Mainnet first deploy
 
 ```bash
-CONFIRM_MAINNET=1 anchor deploy -p <name> --provider.cluster mainnet -- --with-compute-unit-price <N>
+anchor deploy -p <name> --provider.cluster mainnet -- --with-compute-unit-price <N>
 solana program show <PROGRAM_ID> -u mainnet-beta
 anchor idl fetch <PROGRAM_ID> --provider.cluster mainnet    # diff against target/idl/<name>.json
 solana-verify verify-from-repo -um --program-id <PROGRAM_ID> <REPO_URL> --commit-hash <SHA> \
@@ -55,7 +55,7 @@ solana-verify verify-from-repo -um --program-id <PROGRAM_ID> <REPO_URL> --commit
 2. Once stable (about 3 months, or earlier when meaningful value is at stake): move it to the Squads v4 vault PDA (`getVaultPda({ multisigPda, index: 0 })`, the "vault" address in the Squads app). The multisig account itself cannot sign, so authority given to it is lost.
    `solana program set-upgrade-authority <PROGRAM_ID> --new-upgrade-authority <VAULT_PDA> --skip-new-upgrade-authority-signer-check -u mainnet-beta`
    The skip flag is needed because a PDA cannot co-sign; verify the address first, a wrong one is unrecoverable.
-3. After an audit and a long mainnet history: `solana program set-upgrade-authority <PROGRAM_ID> --final`. Irreversible, and it removes every rollback path.
+3. After an audit and a long mainnet history: `solana program set-upgrade-authority <PROGRAM_ID> --final`. Irreversible, and it removes every rollback path, so the user runs it (the kit blocks it for Claude).
 
 ## Mainnet upgrade through Squads v4
 

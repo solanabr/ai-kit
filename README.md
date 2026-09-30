@@ -115,7 +115,7 @@ solana-ai-kit is also its own Claude Code marketplace, serving the **core plugin
 /plugin install solana-ai-kit@stbr
 ```
 
-The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the dev hooks (banner, formatter, pre-deploy/commit gates). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 30 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
@@ -417,6 +417,22 @@ git checkout -b fix/frontend-auth-15-01-2026
 ```
 
 Use `/quick-commit` to automate branch creation and commits.
+
+## Permissions and Safety Gates
+
+Edits and commits run without hooks, formatters or extra prompts. The gates sit around secrets, on-chain writes and destructive commands.
+
+| Gate | Where | What happens |
+|------|-------|--------------|
+| Private keys, wallet vaults, credentials (`~/.ssh`, `~/.config/solana/id.json`, browser wallet storage, `gh auth token`, ...) | `Read` deny rules (also enforced by the sandbox) + PreToolUse hook | Blocked; the message points to `solana address` or asks the user to run it |
+| `--final`, `solana program close --bypass-warning`, `program-v4 finalize`, `spl-token authorize --disable` | deny rules + PreToolUse hook | Blocked; the user runs them |
+| Program deploys, upgrades, buffer writes, `extend`, closes and authority changes; `spl-token transfer`/`authorize`; stake and vote withdrawals | `ask` rules + PreToolUse hook | Approval prompt on every cluster, naming the cluster it resolved (flag, `Anchor.toml` or `solana config`) |
+| `git push --force-with-lease`, `git clean`, `gh pr merge`, `gh issue delete`, `--receive-pack`/`--upload-pack` overrides | `ask` rules | Approval prompt |
+| `sudo`, `rm -rf` on `/*`, `~*` or `.*`, `dd`, `kill -9`/`pkill`/`killall`, `chmod 777`, `chown`, plain `git push --force`, `git reset --hard`, `solana transfer`, `spl-token burn`/`close`, `docker rm`/`rmi`/`system prune` | deny rules | Blocked |
+| Bash sandbox | `sandbox` | On; local ports can bind (validators, dev servers); `git push/pull/fetch` and `gh pr/run/issue` run outside it because SSH and `gh` can't work inside |
+| [safe-ai-skill](#security-firewall-safe-ai-skill) | Its own Claude Code hooks | Gates secrets and mainnet actions too, so some commands pass two checks. It also blocks `.env` reads, which `/setup-mcp` relies on |
+
+Plugin installs get the hooks only; the permission rules and sandbox come with `install.sh`. `/update` keeps an existing `.claude/settings.json`, so existing installs don't pick these up automatically.
 
 ## Code Quality
 

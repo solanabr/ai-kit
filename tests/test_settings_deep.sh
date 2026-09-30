@@ -82,6 +82,16 @@ assert_contains "$DENY_WRITE" "~/.gnupg" "sandbox.filesystem.denyWrite contains 
 assert_contains "$DENY_WRITE" "~/.aws" "sandbox.filesystem.denyWrite contains ~/.aws"
 assert_contains "$DENY_WRITE" "~/.config/solana/id.json" "sandbox.filesystem.denyWrite contains solana key"
 
+# macOS Seatbelt blocks listening sockets by default, so solana-test-validator, Surfpool
+# (anchor test) and dev servers need local binding.
+assert_eq "true" "$(json_get '["sandbox"]["network"]["allowLocalBinding"]')" "sandbox.network.allowLocalBinding == true"
+# SSH remotes need direct network and ~/.ssh, gh needs its config and keychain: neither
+# works inside the sandbox, so these run outside it (still behind the secrets hook and permissions).
+EXCLUDED="$(json_get '["sandbox"]["excludedCommands"]')"
+for c in "git push *" "git pull *" "git fetch *" "gh pr *" "gh run *"; do
+  assert_contains "$EXCLUDED" "\"$c\"" "sandbox.excludedCommands has '$c'"
+done
+
 # --- Plugins, MCP approval, attribution ---
 echo "[user choices]"
 # LSP plugins need their own language server binary; Claude Code offers the matching
@@ -108,22 +118,51 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Deny patterns
-DENY="$(json_get '["permissions"]["deny"]')"
-assert_contains "$DENY" "sudo" "permissions.deny contains sudo pattern"
-assert_contains "$DENY" "rm -rf" "permissions.deny contains rm -rf pattern"
-assert_contains "$DENY" "git push --force" "permissions.deny contains git push --force"
-assert_contains "$DENY" "git push -f" "permissions.deny contains git push -f"
-assert_contains "$DENY" "mainnet" "permissions.deny contains mainnet deploy guard"
+# assert_rule <allow|ask|deny> <rule> <yes|no> <message>: exact membership in a permissions list
+assert_rule() {
+  local got=no
+  if json_contains "[\"permissions\"][\"$1\"]" "$2"; then got=yes; fi
+  TOTAL=$((TOTAL + 1))
+  if [ "$got" = "$3" ]; then
+    echo "  PASS: $4"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $4"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# Secret access and irreversible on-chain actions are hard blocks.
+for r in "Read(~/.ssh/**)" "Read(~/.config/solana/id.json)" "Bash(cat *keypair*.json)" "Bash(gh auth token *)" \
+         "Bash(solana program set-upgrade-authority *--final*)" "Bash(solana program close *--bypass-warning*)"; do
+  assert_rule deny "$r" yes "permissions.deny has $r"
+done
+# Deny rules for subcommands the Solana CLIs don't have are gone (their real counterparts ask),
+# and so are the blanket program-authority denies that also blocked reclaiming buffer SOL.
+for r in "Bash(spl-token set-authority *)" "Bash(solana withdraw-from-stake-account *)" \
+         "Bash(solana program set-upgrade-authority *)" "Bash(solana program close *)"; do
+  assert_rule deny "$r" no "permissions.deny drops $r"
+done
+# Program deploys, upgrades, buffer writes, closes and authority changes ask on every cluster.
+for r in "Bash(solana program deploy *)" "Bash(solana program write-buffer *)" "Bash(solana program upgrade *)" \
+         "Bash(solana program set-upgrade-authority *)" "Bash(solana program close *)" "Bash(anchor deploy *)" \
+         "Bash(anchor upgrade *)" "Bash(spl-token transfer *)" "Bash(git push --force*)" "Bash(git clean *)"; do
+  assert_rule ask "$r" yes "permissions.ask has $r"
+done
+# Deny wins over ask, so a rule in both lists never prompts.
+OVERLAP="$(python3 -c "
+import json
+p = json.load(open('$SETTINGS'))['permissions']
+print(' '.join(sorted(set(p.get('ask', [])) & set(p['deny']))) or 'none')
+" 2>/dev/null)"
+assert_eq "none" "$OVERLAP" "no rule sits in both permissions.ask and permissions.deny"
 
 # --- Hooks ---
 echo "[hooks]"
 HOOKS="$(json_get '["hooks"]')"
-assert_contains "$HOOKS" "SessionStart" "hooks has SessionStart"
-assert_contains "$HOOKS" "Stop" "hooks has Stop"
-assert_contains "$HOOKS" "PreToolUse" "hooks has PreToolUse"
-assert_contains "$HOOKS" "PostToolUse" "hooks has PostToolUse"
-assert_contains "$HOOKS" "SubagentStop" "hooks has SubagentStop"
+HOOK_EVENTS="$(python3 -c "import json; print(' '.join(sorted(json.load(open('$SETTINGS'))['hooks'])))" 2>/dev/null)"
+# Nothing formats files, runs builds or echoes after a tool call, a turn or a subagent.
+assert_eq "PreToolUse SessionStart" "$HOOK_EVENTS" "hooks are only SessionStart and PreToolUse"
 
 # Hook contract: matchers only match tool names (no undocumented "when" key),
 # the payload is read from stdin JSON, and only exit 2 blocks a tool call.
@@ -137,11 +176,14 @@ GATE_CMD="$(python3 -c "
 import json
 d = json.load(open('$SETTINGS'))
 cmds = [h['command'] for e in d['hooks']['PreToolUse'] for h in e['hooks']]
-print(next((c for c in cmds if 'Blocked' in c), '__MISSING__'))
+print(next((c for c in cmds if 'Blocked: reading private keys' in c), '__MISSING__'))
 " 2>/dev/null)"
 assert_contains "$GATE_CMD" "exit 2" "secrets-gate PreToolUse hook blocks with exit 2"
 assert_contains "$GATE_CMD" "tool_input.command" "secrets-gate hook reads the command from stdin JSON"
-assert_contains "$HOOKS" "CONFIRM_MAINNET=1" "pre-deploy hook gates mainnet deploys on CONFIRM_MAINNET=1"
+assert_contains "$HOOKS" 'permissionDecision\":\"ask' "on-chain write hook asks for approval through permissionDecision"
+# The model could add an env prefix itself; approval has to come from the user.
+assert_file_not_contains "$SETTINGS" "CONFIRM_MAINNET" "no CONFIRM_MAINNET env-prefix confirmation"
+assert_file_not_contains "$SETTINGS" "pre-commit checks" "no hook runs builds or tests on git commit"
 for legacy in command_matches CLAUDE_FILE_PATH CLAUDE_TOOL_EXIT_CODE CLAUDE_SUBAGENT_NAME "read -r"; do
   assert_file_not_contains "$SETTINGS" "$legacy" "hooks do not rely on unsupported '$legacy'"
 done
