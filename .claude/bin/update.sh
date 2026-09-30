@@ -153,8 +153,17 @@ strip_md_comments() {
 INSTR_FILE="CLAUDE.md"
 if [ "$CONFIG_NAME" = ".agents" ]; then
   INSTR_FILE="AGENTS.md"
-  # the frozen copy loop above already wrote these; remove from the target
-  for f in $AGENTS_SKIP_FILES; do rm -f "$TARGET_DIR/$CONFIG_NAME/$f"; done
+  # The frozen copy loop above just wrote these. A dry run copies nothing, so there
+  # only an older install's copy can be present, and it must stay.
+  for f in $AGENTS_SKIP_FILES; do
+    [ -f "$TARGET_DIR/$CONFIG_NAME/$f" ] || continue
+    if [ "$DRY_RUN" = true ]; then
+      CHANGES="$CHANGES  [would remove] $CONFIG_NAME/$f (Claude Code only)\n"
+    else
+      rm -f "$TARGET_DIR/$CONFIG_NAME/$f"
+      CHANGES="$CHANGES  [removed] $CONFIG_NAME/$f (Claude Code only)\n"
+    fi
+  done
   strip_md_comments "$TEMP_DIR/repo/CLAUDE-solana.md"
   agents_paths "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/.gitmodules"
   if [ "$DRY_RUN" = false ]; then

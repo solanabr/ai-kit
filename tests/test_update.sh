@@ -164,4 +164,17 @@ assert_file_exists "$AGENTS_DIR/.agents/bin/update.sh" ".agents/bin/update.sh ex
 assert_dir_exists "$AGENTS_DIR/.agents/agents" ".agents/agents/ valid after agents-mode update"
 assert_dir_exists "$AGENTS_DIR/.agents/commands" ".agents/commands/ valid after agents-mode update"
 
+# --- Agents mode: an older install's /cleanup (Claude Code only) ---
+# --dry-run must report the removal and write nothing; the real update removes it.
+echo "[agents mode: Claude-Code-only files]"
+tree_sum() { (cd "$1" && find . -path ./.git -prune -o -type f -exec cksum {} + | LC_ALL=C sort -k3 | cksum); }
+echo "# /cleanup from an older --agents install" > "$AGENTS_DIR/.agents/commands/cleanup.md"
+TREE_BEFORE="$(tree_sum "$AGENTS_DIR")"
+DRY_AGENTS="$(cd "$AGENTS_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/update.sh --dry-run 2>&1)"
+assert_eq "$TREE_BEFORE" "$(tree_sum "$AGENTS_DIR")" "--dry-run changes no file in an --agents install"
+assert_contains "$DRY_AGENTS" "[would remove] .agents/commands/cleanup.md" "--dry-run reports the /cleanup it would remove"
+UPDATE_AGENTS="$(cd "$AGENTS_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/update.sh 2>&1)"
+assert_contains "$UPDATE_AGENTS" "[removed] .agents/commands/cleanup.md" "update reports removing /cleanup"
+assert_file_not_exists "$AGENTS_DIR/.agents/commands/cleanup.md" "update removes /cleanup from an --agents install"
+
 print_summary
