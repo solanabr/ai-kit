@@ -178,6 +178,17 @@ for dir in agents skills rules commands bin; do
   fi
 done
 
+# The copy merges, so it never removes the Claude-Code-only files an older --agents
+# install shipped. Remove them here.
+if [ "$AGENTS_ONLY" = true ]; then
+  for f in $AGENTS_SKIP_FILES; do
+    if [ -f "$TARGET_DIR/$CONFIG_DIR/$f" ]; then
+      rm -f "$TARGET_DIR/$CONFIG_DIR/$f"
+      ok "Removed $CONFIG_DIR/$f (Claude Code only)"
+    fi
+  done
+fi
+
 # Older installs also copied the ext/ submodule gitfiles. Keep only a gitfile whose
 # gitdir lives inside this project (a real submodule the user checked out); a copied
 # one points outside, and with a local source it still resolves, so existence alone
