@@ -55,12 +55,31 @@ SKILL_HUB="$CONFIG_NAME/skills/SKILL.md"
 SKILL_DIR="$CONFIG_NAME/skills"
 MISSING=0
 
+# Hub links into an extension this project has not installed (registry tier +
+# skills/extensions.txt, read by skills.sh) dangle until skills.sh add. They are
+# not broken paths: count them apart and name the extensions instead.
+NOT_INSTALLED=" "
+if [ -f "$SCRIPT_DIR/skills.sh" ]; then
+  NOT_INSTALLED=" $(bash "$SCRIPT_DIR/skills.sh" uninstalled 2>/dev/null | tr '\n' ' ' || true)"
+fi
+SKIPPED=0
+SKIPPED_IDS=""
+skip_uninstalled() {
+  local id="${1#ext/}"
+  [ "$id" != "$1" ] || return 1
+  id="${id%%/*}"
+  case "$NOT_INSTALLED" in *" $id "*) ;; *) return 1 ;; esac
+  SKIPPED=$((SKIPPED + 1))
+  case "$SKIPPED_IDS " in *" $id "*) ;; *) SKIPPED_IDS="$SKIPPED_IDS $id" ;; esac
+}
+
 if [ -f "$SKILL_HUB" ]; then
   echo "Verifying skill paths referenced in SKILL.md..."
 
   while IFS= read -r ref; do
     FULL_PATH="$SKILL_DIR/$ref"
     if [ ! -f "$FULL_PATH" ]; then
+      skip_uninstalled "$ref" && continue
       echo "  MISSING: $ref -> $FULL_PATH"
       MISSING=$((MISSING + 1))
     fi
@@ -69,6 +88,7 @@ if [ -f "$SKILL_HUB" ]; then
   while IFS= read -r ref; do
     FULL_PATH="$SKILL_DIR/$ref"
     if [ ! -d "$FULL_PATH" ]; then
+      skip_uninstalled "$ref" && continue
       echo "  MISSING DIR: $ref -> $FULL_PATH"
       MISSING=$((MISSING + 1))
     fi
@@ -79,6 +99,10 @@ if [ -f "$SKILL_HUB" ]; then
   else
     echo ""
     echo "  $MISSING broken path(s) found. Fix SKILL.md or check submodule state."
+  fi
+  if [ "$SKIPPED" -gt 0 ]; then
+    echo "  Skipped $SKIPPED link(s) into extensions this project has not installed:$SKIPPED_IDS"
+    echo "  Install one when a task needs it: bash $CONFIG_NAME/bin/skills.sh add <id>"
   fi
 fi
 echo ""

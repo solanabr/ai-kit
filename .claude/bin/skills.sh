@@ -9,9 +9,10 @@ set -euo pipefail
 #   bash .claude/bin/skills.sh list              # packs, tier, installed or not, when to install
 #   bash .claude/bin/skills.sh add <id> [...]    # install extensions at the commit the kit pins
 #
-# Called by install.sh and update.sh:
+# Called by install.sh, update.sh and resync.sh:
 #   skills.sh select <kit .claude dir> <project config dir> [ids]   # trim a kit checkout before install copies it
 #   skills.sh prune                                                 # after update.sh has copied every pack
+#   skills.sh uninstalled                                           # extensions not installed here, one id per line
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
 # those and the core packs. Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a
@@ -114,6 +115,17 @@ cmd_prune() {
   summary "$reg" "$keep" "$CONFIG_NAME"
 }
 
+# Extensions this project has not installed. Hub links into them dangle until
+# skills.sh add, so resync.sh lists them instead of reporting broken paths.
+cmd_uninstalled() {
+  local reg="$CONFIG_DIR/skills/skill-registry.json" keep id
+  [ -f "$reg" ] || return 0
+  keep="$(recorded_extensions "$CONFIG_DIR" "$reg")"
+  for id in $(tier_ids "$reg" extension); do
+    has_line "$keep" "$id" || echo "$id"
+  done
+}
+
 cmd_add() {
   local reg="$CONFIG_DIR/skills/skill-registry.json" ids id todo="" src tmp url branch local_src extensions paths=()
   [ "$#" -gt 0 ] || die "usage: skills.sh add <id> [<id>...] (see: skills.sh list)"
@@ -171,6 +183,7 @@ case "${1:-list}" in
   add) shift; cmd_add "$@" ;;
   select) shift; [ "$#" -ge 2 ] || die "usage: skills.sh select <kit .claude dir> <config dir> [ids]"; cmd_select "$@" ;;
   prune) cmd_prune ;;
-  -h|--help|help) sed -n '4,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  uninstalled) cmd_uninstalled ;;
+  -h|--help|help) sed -n '4,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac
