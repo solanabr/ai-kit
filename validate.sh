@@ -14,6 +14,9 @@ SKIP=0
 # uninitialized submodule so callers can SKIP instead of FAIL.
 in_uninitialized_submodule() {
   local path="$1"
+  # Links from agents/, commands/ and skill folders climb out first
+  # (../skills/ext/..., ../ext/...): drop each "dir/.." pair.
+  path="$(printf '%s' "$path" | sed -E -e ':a' -e 's#(^|/)[^/.][^/]*/\.\./#\1#' -e 'ta')"
   case "$path" in
     .claude/skills/ext/*)
       local sub
@@ -145,9 +148,13 @@ while IFS= read -r f; do
     link="${link%%#*}"
     [ -z "$link" ] && continue
     if [ ! -e "$(dirname "$f")/$link" ]; then
-      echo "  FAIL: $f -> $link"
-      FAIL=$((FAIL + 1))
-      broken=$((broken + 1))
+      if in_uninitialized_submodule "$(dirname "$f")/$link"; then
+        SKIP=$((SKIP + 1))
+      else
+        echo "  FAIL: $f -> $link"
+        FAIL=$((FAIL + 1))
+        broken=$((broken + 1))
+      fi
     fi
   done < <(grep -oE '\]\([^)[:space:]]*ext/[^)[:space:]]*\)' "$f" | sed 's/^](//; s/)$//' | grep -v '^http' || true)
 done < <(find .claude/agents .claude/commands -name '*.md'; find .claude/skills -path .claude/skills/ext -prune -o -name '*.md' ! -path .claude/skills/SKILL.md -print)
