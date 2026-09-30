@@ -17,7 +17,7 @@ The idea here is to provide a generic CLAUDE.md that relies on subagents to plan
 
 Current multi-agent workflow favors monorepos, so we use a single CLAUDE.md/config for the whole project while leveraging agents and context-specific skills to solve each step of builder flow.
 
-If you installed manually, remember to rename ./CLAUDE-solana.md back to ./CLAUDE.md, as the current top-level CLAUDE.md file is focused on maintaining the repo itself.
+Working in a fork or clone of this repo? Its top-level CLAUDE.md is for maintaining the kit itself; `/cleanup` swaps in CLAUDE-solana.md (see [Using as a GitHub Template](#using-as-a-github-template)).
 
 ## What This Is
 
@@ -33,52 +33,112 @@ A complete `.claude/` configuration that turns Claude into a Solana development 
 
 ## Quick Start
 
+Pick one way to use the kit. Each code block below holds one command: `bash` blocks run in your terminal, `text` blocks are typed into Claude Code (or, for the no-install prompt, into your agent).
+
+| Way | Use it when |
+|-----|-------------|
+| [Installer](#installer-recommended) (recommended) | You work in Claude Code and want the full kit in a project |
+| [Codex, opencode and other agents](#codex-opencode-and-other-agents) | Your tool reads `AGENTS.md` and `.agents/skills/` instead of Claude Code's files |
+| [No install](#no-install-read-the-kit-from-aikitsuperteamcodes) | You want the skills in any agent without adding files to your project |
+| [Claude Code plugin](#install-as-a-claude-code-plugin-not-recommended) (not recommended) | Read that section before you use it |
+
+### Installer (recommended)
+
+The installer copies the kit into a project: `.claude/` (agents, commands, skills, and a `settings.json` with the permissions, sandbox and hooks), `CLAUDE.md`, `.mcp.json` and `.env`. It downloads the kit's latest release tag from GitHub into a temporary directory, which it deletes when done. It installs into the current directory, so go to your project's root first (replace `your-project` with its path):
+
 ```bash
-# Option 0: Fork Template (Github UI)
-claude -m "/cleanup"  # then start claude code running /cleanup so top-level directory of your project isn't polluted
+cd your-project
+```
 
+**Inspect, then run.** Download the installer, read it, then run it:
 
-# Option 1: One-liner installer (Claude Code)
+```bash
+curl -fsSL https://aikit.superteam.codes/install.sh -o /tmp/solana-ai-kit-install.sh
+```
+
+```bash
+less /tmp/solana-ai-kit-install.sh
+```
+
+```bash
+bash /tmp/solana-ai-kit-install.sh
+```
+
+**One-liner.** The same installer without the review step:
+
+```bash
 curl -fsSL https://aikit.superteam.codes | bash
-# Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash
+```
 
-# Option 2: One-liner installer (Codex, Opencode, everything else)
-curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
-# Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash -s -- --agents
+`aikit.superteam.codes` and `aikit.superteam.codes/install.sh` both redirect to [`install.sh` on `main`](https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh).
 
-# Option 3: Manual setup
-git clone --recurse-submodules https://github.com/solanabr/ai-kit.git solana-ai-kit
-cp -r solana-ai-kit/.claude /path/to/your-project/
-cp solana-ai-kit/CLAUDE-solana.md /path/to/your-project/CLAUDE.md
-cd /path/to/your-project && git submodule update --init --recursive
+**From a clone.** Use this to pin a release, or to review every file it installs, not just the installer, before it reaches your project. Clone the kit outside your project; to pin a release, add `--branch` with a tag from the [tags page](https://github.com/solanabr/ai-kit/tags), e.g. `--branch v2.1.0`:
 
-# Option 4: Claude Code plugin (run inside Claude Code)
-/plugin marketplace add https://github.com/solanabr/ai-kit.git
-/plugin install solana-ai-kit@stbr
-# Commands then namespace as /solana-ai-kit:<name>. The plugin is the CORE kit
-# (agents/commands/local skills/MCP/hooks); the curl one-liner (Option 1) is the
-# FULL install, adding CLAUDE.md + permissions/sandbox + the ext/ skill packs
-# (core packs by default, extensions on demand).
-# Details: see "Install as a Claude Code plugin" below.
+```bash
+git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/solanabr/ai-kit.git "$HOME/ai-kit"
+```
 
-# Start Claude Code
+Then run the clone's installer from your project's root. `SOLANA_AI_KIT_LOCAL_SRC` makes it copy from the clone instead of downloading:
+
+```bash
+SOLANA_AI_KIT_LOCAL_SRC="$HOME/ai-kit" bash "$HOME/ai-kit/install.sh"
+```
+
+When the installer finishes, start Claude Code in the project:
+
+```bash
 claude
 ```
 
-### `--agents` Flag
+Starting a new repository from the kit instead? See [Using as a GitHub Template](#using-as-a-github-template).
 
-Pass `--agents` to install everything into `.agents/` instead of `.claude/`, with the instructions in `AGENTS.md` instead of `CLAUDE.md`. Codex and opencode read `AGENTS.md` and the skills in `.agents/skills/`, and the installed files point at `.agents/` paths. Useful when `.claude/` is already taken or for non-Claude AI tools. `.agents/agents/`, `.agents/commands/` and `.mcp.json` keep Claude Code's format, so other tools can use them as prompts or context.
+### Codex, opencode and other agents
+
+Use this when your tool reads `AGENTS.md` and `.agents/skills/` rather than Claude Code's `CLAUDE.md` and `.claude/`, as Codex and opencode do, or when `.claude/` is already taken. Run it from your project's root (replace `your-project` with its path):
 
 ```bash
-bash install.sh --agents /path/to/your-project
+cd your-project
 ```
 
-To update an `--agents` install:
+```bash
+curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
+```
+
+`--agents` works with every installer variant above, e.g. `bash /tmp/solana-ai-kit-install.sh --agents`. It installs everything into `.agents/` instead of `.claude/`, with the instructions in `AGENTS.md` instead of `CLAUDE.md`, and the installed files point at `.agents/` paths. `.agents/agents/`, `.agents/commands/` and `.mcp.json` keep Claude Code's format, so other tools can use them as prompts or context. To update an `--agents` install, run this from your project's root:
 
 ```bash
-# Run from your project root:
 bash .agents/bin/update.sh
 ```
+
+### No install: read the kit from aikit.superteam.codes
+
+Use this when you want the kit's guidance in any agent (Claude Code, Codex, Grok Build, Cursor, …) without adding files to your project. [aikit.superteam.codes](https://aikit.superteam.codes) serves this repository's files, the `ext/` skill packs included, at `https://aikit.superteam.codes/<path>` (the bare domain and `/install.sh` redirect to the installer instead). Start from these:
+
+| What | URL |
+|------|-----|
+| Project instructions (what the installer writes to `CLAUDE.md` or `AGENTS.md`) | https://aikit.superteam.codes/CLAUDE-solana.md |
+| Skill hub: routes each Solana task to the file to read | https://aikit.superteam.codes/.claude/skills/SKILL.md |
+| Solana Foundation dev skill, the hub's default entry point | https://aikit.superteam.codes/.claude/skills/ext/solana-dev/skills/solana-dev/SKILL.md |
+| Security-first code generation rules | https://aikit.superteam.codes/.claude/skills/ext/safe-solana-builder/SKILL.md |
+| An agent or command as a reference prompt (any file in `.claude/agents/` or `.claude/commands/`) | https://aikit.superteam.codes/.claude/agents/anchor-engineer.md |
+
+Paste this into your agent at the start of a session:
+
+```text
+Use the Solana AI Kit from https://aikit.superteam.codes for this session, without installing it.
+1. Fetch https://aikit.superteam.codes/CLAUDE-solana.md and follow it as project instructions. Skip its HTML comments; they are maintainer notes.
+2. Fetch files verbatim (for example with curl -fsSL), not through a tool that summarizes pages.
+3. The kit names files by repository path, such as .claude/skills/SKILL.md. Fetch those from https://aikit.superteam.codes/<path>, and resolve relative links against the URL of the file that contains them.
+4. Before Solana work, fetch https://aikit.superteam.codes/.claude/skills/SKILL.md and read only the files it routes the task to. The site has no folder listings: for a link that ends in /, fetch SKILL.md in that folder, or README.md if there is none.
+5. Commands the kit names, such as /diff-review, are not installed: fetch .claude/commands/<name>.md from the site and follow it instead.
+6. Skip install steps in these files (install.sh, skills.sh add, /add-skill): every linked file is already on the site.
+```
+
+Trade-offs:
+
+- **Not pinned.** The site deploys this repository's `main` branch, so a file can change between two sessions. Pinned copies of the kit's own files are on GitHub at a release tag, e.g. https://raw.githubusercontent.com/solanabr/ai-kit/v2.1.0/CLAUDE-solana.md. That host doesn't serve the `ext/` packs (they are git submodules), so a pinned pack file comes from the pack's own repository, at the commit the kit pins.
+- **A trust decision.** What the agent fetches becomes instructions it follows. Point it only at a host you trust, and read the files you rely on as you would a dependency.
+- **Instructions only.** Nothing registers agents or commands, runs hooks (such as the mainnet-deploy gate), configures MCP servers or applies the permission and sandbox policy. The agent needs a web-fetch tool or network access for `curl` (Codex, for example, asks before it uses the internet), and every file costs a fetch.
 
 ### Config is gitignored by default
 
@@ -98,25 +158,56 @@ Its engine ships prebuilt for macOS and Linux (x64, arm64) and fails closed else
 
 ### MCP Setup (Optional)
 
-After installation, configure MCP servers for enhanced capabilities:
+After installation, configure the MCP servers from inside Claude Code in your project:
 
-```bash
-# In your project with Claude Code running:
+```text
 /setup-mcp
 ```
 
 This guides you through the Helius API key and offers the [optional MCP servers](#optional-mcp-servers).
 
-## Install as a Claude Code plugin
+## Install as a Claude Code plugin (not recommended)
 
-solana-ai-kit is also its own Claude Code marketplace, serving the **core plugin** and its security dependency, [safe-ai-skill](#security-firewall-safe-ai-skill). From inside Claude Code:
+We recommend against installing the kit, or anything else, from a plugin marketplace. A plugin runs with your user permissions: its hooks run shell commands and its stdio MCP servers run as local processes, both outside Claude Code's sandbox, and it can add executables to the PATH of Claude's shell and instructions to Claude's context. A marketplace fetches all of it from a remote repository, and with auto-update on, a plugin changes on disk after you reviewed it. Every marketplace you add is one more publisher, and one more account that can be compromised, able to ship code to your machine. The [installer](#installer-recommended) ships hooks too, but as plain files in your project that you can read and that change only when you run `/update`.
 
-```text
-/plugin marketplace add https://github.com/solanabr/ai-kit.git
-/plugin install solana-ai-kit@stbr
-```
+The full install uses this mechanism for one plugin, [safe-ai-skill](#security-firewall-safe-ai-skill): its `.claude/settings.json` registers this repository's `stbr` marketplace (default branch, not pinned) for the project and enables `safe-ai-skill@stbr`. Claude Code registers the marketplace only after you trust the folder, and fetches the plugin only when you run `claude plugin install safe-ai-skill@stbr --scope project`, at the commit the marketplace pins.
 
-The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the 3 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+If you use the plugin anyway, keep the exposure small:
+
+1. Add the marketplace pinned to a release tag instead of the default branch. Replace `v2.1.0` with the newest tag on the [tags page](https://github.com/solanabr/ai-kit/tags):
+
+   ```text
+   /plugin marketplace add solanabr/ai-kit#v2.1.0
+   ```
+
+2. Read what it runs, at that tag: the hooks in [`plugin/hooks/hooks.json`](plugin/hooks/hooks.json) and the MCP servers in [`.mcp.json`](.mcp.json).
+3. Install it for one project and only for you (local scope, recorded in that project's `.claude/settings.local.json`). Run it from the project's root (replace `your-project` with its path):
+
+   ```bash
+   cd your-project
+   ```
+
+   ```bash
+   claude plugin install solana-ai-kit@stbr --scope local
+   ```
+
+4. List the hooks, MCP servers, agents and commands that were installed:
+
+   ```bash
+   claude plugin details solana-ai-kit
+   ```
+
+5. Keep auto-update off. It is off by default for third-party marketplaces such as `stbr`, and `/plugin` → **Marketplaces** → `stbr` shows the toggle. Update on purpose, after reading what changed upstream:
+
+   ```bash
+   claude plugin marketplace update stbr
+   ```
+
+   ```bash
+   claude plugin update solana-ai-kit@stbr --scope local
+   ```
+
+The plugin ships the **core kit**: the 15 agents, 31 commands, the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the token-extensions skill, the 3 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
@@ -124,13 +215,13 @@ What the plugin **cannot** carry (Claude Code plugins are plain git clones — t
 - the curated permissions allowlist + sandbox policy
 - the `ext/` skill packs: the core packs by default, extensions on demand (protocol, security, infra, ecosystem depth)
 
-For protocol-skill depth in plugin form, add the upstream marketplaces instead (routing, not copying) — e.g. `/plugin marketplace add sendaifun/skills`, `ghostsecurity/skills`, `trailofbits/skills`, `cloudflare/skills`. The plugin's skill hub and `skill-registry.json` list the current targets.
+For skill-pack depth, use the full install or the [no-install route](#no-install-read-the-kit-from-aikitsuperteamcodes) rather than adding each pack's own marketplace (`sendaifun/skills`, `trailofbits/skills`, …): every marketplace is one more publisher to trust.
 
-The two paths are complementary: individuals wanting Solana agents/commands across **all** their projects → plugin at user scope; project teams working in one repo → `install.sh` (full kit). If you enable both in the same project, `/doctor` warns about duplicate commands/hooks/MCP and advises picking one. Plugin auto-update is off by default for third-party marketplaces — refresh with `/plugin marketplace update` + `claude plugin update`.
+Don't enable the plugin and the full install in the same project: both load the same commands, hooks and MCP servers, and `/doctor` warns about it.
 
 ## External Skill Submodules
 
-The kit pins every skill pack below as a git submodule. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
+The kit pins every skill pack below as a git submodule, except `anthropic-skills`, which it pins to an upstream commit. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
 
 | Submodule | Tier | Source | Purpose |
 |-----------|------|--------|---------|
@@ -154,6 +245,7 @@ The kit pins every skill pack below as a git submodule. **Core** packs install w
 | `ext/vercel` | Extension | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | Vercel deployment, Next.js, AI SDK, v0, edge functions |
 | `ext/solana-new` | Extension | [sendaifun/solana-new](https://github.com/sendaifun/solana-new) | 32 idea→launch journey skills + idea datasets/knowledge base; routed via local wrappers |
 | `ext/colosseum` | Extension | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon projects |
+| `anthropic-skills` (not a submodule) | Extension | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills any agent loads ([details](#anthropics-skills-in-any-agent)) |
 
 **Installing extensions.** At install time: `bash install.sh --with sendai,jupiter` (`--with all` installs every pack). Later: `/add-skill <id>` or `bash .claude/bin/skills.sh add <id>` (`.agents/bin/` for `--agents` installs); `skills.sh list` shows every pack and when to use it. Agents do the same on their own: each hub row, agent and command line that links into an extension names its install command. `/update` keeps the extensions a project installed (recorded in `.claude/skills/extensions.txt`); installs made before the core/extension split keep every pack.
 
@@ -261,7 +353,7 @@ Beyond the bundled submodules above, the kit ships a curated catalog of **opt-in
 
 Featured add-ons by domain:
 
-- **Claude-official:** [anthropics/skills](https://github.com/anthropics/skills) · [anthropics/claude-code](https://github.com/anthropics/claude-code) plugins (non-OSI license; overlaps `/diff-review` + `cso`)
+- **Claude-official:** [anthropics/claude-code](https://github.com/anthropics/claude-code) plugins (non-OSI license; overlaps `/diff-review` + `cso`). Anthropic's Apache-2.0 skills are the `anthropic-skills` extension above
 - **Dev-workflow:** [wshobson/agents](https://github.com/wshobson/agents) · [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done)
 - **Frontend/Design:** [zarazhangrui/frontend-slides](https://github.com/zarazhangrui/frontend-slides) · [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
@@ -273,6 +365,38 @@ Featured add-ons by domain:
 For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos; install the solana-new extension first).
 
 See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats. The same file records the tier and triggers of each pinned pack above; entries without a tier are these opt-in add-ons.
+
+## Use with Codex, Grok Build and other agents
+
+The kit's skills are [Agent Skills](https://agentskills.io) folders, which most coding agents load. Pick the install by where your agent looks:
+
+| Agent | Install | It reads |
+|-------|---------|----------|
+| Claude Code | default | `CLAUDE.md`, `.claude/` (skills, agents, commands, hooks), `.mcp.json` |
+| Grok Build | default (`--agents` works too) | Claude Code's files, plus `AGENTS.md` and `.agents/skills/`, once you trust the folder (`/hooks-trust` or `grok --trust`) |
+| Codex, opencode, Gemini CLI, Cursor, GitHub Copilot and other Agent Skills clients | `--agents` | `AGENTS.md` and `.agents/skills/` |
+
+Grok Build caveats, per the [Grok Build docs](https://docs.x.ai/build/features/project-rules):
+
+- Grok skips instruction files that `.gitignore` lists, and the installer gitignores `CLAUDE.md` (or `AGENTS.md`) by default. Run `/commit-claude-config`, or take the file out of the kit's `.gitignore` block, so Grok loads the house rules. Skills and commands load either way.
+- Grok sends [hooks](https://docs.x.ai/build/features/hooks) camelCase JSON (`toolInput`), while the kit's hooks read Claude Code's `tool_input`, so the secret-read, pre-commit and mainnet-deploy gates in `.claude/settings.json` can't be relied on under Grok. The project `CLAUDE.md` already tells agents on other runtimes to get an explicit go-ahead before any mainnet step.
+
+Gemini CLI reads `GEMINI.md` unless you add `AGENTS.md` to `context.fileName` in its `settings.json`.
+
+### Anthropic's skills in any agent
+
+The `anthropic-skills` extension installs three Apache-2.0 skills from [anthropics/skills](https://github.com/anthropics/skills) as top-level skills, so each agent above loads them by description: `frontend-design` (distinctive UI direction), `webapp-testing` (Playwright tests of a local web app) and `mcp-builder` (MCP servers for a program or API). They land in `.claude/skills/<name>/`, or in `.agents/skills/<name>/` with `--agents`:
+
+```bash
+bash install.sh --with anthropic-skills /path/to/your-project   # add --agents for Codex and the others
+bash .claude/bin/skills.sh add anthropic-skills                  # later (.agents/bin/ with --agents), or /add-skill anthropic-skills
+```
+
+`skills.sh` fetches only those three folders, at the commit pinned in [`skill-registry.json`](.claude/skills/skill-registry.json), and copies them unchanged with their `LICENSE.txt`. It refuses the repo's restricted skills whatever the registry lists: `docx`, `pdf`, `pptx` and `xlsx` are proprietary and licensed for use only within Anthropic's services, and `doc-coauthoring` has no license. Claude users get the document skills first-party from Anthropic: they power file creation in the Claude apps, and Claude Code installs them from Anthropic's own marketplace (`/plugin marketplace add anthropics/skills`, then `/plugin install document-skills@anthropic-agent-skills`).
+
+Two of the three run code: `webapp-testing`'s `scripts/with_server.py` starts the server commands it is given through a shell, and `mcp-builder`'s evaluation script calls the Anthropic API with `ANTHROPIC_API_KEY`.
+
+The pin moves by hand, not through Dependabot: review the upstream diff of the three folders, update `commit` in the registry entry, then run `bash tests/test_anthropic_skills.sh`, which re-checks each skill's license and frontmatter at the new commit.
 
 ## Repository Structure
 
@@ -327,7 +451,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
-    │   ├── token-2022.md            # Token Extensions guide (local)
+    │   ├── token-extensions/        # Token-2022 extensions: pick, combine, create (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
     └── settings.json            # Sandbox, permissions, hooks, stbr marketplace + safe-ai-skill@stbr
@@ -464,31 +588,70 @@ Keep: legitimate security checks, non-obvious explanations, matching error patte
 
 ## Using as a GitHub Template
 
-1. Click "Use this template" on GitHub (or fork the repo)
-2. Clone your new repo
-3. Run Claude Code and use `/cleanup` — this copies `CLAUDE-solana.md` → `CLAUDE.md` and removes config repo scaffolding (tests, install scripts, docs)
-4. Start building!
+1. Click "Use this template" on GitHub (or fork the repo).
+2. Clone your new repository with its skill submodules (replace `your-name/your-project` with its GitHub path):
+
+   ```bash
+   git clone --recurse-submodules https://github.com/your-name/your-project.git
+   ```
+
+3. Start Claude Code in the clone:
+
+   ```bash
+   cd your-project
+   ```
+
+   ```bash
+   claude
+   ```
+
+4. Run `/cleanup`. It copies `CLAUDE-solana.md` → `CLAUDE.md` and removes config repo scaffolding (tests, install scripts, docs):
+
+   ```text
+   /cleanup
+   ```
+
+5. Start building!
 
 For monorepos, add a `CLAUDE.md` to each package/module with architecture decisions scoped to that directory. Claude Code automatically loads these when working in that subdirectory.
 
 ## Updating
 
+Run these from your project's root (replace `your-project` with its path); in `--agents` installs, use `.agents/bin/` instead of `.claude/bin/`. Inside Claude Code, `/update` runs the same update.
+
 ```bash
-# Preferred: use /update in Claude Code, or run directly:
-bash .claude/bin/update.sh
-
-# Preview changes without applying:
-bash .claude/bin/update.sh --dry-run
-
-# Install a skill extension (or /add-skill <id>); list them with: bash .claude/bin/skills.sh list
-bash .claude/bin/skills.sh add <id>
-
-# Resync skill submodules only:
-bash .claude/bin/resync.sh
-
-# Or manually update submodules
-git submodule update --remote --merge
+cd your-project
 ```
+
+Update the kit in place. It pulls the kit's `main` branch and keeps your `.env` and `CLAUDE.md`; when the kit's `CLAUDE.md` differs from yours, it writes the kit's version to `CLAUDE.md.upstream` for you to merge:
+
+```bash
+bash .claude/bin/update.sh
+```
+
+Preview the update without writing anything:
+
+```bash
+bash .claude/bin/update.sh --dry-run
+```
+
+List the skill packs, then install an extension by its id (`sendai` here; `/add-skill <id>` does the same inside Claude Code):
+
+```bash
+bash .claude/bin/skills.sh list
+```
+
+```bash
+bash .claude/bin/skills.sh add sendai
+```
+
+Check that every link in the skill hub resolves:
+
+```bash
+bash .claude/bin/resync.sh
+```
+
+In a fork of this repository, where the `ext/` packs are git submodules, `resync.sh` also moves them to their latest upstream commits. An installed project holds plain copies of the packs, so there `update.sh` is what refreshes them.
 
 ## License
 

@@ -4,7 +4,7 @@ set -euo pipefail
 # Solana AI Kit Installer
 # Usage:
 #   curl -fsSL https://aikit.superteam.codes | bash
-#   (fallback if DNS not yet live: curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash)
+#   (aikit.superteam.codes redirects to https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh)
 #   bash install.sh /path/to/project
 #   bash install.sh --agents /path/to/project   # installs into .agents/ instead of .claude/
 #   bash install.sh --with sendai,jupiter /path/to/project   # core skill packs plus these extensions (--with all: every one)
@@ -119,7 +119,7 @@ fi
 # vendored ext/ repos, bin/ (scripts resolve their own dir), and lines that
 # already name .agents/ (those are written to handle both modes).
 # Claude-Code-only files, not installed by --agents. /cleanup turns a fork of the
-# kit repo into a project (README Option 0, run as `claude -m /cleanup`); its paths
+# kit repo into a project (README "Using as a GitHub Template"); its paths
 # describe the kit's own repo, so in an .agents/ project every step of it is false.
 # Not shipping it beats rewriting it into something plausible but wrong.
 AGENTS_SKIP_FILES='commands/cleanup.md'
@@ -183,10 +183,14 @@ if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
   bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
 fi
 
-# Directories: always overwrite with upstream (same as update.sh)
+# Directories: always overwrite with upstream (same as update.sh).
+# Copy contents (src/.) into a pre-created destination so an existing symlink
+# (e.g. .agents/skills -> ../.claude/skills) is followed and merged into,
+# instead of cp failing with "cannot overwrite non-directory".
 for dir in agents skills rules commands bin; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
-    cp -r "$TEMP_DIR/repo/.claude/$dir" "$TARGET_DIR/$CONFIG_DIR/"
+    mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
+    cp -r "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
   fi
 done
 

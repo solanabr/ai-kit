@@ -76,45 +76,64 @@ if [ -f "$REPO_ROOT/.gitmodules" ]; then
   assert_eq "$GITMODULE_COUNT" "$EXT_DIR_COUNT" "Submodule count ($GITMODULE_COUNT) matches ext/ dir count ($EXT_DIR_COUNT)"
 fi
 
-# --- Manual install: cp reads from the directory git clone creates ---
+# --- Install from a clone: later steps read from the directory git clone creates ---
 # Without a target dir, `git clone <url>` names the directory after the repo, so a
-# repo rename silently breaks every `cp <dir>/...` step that follows it.
-echo "[manual install]"
-MANUAL_INSTALL="$(python3 - "$REPO_ROOT" README.md QUICK-START.md <<'PY'
+# repo rename silently breaks every step that reads `<dir>/...` after it: a `cp`, or
+# the installer run with SOLANA_AI_KIT_LOCAL_SRC=<dir>. The docs put one command per
+# fenced block, so a clone covers the rest of its section, not just its own block.
+echo "[install from clone]"
+CLONE_INSTALL="$(python3 - "$REPO_ROOT" README.md QUICK-START.md <<'PY'
 import os, re, shlex, sys
 root = sys.argv[1]
 TAKES_VALUE = {"-b", "--branch", "-o", "--origin", "-c", "--config", "-j", "--jobs", "--depth"}
+reads = 0
 for name in sys.argv[2:]:
-    text = open(os.path.join(root, name), encoding="utf-8").read()
-    pairs = 0
-    for block in re.findall(r"^```[^\n]*\n(.*?)^```", text, re.S | re.M):
-        clone_dir = None
-        for line in block.splitlines():
-            try:
-                words = shlex.split(line, comments=True)
-            except ValueError:
-                continue
-            if words[:2] == ["git", "clone"]:
-                args, rest = [], iter(words[2:])
-                for w in rest:
-                    if w in TAKES_VALUE:
-                        next(rest, None)
-                    elif not w.startswith("-"):
-                        args.append(w)
-                url = args[0] if args else ""
-                clone_dir = args[1] if len(args) > 1 else re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1])
-            elif words[:1] == ["cp"] and clone_dir:
-                pairs += 1
-                for src in [w for w in words[1:] if not w.startswith("-")][:-1]:
-                    top, _, inside = re.sub(r"^\./", "", src).partition("/")
-                    if top != clone_dir:
-                        print(f"{name}: cp reads {src}, but git clone creates {clone_dir}/")
-                    elif not os.path.exists(os.path.join(root, inside)):
-                        print(f"{name}: cp reads {src}, which the kit repo does not have")
-    if not pairs:
-        print(f"{name}: no git clone + cp manual install found")
+    clone_dir, fenced = None, False
+    for line in open(os.path.join(root, name), encoding="utf-8").read().splitlines():
+        if re.match(r"\s*\x60{3}", line):
+            fenced = not fenced
+            continue
+        if not fenced:
+            if re.match(r"#+ ", line):
+                clone_dir = None
+            continue
+        try:
+            words = shlex.split(line, comments=True)
+        except ValueError:
+            continue
+        env = {}
+        while words and re.match(r"[A-Za-z_]\w*=", words[0]):
+            key, _, value = words.pop(0).partition("=")
+            env[key] = value
+        if words[:2] == ["git", "clone"]:
+            args, rest = [], iter(words[2:])
+            for w in rest:
+                if w in TAKES_VALUE:
+                    next(rest, None)
+                elif not w.startswith("-"):
+                    args.append(w)
+            url = args[0] if args else ""
+            clone_dir = args[1] if len(args) > 1 else re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1])
+            continue
+        if not clone_dir:
+            continue
+        if words[:1] == ["cp"]:
+            srcs = [w for w in words[1:] if not w.startswith("-")][:-1]
+        elif "SOLANA_AI_KIT_LOCAL_SRC" in env:
+            srcs = [env["SOLANA_AI_KIT_LOCAL_SRC"]] + [w for w in words[1:] if w.endswith(".sh")]
+        else:
+            continue
+        reads += 1
+        for src in (re.sub(r"^\./", "", s) for s in srcs):
+            inside = "" if src == clone_dir else src[len(clone_dir) + 1:] if src.startswith(clone_dir + "/") else None
+            if inside is None:
+                print(f"{name}: {line.strip()} reads {src}, but git clone creates {clone_dir}/")
+            elif not os.path.exists(os.path.join(root, inside)):
+                print(f"{name}: {line.strip()} reads {src}, which the kit repo does not have")
+if not reads:
+    print(", ".join(sys.argv[2:]) + ": no git clone followed by a step that reads from the clone")
 PY
 )"
-assert_eq "" "$MANUAL_INSTALL" "README and QUICK-START manual installs copy from the directory git clone creates"
+assert_eq "" "$CLONE_INSTALL" "README and QUICK-START installs from a clone read from the directory git clone creates"
 
 print_summary

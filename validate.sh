@@ -6,6 +6,26 @@ set -euo pipefail
 
 PASS=0
 FAIL=0
+SKIP=0
+
+# A path lives under an ext/ submodule; if that submodule dir is empty it isn't
+# initialized (fresh clone without --recurse-submodules, or before install.sh) —
+# a setup state, NOT broken config. Return 0 when the path is inside an
+# uninitialized submodule so callers can SKIP instead of FAIL.
+in_uninitialized_submodule() {
+  local path="$1"
+  # Links from agents/, commands/ and skill folders climb out first
+  # (../skills/ext/..., ../ext/...): drop each "dir/.." pair.
+  path="$(printf '%s' "$path" | sed -E -e ':a' -e 's#(^|/)[^/.][^/]*/\.\./#\1#' -e 'ta')"
+  case "$path" in
+    .claude/skills/ext/*)
+      local sub
+      sub="$(printf '%s' "$path" | sed -E 's#(\.claude/skills/ext/[^/]+).*#\1#')"
+      [ -d "$sub" ] && [ -z "$(ls -A "$sub" 2>/dev/null)" ]
+      ;;
+    *) return 1 ;;
+  esac
+}
 
 check() {
   local description="$1"
@@ -100,9 +120,13 @@ if [ -f .claude/skills/SKILL.md ]; then
 
     target=".claude/skills/$link"
     if [ ! -e "$target" ] && [ ! -d "$target" ]; then
-      echo "  FAIL: Broken link -> $link"
-      FAIL=$((FAIL + 1))
-      broken=$((broken + 1))
+      if in_uninitialized_submodule "$target"; then
+        SKIP=$((SKIP + 1))
+      else
+        echo "  FAIL: Broken link -> $link"
+        FAIL=$((FAIL + 1))
+        broken=$((broken + 1))
+      fi
     fi
   done < <(grep -oE '\]\([^)]+\)' .claude/skills/SKILL.md | sed 's/\](//' | sed 's/)//' | grep -v '^http')
 
@@ -124,9 +148,13 @@ while IFS= read -r f; do
     link="${link%%#*}"
     [ -z "$link" ] && continue
     if [ ! -e "$(dirname "$f")/$link" ]; then
-      echo "  FAIL: $f -> $link"
-      FAIL=$((FAIL + 1))
-      broken=$((broken + 1))
+      if in_uninitialized_submodule "$(dirname "$f")/$link"; then
+        SKIP=$((SKIP + 1))
+      else
+        echo "  FAIL: $f -> $link"
+        FAIL=$((FAIL + 1))
+        broken=$((broken + 1))
+      fi
     fi
   done < <(grep -oE '\]\([^)[:space:]]*ext/[^)[:space:]]*\)' "$f" | sed 's/^](//; s/)$//' | grep -v '^http' || true)
 done < <(find .claude/agents .claude/commands -name '*.md'; find .claude/skills -path .claude/skills/ext -prune -o -name '*.md' ! -path .claude/skills/SKILL.md -print)
@@ -140,7 +168,8 @@ echo "[Submodules]"
 for dir in .claude/skills/ext/*/; do
   name="$(basename "$dir")"
   if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
-    check "ext/$name is initialized (non-empty)" 1
+    echo "  SKIP: ext/$name not initialized (run: git submodule update --init)"
+    SKIP=$((SKIP + 1))
   else
     check "ext/$name is initialized (non-empty)" 0
   fi
@@ -269,7 +298,11 @@ echo ""
 # --- Summary ---
 TOTAL=$((PASS + FAIL))
 echo "========================================="
-echo "Results: $PASS passed, $FAIL failed (of $TOTAL checks)"
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped (of $((TOTAL + SKIP)) checks)"
+if [ "$SKIP" -gt 0 ]; then
+  echo "Note: $SKIP checks skipped because submodules aren't initialized."
+  echo "      Run 'git submodule update --init --recursive' (or ./install.sh) to check them."
+fi
 echo "========================================="
 
 if [ "$FAIL" -gt 0 ]; then
