@@ -38,15 +38,16 @@ fi
 # Skills should have been installed through the symlink into .claude/skills
 assert_file_exists "$TEMP_DIR/.agents/skills/SKILL.md" "SKILL.md reachable via .agents/skills symlink"
 assert_file_exists "$TEMP_DIR/.claude/skills/SKILL.md" "SKILL.md landed in symlink target .claude/skills"
+assert_dir_exists "$TEMP_DIR/.claude/skills/ext/solana-dev" "core skill pack landed in symlink target .claude/skills"
 
 # Non-symlinked directories still install normally
 assert_dir_exists "$TEMP_DIR/.agents/agents" ".agents/agents/ directory exists"
 assert_dir_exists "$TEMP_DIR/.agents/commands" ".agents/commands/ directory exists"
-assert_dir_exists "$TEMP_DIR/.agents/rules" ".agents/rules/ directory exists"
 assert_dir_exists "$TEMP_DIR/.agents/bin" ".agents/bin/ directory exists"
 
 # Install completed past the copy step
-assert_file_exists "$TEMP_DIR/CLAUDE.md" "CLAUDE.md exists at project root"
+assert_file_exists "$TEMP_DIR/AGENTS.md" "AGENTS.md exists at project root"
 assert_file_exists "$TEMP_DIR/.agents/VERSION" "VERSION exists in .agents/"
+assert_file_exists "$TEMP_DIR/.env" ".env written (install ran to the end)"
 
 print_summary
