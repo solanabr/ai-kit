@@ -343,4 +343,31 @@ assert_eq "" "$(cd "$DUAL" && git status --porcelain --untracked-files=normal | 
   "dual install leaves no untracked .agents/ tree"
 rm -rf "$DUAL"
 
+# ── Reverse order: .claude/ must join an existing --agents gitignore block ───
+echo "[dual install gitignore, --agents first]"
+REV="$WORK/dual-agents-first"; mkdir -p "$REV"; git -C "$REV" init -q
+install_agents "$REV" || true
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+for entry in .claude/ CLAUDE.md .agents/ AGENTS.md; do
+  assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$REV/.gitignore" | grep -cxF "$entry" || true)" \
+    "--agents first: $entry is listed once in the gitignore config block"
+done
+assert_eq "" "$(cd "$REV" && git status --porcelain --untracked-files=normal | grep -E '\.claude|CLAUDE\.md|\.agents|AGENTS\.md' || true)" \
+  "--agents first: no kit path left untracked"
+cp "$REV/.gitignore" "$WORK/gitignore.before"
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+install_agents "$REV" || true
+assert_cmd_success "cmp -s '$WORK/gitignore.before' '$REV/.gitignore'" "re-running both installs leaves .gitignore unchanged"
+# /commit-claude-config deletes the marked block, so every config entry must sit inside it
+assert_eq "1 1" "$(grep -c '^# >>> solana-ai-kit config' "$REV/.gitignore") $(grep -c '^# <<< solana-ai-kit config <<<$' "$REV/.gitignore")" \
+  "one pair of /commit-claude-config markers"
+assert_eq "" "$(sed '/# >>> solana-ai-kit config/,/# <<< solana-ai-kit config <<</d' "$REV/.gitignore" \
+    | grep -xE '\.claude/|CLAUDE\.md|\.agents/|AGENTS\.md|\.mcp\.json|\.gitmodules' || true)" \
+  "every kit config entry sits inside the /commit-claude-config markers"
+# Git for Windows checks a tracked .gitignore out with CRLF endings
+awk '{ printf "%s\r\n", $0 }' "$REV/.gitignore" > "$WORK/gitignore.crlf" && cat "$WORK/gitignore.crlf" > "$REV/.gitignore"
+bash "$REPO_ROOT/install.sh" "$REV" >/dev/null 2>&1 || true
+assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$REV/.gitignore" | tr -d '\r' | grep -cxF '.claude/' || true)" \
+  "a CRLF .gitignore gets no second .claude/ entry on re-install"
+
 print_summary
