@@ -108,7 +108,8 @@ sys.stdout.write(m.group(1) if m else "<<missing>>")
 }
 SKIP_FILES_INSTALL="$(skip_value "$REPO_ROOT/install.sh")"
 SKIP_FILES_UPDATE="$(skip_value "$REPO_ROOT/.claude/bin/update.sh")"
-BOTH_MODE_EXPECTED='commands/commit-claude-config.md
+BOTH_MODE_EXPECTED='commands/add-skill.md
+commands/commit-claude-config.md
 commands/doctor.md
 commands/resync.md
 commands/scaffold.md
@@ -211,6 +212,9 @@ assert_eq "$SKIP_FILES_INSTALL" "$SKIP_FILES_UPDATE" \
   "AGENTS_SKIP_FILES is identical in install.sh and bin/update.sh"
 assert_file_not_exists "$TEMP_DIR/.agents/commands/cleanup.md" \
   "/cleanup is not installed in --agents mode (it describes a Claude Code fork flow)"
+assert_file_exists "$TEMP_DIR/.agents/commands/add-skill.md" \
+  "/add-skill is installed in --agents mode (it resolves .claude/bin or .agents/bin)"
+assert_file_exists "$TEMP_DIR/.agents/bin/skills.sh" ".agents/bin/skills.sh exists for /add-skill"
 assert_contains "$(cat "$TEMP_DIR/.agents/commands/commit-claude-config.md")" 'INSTR_FILE' \
   "/commit-claude-config resolves the instruction file so it stages AGENTS.md"
 assert_submodules_under_agents "$TEMP_DIR" "fresh install"
