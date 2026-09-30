@@ -139,7 +139,7 @@ cmd_add() {
     if [ -n "$local_src" ] && [ -d "$local_src/.claude/skills/ext" ]; then
       src="$local_src"
     else
-      url="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-https://github.com/solanabr/solana-ai-kit.git}}"
+      url="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-https://github.com/solanabr/ai-kit.git}}"
       branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-main}}"
       tmp="$(mktemp -d)"
       trap 'rm -rf "$tmp"' EXIT
