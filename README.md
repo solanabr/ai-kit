@@ -47,7 +47,7 @@ curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
 # Fallback (or before the aikit.superteam.codes DNS is live): curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | bash -s -- --agents
 
 # Option 3: Manual setup
-git clone --recurse-submodules https://github.com/solanabr/ai-kit.git
+git clone --recurse-submodules https://github.com/solanabr/ai-kit.git solana-ai-kit
 cp -r solana-ai-kit/.claude /path/to/your-project/
 cp solana-ai-kit/CLAUDE-solana.md /path/to/your-project/CLAUDE.md
 cd /path/to/your-project && git submodule update --init --recursive
