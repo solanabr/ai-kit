@@ -130,7 +130,7 @@ The two paths are complementary: individuals wanting Solana agents/commands acro
 
 ## External Skill Submodules
 
-The kit pins every skill pack below as a git submodule. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
+The kit pins every skill pack below as a git submodule, except `anthropic-skills`, which it pins to an upstream commit. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
 
 | Submodule | Tier | Source | Purpose |
 |-----------|------|--------|---------|
@@ -154,6 +154,7 @@ The kit pins every skill pack below as a git submodule. **Core** packs install w
 | `ext/vercel` | Extension | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | Vercel deployment, Next.js, AI SDK, v0, edge functions |
 | `ext/solana-new` | Extension | [sendaifun/solana-new](https://github.com/sendaifun/solana-new) | 32 idea→launch journey skills + idea datasets/knowledge base; routed via local wrappers |
 | `ext/colosseum` | Extension | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon projects |
+| `anthropic-skills` (not a submodule) | Extension | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills any agent loads ([details](#anthropics-skills-in-any-agent)) |
 
 **Installing extensions.** At install time: `bash install.sh --with sendai,jupiter` (`--with all` installs every pack). Later: `/add-skill <id>` or `bash .claude/bin/skills.sh add <id>` (`.agents/bin/` for `--agents` installs); `skills.sh list` shows every pack and when to use it. Agents do the same on their own: each hub row, agent and command line that links into an extension names its install command. `/update` keeps the extensions a project installed (recorded in `.claude/skills/extensions.txt`); installs made before the core/extension split keep every pack.
 
@@ -261,7 +262,7 @@ Beyond the bundled submodules above, the kit ships a curated catalog of **opt-in
 
 Featured add-ons by domain:
 
-- **Claude-official:** [anthropics/skills](https://github.com/anthropics/skills) · [anthropics/claude-code](https://github.com/anthropics/claude-code) plugins (non-OSI license; overlaps `/diff-review` + `cso`)
+- **Claude-official:** [anthropics/claude-code](https://github.com/anthropics/claude-code) plugins (non-OSI license; overlaps `/diff-review` + `cso`). Anthropic's Apache-2.0 skills are the `anthropic-skills` extension above
 - **Dev-workflow:** [wshobson/agents](https://github.com/wshobson/agents) · [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done)
 - **Frontend/Design:** [zarazhangrui/frontend-slides](https://github.com/zarazhangrui/frontend-slides) · [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
@@ -273,6 +274,38 @@ Featured add-ons by domain:
 For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos; install the solana-new extension first).
 
 See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats. The same file records the tier and triggers of each pinned pack above; entries without a tier are these opt-in add-ons.
+
+## Use with Codex, Grok Build and other agents
+
+The kit's skills are [Agent Skills](https://agentskills.io) folders, which most coding agents load. Pick the install by where your agent looks:
+
+| Agent | Install | It reads |
+|-------|---------|----------|
+| Claude Code | default | `CLAUDE.md`, `.claude/` (skills, agents, commands, hooks), `.mcp.json` |
+| Grok Build | default (`--agents` works too) | Claude Code's files, plus `AGENTS.md` and `.agents/skills/`, once you trust the folder (`/hooks-trust` or `grok --trust`) |
+| Codex, opencode, Gemini CLI, Cursor, GitHub Copilot and other Agent Skills clients | `--agents` | `AGENTS.md` and `.agents/skills/` |
+
+Grok Build caveats, per the [Grok Build docs](https://docs.x.ai/build/features/project-rules):
+
+- Grok skips instruction files that `.gitignore` lists, and the installer gitignores `CLAUDE.md` (or `AGENTS.md`) by default. Run `/commit-claude-config`, or take the file out of the kit's `.gitignore` block, so Grok loads the house rules. Skills and commands load either way.
+- Grok sends [hooks](https://docs.x.ai/build/features/hooks) camelCase JSON (`toolInput`), while the kit's hooks read Claude Code's `tool_input`, so the secret-read, pre-commit and mainnet-deploy gates in `.claude/settings.json` can't be relied on under Grok. The project `CLAUDE.md` already tells agents on other runtimes to get an explicit go-ahead before any mainnet step.
+
+Gemini CLI reads `GEMINI.md` unless you add `AGENTS.md` to `context.fileName` in its `settings.json`.
+
+### Anthropic's skills in any agent
+
+The `anthropic-skills` extension installs three Apache-2.0 skills from [anthropics/skills](https://github.com/anthropics/skills) as top-level skills, so each agent above loads them by description: `frontend-design` (distinctive UI direction), `webapp-testing` (Playwright tests of a local web app) and `mcp-builder` (MCP servers for a program or API). They land in `.claude/skills/<name>/`, or in `.agents/skills/<name>/` with `--agents`:
+
+```bash
+bash install.sh --with anthropic-skills /path/to/your-project   # add --agents for Codex and the others
+bash .claude/bin/skills.sh add anthropic-skills                  # later (.agents/bin/ with --agents), or /add-skill anthropic-skills
+```
+
+`skills.sh` fetches only those three folders, at the commit pinned in [`skill-registry.json`](.claude/skills/skill-registry.json), and copies them unchanged with their `LICENSE.txt`. It refuses the repo's restricted skills whatever the registry lists: `docx`, `pdf`, `pptx` and `xlsx` are proprietary and licensed for use only within Anthropic's services, and `doc-coauthoring` has no license. Claude users get the document skills first-party from Anthropic: they power file creation in the Claude apps, and Claude Code installs them from Anthropic's own marketplace (`/plugin marketplace add anthropics/skills`, then `/plugin install document-skills@anthropic-agent-skills`).
+
+Two of the three run code: `webapp-testing`'s `scripts/with_server.py` starts the server commands it is given through a shell, and `mcp-builder`'s evaluation script calls the Anthropic API with `ANTHROPIC_API_KEY`.
+
+The pin moves by hand, not through Dependabot: review the upstream diff of the three folders, update `commit` in the registry entry, then run `bash tests/test_anthropic_skills.sh`, which re-checks each skill's license and frontmatter at the new commit.
 
 ## Repository Structure
 

@@ -143,7 +143,7 @@ Knowledge loads on-demand:
 - PlaySolana/PSG1 integration
 - Security auditing
 
-Only the core skill packs (solana-dev, safe-solana-builder) install by default. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack.
+Only the core skill packs (solana-dev, safe-solana-builder) install by default. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too (README: "Use with Codex, Grok Build and other agents").
 
 Need a capability the kit doesn't bundle? See [`.claude/skills/skill-registry.json`](.claude/skills/skill-registry.json) — a curated catalog of opt-in skills/MCPs/repos the agent can install on request, at your own expense (not bundled by default).
 
@@ -197,6 +197,7 @@ your-project/
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
+│   │   ├── frontend-design/  # With the anthropic-skills extension, also webapp-testing/, mcp-builder/
 │   │   ├── token-2022.md     # Token Extensions guide
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   └── deployment.md     # Deploy workflows
