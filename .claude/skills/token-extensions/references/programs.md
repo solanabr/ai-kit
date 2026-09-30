@@ -1,6 +1,6 @@
 # Token-2022 in programs
 
-Checked against anchor-lang and anchor-spl 1.2.0. anchor-spl re-exports spl-token-2022-interface 2.x as `anchor_spl::token_interface::spl_token_2022` (and `anchor_spl::token_2022::spl_token_2022`). Depend on that re-export, or on `spl-token-2022-interface = "2"`, rather than on the `spl-token-2022` program crate, so one version of the types is in play. The 3.x interface is needed only for PermissionedBurn.
+Checked against anchor-lang and anchor-spl 1.2.0. anchor-spl re-exports spl-token-2022-interface 2.x as `anchor_spl::token_interface::spl_token_2022` (and `anchor_spl::token_2022::spl_token_2022`). Depend on that re-export, or on `spl-token-2022-interface = "2"`, rather than on the `spl-token-2022` program crate, so one version of the types is in play. Only the 3.x interface has PermissionedBurn, the `UnwrapLamports` and `Batch` instructions, `extension::account_len` and `sync_native_with_rent_sysvar`. When you need one, add 3.x under another name next to anchor-spl's 2.x, as in [PermissionedBurn](issuer-controls.md#permissionedburn).
 
 ## Accept both token programs
 
@@ -54,17 +54,24 @@ use anchor_spl::token_interface::spl_token_2022::{
 
 #[error_code]
 pub enum PoolError {
+    #[msg("Mint is not owned by a token program")]
+    NotATokenMint,
     #[msg("Mint has an extension this program does not support")]
     UnsupportedMintExtension,
 }
 
 pub fn check_mint_extensions(mint_info: &AccountInfo) -> Result<()> {
-    if *mint_info.owner != anchor_spl::token_2022::ID {
+    if *mint_info.owner == anchor_spl::token::ID {
         return Ok(()); // classic Token mint: no extensions
     }
+    require_keys_eq!(*mint_info.owner, anchor_spl::token_2022::ID, PoolError::NotATokenMint);
     let data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<MintState>::unpack(&data)?;
-    for extension in mint.get_extension_types()? {
+    // Interface 2.x fails to parse types it doesn't know (PermissionedBurn): reject those too
+    let extensions = mint
+        .get_extension_types()
+        .map_err(|_| error!(PoolError::UnsupportedMintExtension))?;
+    for extension in extensions {
         match extension {
             ExtensionType::MetadataPointer | ExtensionType::TokenMetadata | ExtensionType::TransferFeeConfig => {}
             _ => return err!(PoolError::UnsupportedMintExtension),
@@ -78,7 +85,7 @@ For one fixed-size extension's values use `anchor_spl::token_interface::get_mint
 
 ## Create a mint with extensions that have no constraint
 
-Anchor's `init` handles MetadataPointer, GroupPointer, GroupMemberPointer, TransferHook, MintCloseAuthority, PermanentDelegate and Pausable. For any other extension, create the account, run the extension initializers, then `initialize_mint2`, all in one instruction:
+Anchor's `init` handles MetadataPointer, GroupPointer, GroupMemberPointer, TransferHook, MintCloseAuthority, PermanentDelegate and Pausable. For any other fixed-size extension, create the account, run the extension initializers, then `initialize_mint2`, all in one instruction. TokenMetadata, TokenGroup and TokenGroupMember come after `initialize_mint2`, with the rent topped up first: [metadata-groups](metadata-groups.md).
 
 ```rust
 use anchor_lang::prelude::*;
@@ -131,10 +138,10 @@ pub fn create_fee_mint(ctx: Context<CreateFeeMint>, fee_bps: u16, max_fee: u64) 
 
 - The other initializers follow the same pattern: `default_account_state_initialize`, `interest_bearing_mint_initialize`, `non_transferable_mint_initialize`, `permanent_delegate_initialize`, `mint_close_authority_initialize`, `pausable_initialize`, `transfer_hook_initialize`, `metadata_pointer_initialize`, `group_pointer_initialize`, `group_member_pointer_initialize`. `anchor_spl::token_interface::find_mint_account_size(Some(&vec![...]))` computes the same size as above.
 - These helpers take the token program from their `token_program_id` account and pass no multisig signers.
-- anchor-spl 1.2.0 has no helpers for ScaledUiAmount, PermissionedBurn or the confidential extensions. Build those instructions from the interface crate and `invoke` them.
+- anchor-spl 1.2.0 has no helpers for ScaledUiAmount, PermissionedBurn or the confidential extensions. Build those instructions with the interface crate's builders (3.x for PermissionedBurn) and `invoke` them.
 
 ## Before launch
 
-- Check every target venue's extension policy. Orca Whirlpools, for example, accepts TransferFeeConfig, InterestBearingConfig, MetadataPointer, TokenMetadata and ScaledUiAmount; supports confidential mints for public transfers only; needs an issuer TokenBadge for PermanentDelegate, TransferHook, MintCloseAuthority, DefaultAccountState, Pausable and for any freeze authority; and rejects NonTransferable and every other extension (https://github.com/orca-so/whirlpools/blob/main/programs/whirlpool/src/util/v2/token.rs, `is_supported_token_mint`).
-- Authorities (fee, withdraw, hook, pointer, metadata, pause, delegate, close) outlive the launch. Put the ones you may still need on a multisig and revoke the rest; revoking is permanent.
-- Test hooks and fee logic with LiteSVM or Mollusk ([testing.md](../../ext/solana-dev/skills/solana-dev/references/testing.md)). On a Surfpool fork, `surfnet_setTokenAccount` takes the token program as an optional last parameter, and `surfnet_timeTravel` with `absoluteEpoch` crosses the two-epoch fee delay ([cheatcodes.md](../../ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md)).
+- Check every target venue's extension policy. Orca Whirlpools, for example, accepts TransferFeeConfig, InterestBearingConfig, MetadataPointer, TokenMetadata and ScaledUiAmount; supports confidential mints for public transfers only; needs a TokenBadge (a Whirlpools account for that config and mint) for PermanentDelegate, TransferHook, MintCloseAuthority, DefaultAccountState, Pausable and for any freeze authority; and rejects NonTransferable and every other extension (https://github.com/orca-so/whirlpools/blob/main/programs/whirlpool/src/util/v2/token.rs, `is_supported_token_mint`).
+- The metadata and group update authorities and the PermissionedBurn authority are checked as direct signers, so an SPL Token multisig can't hold them. Setting an extension authority to None is permanent.
+- Tests: [testing.md](../../ext/solana-dev/skills/solana-dev/references/testing.md) (LiteSVM, Mollusk). On a Surfpool fork, `surfnet_setTokenAccount` takes the token program as an optional last parameter, and `surfnet_timeTravel` with `absoluteEpoch` crosses the two-epoch fee delay ([cheatcodes.md](../../ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md)).

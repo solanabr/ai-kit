@@ -4,12 +4,12 @@ MetadataPointer, TokenMetadata, GroupPointer, TokenGroup, GroupMemberPointer and
 
 ## Metadata
 
-- **MetadataPointer** `{ authority, metadata_address }`, initialized before `InitializeMint`. The program doesn't check the target; point it at the mint unless another program holds the metadata. Update it with the pointer authority (SetAuthority type `MetadataPointer`, CLI `metadata-pointer`).
+- **MetadataPointer** `{ authority, metadata_address }`, initialized before `InitializeMint`. The program doesn't check the target; point it at the mint unless another program holds the metadata. The pointer's `Update` instruction, signed by the pointer authority, changes the address (CLI `update-metadata-address`, Kit `getUpdateMetadataPointerInstruction`); SetAuthority `MetadataPointer` (CLI `authorize <MINT> metadata-pointer`) only rotates the authority.
 - **TokenMetadata** `{ update_authority, mint, name, symbol, uri, additional_metadata }`, variable length. Initialize it after `InitializeMint`:
   - The metadata account must be the mint itself (`MintMismatch`), and the mint needs a MetadataPointer (`InvalidExtensionCombination`).
   - The mint authority signs initialize. The update authority is just an address there; it signs everything after.
 - **Updates** (update authority signs; the mint authority has no say): `UpdateField` with `Name`, `Symbol`, `Uri` or `Key(custom)`; `RemoveKey` for custom keys (optionally idempotent); `UpdateAuthority`, where None makes the metadata permanently immutable (`ImmutableMetadata` afterwards); `Emit` returns the Borsh-encoded metadata as return data. Rotate the update authority with `UpdateAuthority` (CLI `spl-token authorize <MINT> metadata <NEW>`), not SetAuthority.
-- **Rent:** initialize and every update resize the mint but move no lamports, and the mint must stay rent-exempt at its new size. Send the lamports before the instruction that grows it, or from a program top up in the same instruction. Shrinking leaves the extra lamports in the mint (the mint authority can reclaim them with `WithdrawExcessLamports`).
+- **Rent:** initialize, and any `UpdateField` or `RemoveKey` that changes the length, resize the mint but move no lamports, and the mint must stay rent-exempt at its new size. Send the lamports in an earlier instruction of the same transaction, or top up from your program in the same instruction. Shrinking leaves the extra lamports in the mint (the mint authority can reclaim them with `WithdrawExcessLamports`).
 - Readers should check that the pointer and `metadata.mint` both refer to this mint, since pointers can name any account.
 
 ### CLI
@@ -26,14 +26,14 @@ The CLI's metadata commands fund the extra rent themselves.
 ### Kit
 
 - Create: `extension('MetadataPointer', { authority, metadataAddress: mint })` plus `extension('TokenMetadata', { updateAuthority, mint, name, symbol, uri, additionalMetadata: new Map() })` in `createMint` (see SKILL.md). It funds rent for the full metadata but initializes only name, symbol and URI; set extra fields with update instructions afterwards. With `updateAuthority: null` it skips the metadata initialize entirely.
-- Update: `getUpdateTokenMetadataFieldInstruction({ metadata: mint, updateAuthority, field: tokenMetadataField('Key', ['tier']), value: 'gold' })` (or `tokenMetadataField('Name' | 'Symbol' | 'Uri')`). No Kit helper tops up rent for a growing field: before the update, transfer the difference between `getMinimumBalance(getMintSize(updatedExtensions))` and the mint's current lamports.
+- Update: `getUpdateTokenMetadataFieldInstruction({ metadata: mint, updateAuthority, field: tokenMetadataField('Key', ['tier']), value: 'gold' })` (or `tokenMetadataField('Name' | 'Symbol' | 'Uri')`). No Kit helper tops up rent for a growing field: before the update, transfer the difference between `await client.getMinimumBalance(getMintSize(updatedExtensions))` (or `rpc.getMinimumBalanceForRentExemption`) and the mint's current lamports.
 - Also: `getRemoveTokenMetadataKeyInstruction({ metadata, updateAuthority, key, idempotent })`, `getUpdateTokenMetadataUpdateAuthorityInstruction({ metadata, updateAuthority, newUpdateAuthority })`, `getEmitTokenMetadataInstruction({ metadata })`, `getUpdateMetadataPointerInstruction({ mint, metadataPointerAuthority, metadataAddress })`.
 
 web3.js 1.x: `tokenMetadataInitializeWithRentTransfer` and `tokenMetadataUpdateFieldWithRentTransfer` add the rent; `getTokenMetadata(connection, mint)` reads the mint's own metadata and doesn't follow the pointer.
 
 ### Anchor 1.2.0
 
-`init` takes `extensions::metadata_pointer::{authority, metadata_address}`; TokenMetadata is a CPI after that. anchor-spl's metadata helpers never move lamports, so top up in the same instruction (Anchor's own tests do it right after the CPI):
+`init` takes `extensions::metadata_pointer::{authority, metadata_address}`; TokenMetadata is a CPI after that. anchor-spl's metadata helpers never move lamports, so top up in the same instruction (Anchor's own tests top up later in the same handler):
 
 ```rust
 use anchor_lang::prelude::*;
@@ -98,4 +98,4 @@ Other helpers: `token_metadata_update_field(ctx, Field::Key("tier".into()), valu
 
 Kit also has `getUpdateTokenGroupMaxSizeInstruction` and `getUpdateTokenGroupUpdateAuthorityInstruction`; anchor-spl 1.2.0 has neither.
 
-Wallet, marketplace and DEX support for Token-2022 groups is thin (Orca's pools reject group and member mints). For NFT collections, Metaplex Core is usually the better fit; the skills hub routes to the Metaplex skill.
+Orca's pools reject group and member mints. For NFT collections, the skills hub also routes to the Metaplex skill.

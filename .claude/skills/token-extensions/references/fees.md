@@ -1,6 +1,6 @@
 # Transfer fees: TransferFeeConfig, TransferFeeAmount
 
-A fee withheld from every `TransferChecked`. The sender is debited `amount`, the recipient is credited `amount - fee`, and the fee sits in the recipient's token account until the withdraw authority collects it.
+A fee withheld from every `TransferChecked`. The sender is debited `amount`, the recipient is credited `amount - fee`, and the fee stays withheld in the recipient's token account until anyone harvests it to the mint or the withdraw authority withdraws it.
 
 - **Lives on:** the mint (TransferFeeConfig). Every token account of the mint gets TransferFeeAmount, which holds its withheld fees.
 - **Authorities:** the transfer fee config authority changes the fee; the withdraw withheld authority collects fees. Rotate them with SetAuthority types `TransferFeeConfig` and `WithheldWithdraw` (CLI `spl-token authorize <MINT> transfer-fee-config|withheld-withdraw <NEW>`, or `--disable`). Either can be None, and setting one to None can't be undone.
@@ -9,7 +9,7 @@ A fee withheld from every `TransferChecked`. The sender is debited `amount`, the
 
 - `fee = ceil(amount * basis_points / 10_000)`, capped at `maximum_fee`, and 0 when either is 0. Basis points above 10_000 fail with `TransferFeeExceedsMaximum`.
 - The mint stores an older and a newer fee; the newer one applies from its epoch on. `SetTransferFee` in epoch N makes the new fee apply from epoch N+2, and calling it again before then restarts that delay. Read the fee that applies now with `get_epoch_fee(current_epoch)` (Rust) or `getEpochFee(config, epoch)` (web3.js 1.x), not `newer_transfer_fee`.
-- Kit has no fee calculator. web3.js 1.x has `calculateEpochFee(config, epoch, amount)`; Rust has `TransferFeeConfig::calculate_epoch_fee(epoch, amount)` and `calculate_inverse_epoch_fee` for the gross amount behind a target net amount.
+- Kit has no fee calculator. web3.js 1.x has `calculateEpochFee(config, epoch, amount)`; Rust has `TransferFeeConfig::calculate_epoch_fee(epoch, amount)`. For a transfer that must deliver exactly `net`, `calculate_inverse_epoch_fee(epoch, net)` returns the fee, so send `net + fee`; `get_epoch_fee(epoch).calculate_pre_fee_amount(net)` returns that gross amount directly.
 
 ## Create the mint
 
@@ -52,7 +52,7 @@ To keep the option of a fee later, create the mint with 0 basis points and keep 
 
 | | Harvest to mint | Withdraw from mint | Withdraw from accounts |
 |---|---|---|---|
-| Kit | `getHarvestWithheldTokensToMintInstruction({ mint, sources })` | `getWithdrawWithheldTokensFromMintInstruction({ mint, feeReceiver, withdrawWithheldAuthority })` | `getWithdrawWithheldTokensFromAccountsInstruction({ mint, feeReceiver, withdrawWithheldAuthority, numTokenAccounts, sources })`; `numTokenAccounts` must equal `sources.length` |
+| Kit | `getHarvestWithheldTokensToMintInstruction({ mint, sources })` | `getWithdrawWithheldTokensFromMintInstruction({ mint, feeReceiver, withdrawWithheldAuthority })` | `getWithdrawWithheldTokensFromAccountsInstruction({ mint, feeReceiver, withdrawWithheldAuthority, numTokenAccounts, sources })`; set `numTokenAccounts` to `sources.length`, since the program treats the surplus leading accounts as multisig signers and skips them |
 | Anchor 1.2.0 | `harvest_withheld_tokens_to_mint(ctx, sources)` | `withdraw_withheld_tokens_from_mint(ctx)` | `withdraw_withheld_tokens_from_accounts(ctx, sources)` |
 | CLI | `spl-token close` harvests first | `spl-token withdraw-withheld-tokens <RECIPIENT_ACCOUNT> --include-mint` | `spl-token withdraw-withheld-tokens <RECIPIENT_ACCOUNT> <SOURCE_ACCOUNT>...` |
 
@@ -64,4 +64,4 @@ The Anchor wrappers take their program id from the `token_program_id` account an
 - Withheld fees still count in the supply. Closing a mint (MintCloseAuthority) needs a supply of 0, so withdraw and burn them first.
 - TransferFeeConfig together with ConfidentialTransferMint also needs ConfidentialTransferFeeConfig ([confidential.md](confidential.md)); the CLI adds it when you enable both.
 - Test the two-epoch delay by warping epochs: Surfpool's `surfnet_timeTravel` takes `{"absoluteEpoch": n}` ([cheatcodes.md](../../ext/solana-dev/skills/solana-dev/references/surfpool/cheatcodes.md)).
-- Venues differ: some accept fee mints and some don't. Check each target before launch ([programs.md](programs.md)).
+- Orca's pools accept fee mints without a TokenBadge; other venues set their own rules ([programs.md](programs.md)).

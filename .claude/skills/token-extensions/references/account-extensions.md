@@ -8,7 +8,7 @@ ImmutableOwner, MemoTransfer and CpiGuard live on token accounts and protect the
 - `InitializeAccount` fails with `InvalidAccountData` if the account is too small for those.
 - Associated token accounts: the associated token account program sizes them and adds ImmutableOwner, so Token-2022 associated token accounts always have it. Kit `getCreateAssociatedTokenIdempotentInstructionAsync({ payer, owner, mint, tokenProgram })`; `tokenProgram` defaults to Token-2022 there, while web3.js 1.x helpers default to the classic Token program.
 - Anchor 1.2.0: `init` with `associated_token::` constraints goes through that program. `init` with `token::` constraints allocates exactly the mint's required extensions, which leaves no room for MemoTransfer or CpiGuard and no ImmutableOwner unless the mint is NonTransferable.
-- Manual accounts: Rust `ExtensionType::try_calculate_account_len::<Account>(&types)`, or in interface 3.x `extension::account_len::try_calculate_account_len_from_mint_data(&mint_data, &extra_types)`. Kit `getTokenSize(extensions)` counts only the extensions you pass, so include the mint's required ones (for example `extension('TransferFeeAmount', { withheldAmount: 0n })`). Kit's `getCreateTokenInstructionPlan` never sends `InitializeImmutableOwner`, even when you list it. web3.js 1.x `getAccountLenForMint` misses ImmutableOwner for NonTransferable mints.
+- Manual accounts: Rust `ExtensionType::try_calculate_account_len::<Account>(&types)`, or `extension::account_len::try_calculate_account_len_from_mint_data(&mint_data, &extra_types)`, which exists only in interface 3.x and takes 3.x `ExtensionType`s (next to anchor-spl, add 3.x as in [programs](programs.md)). Kit `getTokenSize(extensions)` counts only the extensions you pass, so include the mint's required ones (for example `extension('TransferFeeAmount', { withheldAmount: 0n })`). Kit's `getCreateTokenInstructionPlan` never sends `InitializeImmutableOwner`, even when you list it. web3.js 1.x `getAccountLenForMint` misses ImmutableOwner for NonTransferable mints.
 - The on-chain `GetAccountDataSize` instruction returns the size for the mint's required extensions plus the ones you list (Rust builder `get_account_data_size(program, mint, &types)`, Anchor `anchor_spl::token_2022::get_account_data_size`); Kit's builder takes no extension list.
 
 ## ImmutableOwner
@@ -33,7 +33,7 @@ ImmutableOwner, MemoTransfer and CpiGuard live on token accounts and protect the
   - closing the account to anyone but the owner fails (`CpiGuardCloseAccountBlocked`);
   - setting a close authority fails (`CpiGuardSetAuthorityBlocked`);
   - unwrapping lamports fails for any signer.
-- Changing the account owner fails even outside a CPI (`CpiGuardOwnerChangeBlocked`).
+- Changing the account owner fails outside a CPI too (`CpiGuardOwnerChangeBlocked`; inside one the error is `CpiGuardSetAuthorityBlocked`).
 - Consequence for protocols: a program that moves a user's tokens with the user's own signature in a CPI fails for these users. Have the user approve the program's PDA as delegate in a top-level instruction, then transfer as that delegate.
 - CLI: `spl-token enable-cpi-guard <ACCOUNT>` / `disable-cpi-guard` (they reallocate if needed). Kit: `getEnableCpiGuardInstruction({ token, owner })` / `getDisableCpiGuardInstruction(...)`. anchor-spl 1.2.0's `cpi_guard_enable` and `cpi_guard_disable` are deprecated, because a program can't toggle the guard through a CPI.
 
