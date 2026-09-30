@@ -51,5 +51,7 @@ assert_file_exists "$TEMP_DIR/.claude/VERSION" ".claude/VERSION file exists"
 # Check .claude/bin scripts exist
 assert_file_exists "$TEMP_DIR/.claude/bin/update.sh" ".claude/bin/update.sh exists"
 assert_file_exists "$TEMP_DIR/.claude/bin/resync.sh" ".claude/bin/resync.sh exists"
+assert_file_exists "$TEMP_DIR/.claude/bin/skills.sh" ".claude/bin/skills.sh exists for /add-skill"
+assert_file_exists "$TEMP_DIR/.claude/commands/add-skill.md" "/add-skill is installed"
 
 print_summary
