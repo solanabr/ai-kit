@@ -8,7 +8,7 @@ The mint names a hook program. Every `TransferChecked` or `TransferCheckedWithFe
 ## When the hook runs
 
 - On `TransferChecked`, `TransferCheckedWithFee` and confidential transfers. A confidential transfer calls it with `amount = u64::MAX`, because the real amount is encrypted. Mint, burn and confidential deposit or withdraw never call it.
-- Skipped when the mint has no program id and for transfers to the same account. Zero-amount transfers still call it.
+- Skipped when the mint has no program id, and for a `TransferChecked` or `TransferCheckedWithFee` to the same account; a confidential transfer to the same account still calls it. Zero-amount transfers call it too.
 - Plain `Transfer` fails with `MintRequiredForTransfer`.
 - Execute accounts: 0 source, 1 mint, 2 destination, 3 source owner or delegate, 4 the ExtraAccountMetaList PDA, then the extra accounts in list order. All of them arrive read-only and without signer privileges, even the one that signed the transfer, so anything the hook writes must be an extra account marked writable in its list.
 - If the transaction doesn't carry the ExtraAccountMetaList PDA, Token-2022 still calls the hook, with only the four base accounts. Whether that fails is up to the hook.
@@ -16,7 +16,7 @@ The mint names a hook program. Every `TransferChecked` or `TransferCheckedWithFe
 ## ExtraAccountMetaList
 
 - A PDA of the hook program with seeds `["extra-account-metas", mint]`: Rust `get_extra_account_metas_address(&mint, &hook_program_id)`, Kit `findExtraAccountMetaListPda({ mint }, { programAddress: hookProgram })`.
-- Entries (spl-tlv-account-resolution 0.11): `ExtraAccountMeta::new_with_pubkey` (fixed address), `new_with_seeds` (PDA of the hook program), `new_external_pda_with_seeds(program_index, ...)` (PDA of another program in the list), `new_with_pubkey_data` (address read from account data).
+- Entries (spl-tlv-account-resolution 0.11): `ExtraAccountMeta::new_with_pubkey` (fixed address), `new_with_seeds` (PDA of the hook program), `new_external_pda_with_seeds(program_index, ...)` (PDA of another program in the list), `new_with_pubkey_data` (address read from account or instruction data).
 - Seeds: `Seed::Literal { bytes }`, `Seed::AccountKey { index }`, `Seed::AccountData { account_index, data_index, length }`, `Seed::InstructionData { index, length }`; the amount is `index: 8, length: 8`. Account indexes follow the Execute order above, then earlier extras. Packed seeds must fit in 32 bytes.
 - Allocate `ExtraAccountMetaList::size_of(n)` and write it with `ExtraAccountMetaList::init::<ExecuteInstruction>(data, &metas)`. It must exist before the first transfer. The interface's own InitializeExtraAccountMetaList takes `[meta list (writable), mint, mint authority (signer), system program]`; whichever instruction writes the list, the hook program decides who may call it, so check the mint authority.
 - Changing the list later (`UpdateExtraAccountMetaList`) breaks clients and programs that pass the old accounts.
@@ -102,12 +102,12 @@ pub struct TransferHook<'info> {
 pub enum HookError {
     #[msg("Hook called outside a Token-2022 transfer")]
     NotTransferring,
-    #[msg("Owner is not on the allowlist")]
+    #[msg("Transfer authority is not on the allowlist")]
     NotAllowed,
 }
 ```
 
-Every transfer pays for the hook's compute, so keep it small. If the hook also has to accept confidential transfers, handle `amount == u64::MAX`.
+Account 3 is whoever signed the transfer (owner, delegate or permanent delegate), so this allowlist checks that signer. If the hook also has to accept confidential transfers, handle `amount == u64::MAX`.
 
 ## Create the mint
 
@@ -120,9 +120,8 @@ Every transfer pays for the hook's compute, so keep it small. If the hook also h
 
 - Kit: `getTransferCheckedWithTransferHookInstructionAsync(client, { source, mint, destination, authority, amount, decimals })` reads the mint and appends the extras, the hook program and the meta list PDA; for a mint without a hook it returns a plain `transferChecked`. The plugin exposes it as `client.token2022.instructions.transferCheckedWithTransferHook(...)`. The plugin's `transferToATA` does not add hook accounts.
 - web3.js 1.x: `createTransferCheckedWithTransferHookInstruction(connection, source, mint, destination, owner, amount, decimals, multiSigners, commitment, TOKEN_2022_PROGRAM_ID)`. Its program id defaults to the classic Token program, so pass the Token-2022 id.
-- Rust clients: `spl_token_2022::offchain::create_transfer_checked_instruction_with_extra_metas` or `spl_transfer_hook_interface::offchain::add_extra_account_metas_for_execute`.
+- Rust clients: `offchain::create_transfer_checked_instruction_with_extra_metas` from the full `spl-token-2022` crate (anchor-spl's interface re-export has no `offchain` module), or `spl_transfer_hook_interface::offchain::add_extra_account_metas_for_execute`.
 - CLI: `spl-token transfer` resolves the extra accounts when online; `--transfer-hook-account <PUBKEY>:<ROLE>` adds one by hand (roles `readonly`, `writable`, `readonly-signer`, `writable-signer`).
-- Simulate first: the hook can reject for reasons of its own.
 
 ## CPI a transfer of a hook mint
 

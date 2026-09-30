@@ -4,7 +4,7 @@ Balances and transfer amounts encrypted with ElGamal, with zero-knowledge proofs
 
 ## Network
 
-- Proofs are verified by the ZK ElGamal Proof program (`ZkE1Gama1Proof11111111111111111111111111111`). It was switched off on mainnet after the June 2025 proof-verification bug and switched back on at epoch 982 by feature `zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN`; that feature is active on devnet too. Check any cluster, local validators included, with `solana feature status zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN -u <mainnet-beta|devnet|URL>`. A fresh Agave 4.0 `solana-test-validator` starts with it active, although the solana.com guides say a stock local validator lacks the program.
+- Proofs are verified by the ZK ElGamal Proof program (`ZkE1Gama1Proof11111111111111111111111111111`). After a proof-forgery bug ([post-mortem](https://solana.com/news/post-mortem-june-25-2025)), mainnet disabled it at epoch 805 (feature `zkdoVwnSFnSLtGJG7irJPEYUpmb4i7sGMGcnN6T9rnC`) and re-enabled it at epoch 982 (feature `zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN`). Devnet has both (epochs 899 and 1055). On any other cluster, local validators included, run `solana feature status zkdoVwnSFnSLtGJG7irJPEYUpmb4i7sGMGcnN6T9rnC zkexuyPRdyTVbZqEAREueqL2xvvoBhRgth9xGSc1tMN -u <URL>`: the program is off when the first is active and the second isn't.
 
 ## Mint extensions
 
@@ -12,17 +12,17 @@ All three are initialized before `InitializeMint` and can't be added later.
 
 - **ConfidentialTransferMint** `{ authority, auto_approve_new_accounts, auditor_elgamal_pubkey }`.
   - With `auto_approve_new_accounts` true, an account can use confidential transfers as soon as it is configured. With false, the confidential transfer authority must send `ApproveAccount` for each account (compliance or KYC gating). Changing the policy later doesn't touch configured accounts, and an approval can't be revoked.
-  - The optional auditor key receives every transfer amount, encrypted to it, but not the balances. Rotating it only affects later transfers.
+  - The optional auditor key receives every transfer amount, encrypted to it (and the mint and burn amounts on a ConfidentialMintBurn mint), but not the balances. Rotating it only affects later transfers.
   - The authority approves accounts and changes the policy and auditor (`UpdateMint`). A multisig can't hold it. Rotate it with SetAuthority `ConfidentialTransferMint` (CLI `confidential-transfer-mint`).
 - **ConfidentialTransferFeeConfig**: required once the mint has both TransferFeeConfig and ConfidentialTransferMint, and not allowed without them. It holds the ElGamal key that withheld confidential fees are encrypted to. Withdrawing them is signed by the TransferFeeConfig withdraw authority; this extension's own authority only turns harvest-to-mint on or off.
-- **ConfidentialMintBurn**: the supply is encrypted as well, and the mint authority mints and burns confidentially. Such a mint rejects public `MintTo`, `Burn`, deposit and withdraw (`IllegalMintBurnConversion`). NonTransferable together with ConfidentialTransferMint requires it.
+- **ConfidentialMintBurn**: the supply is encrypted as well. The mint authority signs confidential mints and `ApplyPendingBurn`, which folds pending burns into the encrypted supply; token owners sign their own confidential burns. Such a mint rejects public `MintTo`, `Burn`, deposit and withdraw (`IllegalMintBurnConversion`). NonTransferable together with ConfidentialTransferMint requires it.
 
 ## Account setup
 
 - Opt-in per token account. `Reallocate` to add ConfidentialTransferAccount (plus ConfidentialTransferFeeAmount on a fee mint), then `ConfigureAccount` with a public-key validity proof, signed by the owner. `ConfigureAccountWithRegistry` replaces the proof and the owner's signature with an ElGamal registry account.
 - Incoming confidential credits land in a pending balance. The owner moves them to the available balance with `ApplyPendingBalance`. After the maximum number of pending credits (65,536 by default, set when configuring) further credits fail until the owner applies.
 - Each deposit or transfer amount must be below 2^48. Closing an account needs `EmptyAccount` (a zero-balance proof) first.
-- Derive the ElGamal and AES keys the standard way: one signature from the wallet over a fixed message, the same keys for all of its accounts (Kit `deriveConfidentialKeys({ signer })`, the CLI, `solana-zk-sdk`). It needs a signer that produces deterministic Ed25519 signatures. Seed-scoped derivations produce different keys, and balances encrypted under one set can't be read with the other.
+- Derive the ElGamal and AES keys the standard way: one signature from the wallet over a fixed message, the same keys for all of its accounts. Kit's `deriveConfidentialKeys({ signer })` does this and documents its keys as byte-identical to the CLI's and `solana-zk-sdk`'s. It needs a signer that produces deterministic Ed25519 signatures. Seed-scoped derivations produce different keys, and balances encrypted under one set can't be read with the other.
 
 ## How other extensions interact
 
@@ -45,5 +45,5 @@ Its Rust walkthrough of configure, deposit, apply, transfer and withdraw is the 
 
 - Its "Current Network Availability" section says confidential transfers run only on a ZK-Edge test cluster. The mainnet feature above is active.
 - Its "Privacy Levels" (Disabled, Whitelisted, OptIn, Required) aren't program settings. The mint has only the authority, the auto-approve flag and the auditor, and each account has its credit flags.
-- It pins spl-token-2022 10.0.0 and imports paths that moved in 11.0.0 (`spl_token_2022::solana_zk_sdk`, `confidential_transfer::account_info`); the CLI 5.6.1 source imports those account-info types from `spl_token_client::zk_proofs`.
+- It pins spl-token-2022 10.0.0 and imports paths that 11.0.0 doesn't have (`spl_token_2022::solana_zk_sdk`, `confidential_transfer::account_info`); the CLI 5.6.1 source imports those account-info types from `spl_token_client::zk_proofs`.
 - It derives keys per token account (`new_from_signer(authority, token_account)`), which won't match keys from the standard derivation above.
