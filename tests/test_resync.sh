@@ -97,4 +97,35 @@ fi
 # check above is ever skipped (e.g. no network / no git in CI).
 assert_contains "$RESYNC_CONTENT" 'cd "$TARGET_DIR"' "resync.sh cds into TARGET_DIR before using relative paths"
 
+# --- Extensions: links into packs a project has not installed are not broken paths ---
+# A default install carries only the core packs, so most ext/ links in the hub dangle
+# by design. resync.sh must skip those and still report a broken link into a core pack
+# or into an installed extension. Output goes to files: a grep -q that exits early can
+# SIGPIPE an echo under pipefail.
+echo "[extensions]"
+AGENTS_DIR="$(mktemp -d)"
+trap 'rm -rf "$TEMP_DIR" "$FAKE_ROOT" "$OTHER_DIR" "$AGENTS_DIR"' EXIT
+(cd "$AGENTS_DIR" && git init -q)
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
+HUB="$REPO_ROOT/.claude/skills/SKILL.md"
+CORE_LINK="$(grep -oE '\]\(ext/solana-dev/[^)]+\.md\)' "$HUB" | head -1 | sed 's/^](//; s/)$//')"
+CORE_LINK_COUNT="$(grep -oF "]($CORE_LINK)" "$HUB" | wc -l | tr -d ' ')"
+for P in "$TEMP_DIR" "$AGENTS_DIR"; do
+  if [ "$P" = "$AGENTS_DIR" ]; then CFG=.agents; else CFG=.claude; fi
+  LOG="$OTHER_DIR/resync${CFG}"
+  (cd "$P" && bash "$CFG/bin/resync.sh") > "$LOG-default.log" 2>&1 || true
+  assert_file_contains "$LOG-default.log" "All skill paths resolve correctly." "$CFG: default install reports no broken skill path"
+  assert_file_not_contains "$LOG-default.log" "MISSING" "$CFG: links into extensions it has not installed are not MISSING"
+  assert_file_contains "$LOG-default.log" "bash $CFG/bin/skills.sh add <id>" "$CFG: skipped extensions come with this mode's install command"
+
+  rm -f "$P/$CFG/skills/${CORE_LINK:?the hub has no link into ext/solana-dev}"
+  (cd "$P" && bash "$CFG/bin/resync.sh") > "$LOG-core.log" 2>&1 || true
+  assert_file_contains "$LOG-core.log" "MISSING: $CORE_LINK" "$CFG: a broken link into a core pack is still reported"
+  assert_file_contains "$LOG-core.log" "$CORE_LINK_COUNT broken path(s) found" "$CFG: ...and it is the only broken path"
+
+  echo jupiter >> "$P/$CFG/skills/extensions.txt"
+  (cd "$P" && bash "$CFG/bin/resync.sh") > "$LOG-ext.log" 2>&1 || true
+  assert_file_contains "$LOG-ext.log" "MISSING: ext/jupiter/" "$CFG: a broken link into an installed extension is still reported"
+done
+
 print_summary
