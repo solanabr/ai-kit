@@ -220,7 +220,7 @@ The kit used to list `memsearch` too, but its `memsearch-mcp` package is not pub
 
 #### Settings the kit leaves to you
 
-`.claude/settings.json` ships the sandbox, permission rules, hooks and attribution, and nothing that pins how Claude works. Turn these on yourself with the command shown or in `.claude/settings.local.json`, which `/update` never touches:
+`.claude/settings.json` ships the sandbox, permission rules, hooks and attribution, registers the `stbr` marketplace (`extraKnownMarketplaces`) and enables `safe-ai-skill@stbr`, and pins nothing about how Claude works. Turn these on yourself with the command shown or in `.claude/settings.local.json`, which `/update` never touches:
 
 - **Effort**: `/effort` (the kit no longer forces `max`)
 - **Agent teams**: `{"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}}`, see [Agent Teams](#agent-teams)
@@ -330,7 +330,7 @@ See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete
     │   ├── token-2022.md            # Token Extensions guide (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)
-    └── settings.json            # Sandbox, permissions, hooks
+    └── settings.json            # Sandbox, permissions, hooks, stbr marketplace + safe-ai-skill@stbr
 ```
 
 ## Agents
