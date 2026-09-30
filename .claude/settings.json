@@ -47,7 +47,7 @@
 
   "extraKnownMarketplaces": {
     "stbr": {
-      "source": { "source": "git", "url": "https://github.com/solanabr/solana-ai-kit.git" }
+      "source": { "source": "git", "url": "https://github.com/solanabr/ai-kit.git" }
     }
   },
 
