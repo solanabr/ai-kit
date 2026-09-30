@@ -41,6 +41,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md) |
 | Official doc links | [resources.md](ext/solana-dev/skills/solana-dev/references/resources.md) |
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) (install: `bash .claude/bin/skills.sh add vercel`) |
+| UI design direction; Playwright tests of a local dApp | Anthropic's `frontend-design/SKILL.md` and `webapp-testing/SKILL.md` (install: `bash .claude/bin/skills.sh add anthropic-skills`; later sessions load them by description) |
 
 ## Tokens and NFTs
 
@@ -73,6 +74,7 @@ Other protocols from [SendAI](ext/sendai/skills/) (install: `bash .claude/bin/sk
 
 - [deployment.md](deployment.md): devnet and mainnet flow, verifiable builds, Squads multisig upgrades, rollback
 - [backend-async.md](backend-async.md): Rust services and indexers that talk to Solana
+- MCP server for a program or API: Anthropic's `mcp-builder/SKILL.md` (install: `bash .claude/bin/skills.sh add anthropic-skills`); its evaluation script needs `ANTHROPIC_API_KEY`
 - [Cloudflare](ext/cloudflare/skills/) (install: `bash .claude/bin/skills.sh add cloudflare`): [workers-best-practices](ext/cloudflare/skills/workers-best-practices/), [agents-sdk](ext/cloudflare/skills/agents-sdk/), [sandbox-stable](ext/cloudflare/skills/sandbox-stable/), [durable-objects](ext/cloudflare/skills/durable-objects/), [wrangler](ext/cloudflare/skills/wrangler/)
 
 ## Games and mobile
@@ -110,6 +112,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | vercel | Vercel deploys, Next.js and React performance, web design review | `bash .claude/bin/skills.sh add vercel` |
 | solana-new | Go-to-market references: marketing video, brand design, tokenomics, DefiLlama research, ecosystem catalogs; idea-sprint, pitch-deck and hackathon link it | `bash .claude/bin/skills.sh add solana-new` |
 | colosseum | Colosseum hackathon archives, idea validation, competitive research (needs `COLOSSEUM_COPILOT_PAT`) | `bash .claude/bin/skills.sh add colosseum` |
+| anthropic-skills | UI design direction, Playwright tests of a local web app, building an MCP server (Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder, installed as top-level skills in `skills/<name>/`) | `bash .claude/bin/skills.sh add anthropic-skills` |
 
 ## Add-ons
 
