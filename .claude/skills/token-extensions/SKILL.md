@@ -114,5 +114,5 @@ Anchor 1.2.0: `init` on an `InterfaceAccount<'info, Mint>` accepts `extensions::
 ## Related
 
 - [kit/programs/token-2022.md](../ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the Kit client basics. [confidential-transfers.md](../ext/solana-dev/skills/solana-dev/references/confidential-transfers.md): the Rust confidential flow; [confidential](references/confidential.md) lists what in it is out of date. [testing.md](../ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM and Mollusk.
-- NFTs and collections: the skills hub also routes to the Metaplex skill.
+- NFTs and collections: the skills hub also routes to the Metaplex skill (install first: `bash .claude/bin/skills.sh add metaplex`).
 - Official guides: https://solana.com/docs/tokens/extensions

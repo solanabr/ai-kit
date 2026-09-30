@@ -98,4 +98,4 @@ Other helpers: `token_metadata_update_field(ctx, Field::Key("tier".into()), valu
 
 Kit also has `getUpdateTokenGroupMaxSizeInstruction` and `getUpdateTokenGroupUpdateAuthorityInstruction`; anchor-spl 1.2.0 has neither.
 
-Orca's pools reject group and member mints. For NFT collections, the skills hub also routes to the Metaplex skill.
+Orca's pools reject group and member mints. For NFT collections, the skills hub also routes to the Metaplex skill (install first: `bash .claude/bin/skills.sh add metaplex`).
