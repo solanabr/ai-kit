@@ -49,7 +49,7 @@ check_model() {
 
 # Kit-owned skills only: .claude/skills/ext/ holds upstream submodules.
 SKILL_FILES=()
-for f in "$REPO_ROOT"/.claude/skills/*.md "$REPO_ROOT"/.claude/skills/*/SKILL.md "$REPO_ROOT"/plugin/skills/SKILL.md; do
+for f in "$REPO_ROOT"/.claude/skills/*.md "$REPO_ROOT"/.claude/skills/*/SKILL.md "$REPO_ROOT"/plugin/skills/solana-ai-kit/SKILL.md; do
   case "$f" in */skills/ext/*) continue ;; esac
   [ -f "$f" ] && SKILL_FILES+=("$f")
 done

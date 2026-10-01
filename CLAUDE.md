@@ -93,7 +93,7 @@ When X changes, also update Y:
 | **Commands** | `.claude/commands/` | Atomic (one command, one purpose); document inputs/outputs; one-line description |
 | **Rules** | `.claude/rules/` | The kit ships none. A project rule needs `paths:` frontmatter (`globs:` is ignored, so the rule loads every session) |
 | **MCP Servers** | `.mcp.json` | Document env vars; test connectivity; update setup-mcp command |
-| **Plugin** | `.claude-plugin/marketplace.json` + `plugin/` | In-repo marketplace + symlinked core-plugin subtree (agents/commands/.mcp.json/local skills are **symlinks** into `.claude/`; only `hooks/hooks.json` + plugin-variant `skills/SKILL.md` are real files). Keep `plugin.json` version = `.claude/VERSION`. `plugin/skills/SKILL.md` must have NO `ext/` links (submodules absent in plugin installs). Validate: `claude plugin validate .` + `./plugin`. `install.sh` stays the full install (CLAUDE.md/permissions/submodules) |
+| **Plugin** | `.claude-plugin/marketplace.json` + `plugin/` | In-repo marketplace + symlinked core-plugin subtree (agents/commands/.mcp.json/local skills are **symlinks** into `.claude/`; only `hooks/hooks.json` + plugin-variant `skills/solana-ai-kit/SKILL.md` are real files). Keep `plugin.json` version = `.claude/VERSION`. Every plugin skill is `plugin/skills/<name>/SKILL.md`; a `SKILL.md` directly in `plugin/skills/` loads as the only skill and hides the rest. `plugin/skills/solana-ai-kit/SKILL.md` must have NO `ext/` links (submodules absent in plugin installs). Validate: `claude plugin validate .` + `./plugin`. `install.sh` stays the full install (CLAUDE.md/permissions/submodules) |
 
 ## Agent Teams
 
