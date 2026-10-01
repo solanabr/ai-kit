@@ -1,6 +1,17 @@
 {
   "sandbox": {
     "enabled": true,
+    "excludedCommands": [
+      "git push *",
+      "git pull *",
+      "git fetch *",
+      "gh pr *",
+      "gh run *",
+      "gh issue *"
+    ],
+    "network": {
+      "allowLocalBinding": true
+    },
     "filesystem": {
       "denyWrite": [
         "~/.ssh",
@@ -252,7 +263,6 @@
       "Bash(git push -f *)",
       "Bash(git reset --hard *)",
       "Bash(git clean -fd *)",
-      "Bash(solana program deploy *mainnet*)",
       "Bash(solana transfer *)",
       "Bash(solana withdraw-from-nonce-account *)",
       "Bash(docker rm *)",
@@ -279,6 +289,7 @@
       "Bash(cat ~/.netrc)",
       "Bash(less *id.json)",
       "Bash(xxd *id.json)",
+      "Bash(gh auth token *)",
 
       "Read(~/.ssh/**)",
       "Read(~/.gnupg/**)",
@@ -326,11 +337,55 @@
       "Bash(git clean -fdx*)",
       "Bash(git clean -fX*)",
 
-      "Bash(solana program set-upgrade-authority *)",
-      "Bash(spl-token set-authority *)",
+      "Bash(solana program deploy *--final*)",
+      "Bash(solana program set-upgrade-authority *--final*)",
+      "Bash(anchor * --final*)",
+      "Bash(solana program close *--bypass-warning*)",
+      "Bash(solana program-v4 finalize *)",
+      "Bash(spl-token authorize *--disable*)"
+    ],
+
+    "ask": [
+      "Bash(solana program deploy *)",
+      "Bash(solana program write-buffer *)",
+      "Bash(solana program upgrade *)",
+      "Bash(solana program extend *)",
+      "Bash(solana program migrate *)",
       "Bash(solana program close *)",
-      "Bash(solana withdraw-from-stake-account *)",
-      "Bash(solana withdraw-from-vote-account *)"
+      "Bash(solana program set-upgrade-authority *)",
+      "Bash(solana program set-buffer-authority *)",
+      "Bash(solana program-v4 deploy *)",
+      "Bash(solana program-v4 retract *)",
+      "Bash(solana program-v4 transfer-authority *)",
+      "Bash(anchor deploy *)",
+      "Bash(anchor upgrade *)",
+      "Bash(anchor program deploy *)",
+      "Bash(anchor program upgrade *)",
+      "Bash(anchor program write-buffer *)",
+      "Bash(anchor program close *)",
+      "Bash(anchor program set-upgrade-authority *)",
+      "Bash(anchor program set-buffer-authority *)",
+
+      "Bash(solana withdraw-stake *)",
+      "Bash(solana withdraw-from-vote-account *)",
+      "Bash(spl-token transfer *)",
+      "Bash(spl-token authorize *)",
+
+      "Bash(git push --force*)",
+      "Bash(git push *--receive-pack*)",
+      "Bash(git push *--exec*)",
+      "Bash(git pull *--upload-pack*)",
+      "Bash(git fetch *--upload-pack*)",
+      "Bash(git clean *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh issue delete *)",
+
+      "Bash(solana-keygen new *--force*)",
+      "Bash(solana-keygen new -f*)",
+      "Bash(solana-keygen new * -f*)",
+      "Bash(solana-keygen recover *--force*)",
+      "Bash(solana-keygen recover -f*)",
+      "Bash(solana-keygen recover * -f*)"
     ]
   },
 
@@ -340,61 +395,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "V=$(awk 'NF{print $NF; exit}' \"${CLAUDE_PROJECT_DIR:-.}/.claude/VERSION\" 2>/dev/null)\n[ -n \"$V\" ] || V=dev\nif [ -z \"${NO_COLOR:-}\" ] && printf %s \"${COLORTERM:-}\" | grep -qiE 'truecolor|24bit'; then\n  G1=$(printf '\\033[38;2;153;69;255m'); G2=$(printf '\\033[38;2;131;98;237m')\n  G3=$(printf '\\033[38;2;109;126;220m'); G4=$(printf '\\033[38;2;86;155;202m')\n  G5=$(printf '\\033[38;2;64;184;184m'); G6=$(printf '\\033[38;2;42;212;167m')\n  G7=$(printf '\\033[38;2;20;241;149m')\n  DM=$(printf '\\033[2;38;2;100;100;100m'); RS=$(printf '\\033[0m')\nelse\n  G1=; G2=; G3=; G4=; G5=; G6=; G7=; DM=; RS=\nfi\nprintf '%s%s%s\\n' \"$G1\" '   _____ ____  __    ___    _   _____' \"$RS\"\nprintf '%s%s%s\\n' \"$G2\" '  / ___// __ \\/ /   /   |  / | / /   |' \"$RS\"\nprintf '%s%s%s\\n' \"$G3\" '  \\__ \\/ / / / /   / /| | /  |/ / /| |' \"$RS\"\nprintf '%s%s%s\\n' \"$G4\" ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' \"$RS\"\nprintf '%s%s%s\\n' \"$G5\" '/____/\\____/_____/_/  |_/_/ |_/_/  |_|' \"$RS\"\nprintf '%s%s%s\\n' \"$G6\" '           ▄▀█ █   █▄▀ █ ▀█▀' \"$RS\"\nprintf '%s%s%s\\n' \"$G7\" '           █▀█ █   █ █ █  █' \"$RS\"\nprintf '%s\\n\\n' \"${DM}     v$V — by @SuperteamBR 🇧🇷${RS}\"\nif command -v solana >/dev/null 2>&1; then\n  echo \"🔗 $(solana config get | grep 'RPC URL' | awk '{print $3}')\"\n  echo \"👛 $(solana address 2>/dev/null || echo 'No wallet configured')\"\nelse\n  echo '⚠️  Solana CLI not found'\nfi"
-          }
-        ]
-      }
-    ],
-
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "for f in $(git diff --cached --name-only 2>/dev/null); do\n  case \"$f\" in\n    *.rs) command -v rustfmt >/dev/null 2>&1 && rustfmt \"$f\" 2>/dev/null || true ;;\n    *.ts|*.tsx|*.js|*.jsx|*.json) command -v npx >/dev/null 2>&1 && npx prettier --write \"$f\" 2>/dev/null || true ;;\n  esac\ndone"
-          }
-        ]
-      }
-    ],
-
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat)\nNAME=$(printf '%s' \"$INPUT\" | jq -r '.agent_type // .agent_id // \"unknown\"' 2>/dev/null)\necho \"🤖 Agent completed: ${NAME:-unknown}\""
-          }
-        ]
-      }
-    ],
-
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat)\nFILE=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.file_path // empty' 2>/dev/null)\n[ -n \"$FILE\" ] || exit 0\n\ncase \"$FILE\" in\n  *.rs)\n    command -v rustfmt >/dev/null 2>&1 && rustfmt \"$FILE\" || true\n    ;;\n  *.ts|*.tsx|*.js|*.jsx|*.json|*.md)\n    command -v npx >/dev/null 2>&1 && npx prettier --write \"$FILE\" || true\n    ;;\nesac"
-          }
-        ]
-      },
-
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'cargo test|anchor test' || exit 0\nOUT=$(printf '%s' \"$INPUT\" | jq -r '.tool_response | if type==\"string\" then . else (.stdout // \"\") + \"\\n\" + (.stderr // \"\") end' 2>/dev/null)\n[ -n \"$OUT\" ] || OUT=$INPUT\n\necho \"\"\necho \"📊 Test Summary:\"\nif printf '%s' \"$OUT\" | grep -qE 'test result: FAILED|error\\[|panicked|failing'; then\n  echo \"❌ Some tests failed. Review output above.\"\nelse\n  echo \"✅ All tests passed!\"\nfi"
-          }
-        ]
-      },
-
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'dotnet test|unity-editor.*-runTests' || exit 0\nOUT=$(printf '%s' \"$INPUT\" | jq -r '.tool_response | if type==\"string\" then . else (.stdout // \"\") + \"\\n\" + (.stderr // \"\") end' 2>/dev/null)\n[ -n \"$OUT\" ] || OUT=$INPUT\n\necho \"\"\necho \"📊 .NET Test Summary:\"\nif printf '%s' \"$OUT\" | grep -qE 'Failed!|Failed: *[1-9]|error'; then\n  echo \"❌ Some tests failed. Review output above.\"\nelse\n  echo \"✅ All tests passed!\"\nfi"
+            "command": "INPUT=$(cat)\nV=$(awk 'NF{print $NF; exit}' \"${CLAUDE_PROJECT_DIR:-.}/.claude/VERSION\" 2>/dev/null)\n[ -n \"$V\" ] || V=dev\nif command -v solana >/dev/null 2>&1; then\n  RPC=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}' | sed -E 's#^([a-z]+://[^/?]+).*#\\1#')\n  WALLET=$(solana address 2>/dev/null) || WALLET='none configured'\n  CTX=\"Solana CLI: RPC ${RPC:-unknown}, wallet ${WALLET:-none configured}.\"\nelse\n  CTX='Solana CLI not found on PATH.'\nfi\ncase $INPUT in *'\"startup\"'*) ;; *) printf '%s\\n' \"$CTX\"; exit 0 ;; esac\ncommand -v jq >/dev/null 2>&1 || { printf '%s\\n' \"$CTX\"; exit 0; }\nBANNER=$(printf '%s\\n' \\\n  '   _____ ____  __    ___    _   _____' \\\n  '  / ___// __ \\/ /   /   |  / | / /   |' \\\n  '  \\__ \\/ / / / /   / /| | /  |/ / /| |' \\\n  ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' \\\n  '/____/\\____/_____/_/  |_/_/ |_/_/  |_|' \\\n  '           ▄▀█ █   █▄▀ █ ▀█▀' \\\n  '           █▀█ █   █ █ █  █' \\\n  \"     v$V — by @SuperteamBR 🇧🇷\")\njq -n --arg b \"$BANNER\" --arg c \"$CTX\" '{systemMessage: $b, hookSpecificOutput: {hookEventName: \"SessionStart\", additionalContext: $c}}'",
+            "timeout": 15
           }
         ]
       }
@@ -406,7 +408,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nif printf '%s' \"$CMD\" | grep -qE '\\.ssh/|\\.gnupg|\\.aws/|\\.config/solana/id\\.json|\\.npmrc|\\.git-credentials|\\.netrc|\\.cargo/credentials|\\.docker/config\\.json|\\.config/gh/hosts|\\.kube/config|\\.pypirc|\\.gem/credentials|Application[\\\\ ]+Support/Google/Chrome|Application[\\\\ ]+Support/BraveSoftware|Application[\\\\ ]+Support/Microsoft[\\\\ ]+Edge|Application[\\\\ ]+Support/Firefox|Application[\\\\ ]+Support/Chromium|Application[\\\\ ]+Support/Vivaldi|Application[\\\\ ]+Support/Arc|Application[\\\\ ]+Support/com\\.operasoftware|\\.config/google-chrome|\\.config/BraveSoftware|\\.config/microsoft-edge|\\.mozilla/firefox|\\.config/chromium|\\.config/vivaldi|\\.config/opera|AppData/Local/Google/Chrome|AppData/Local/BraveSoftware|AppData/Local/Microsoft/Edge|AppData/Roaming/Mozilla/Firefox|AppData/Local/Chromium|AppData/Local/Vivaldi|AppData/Roaming/Opera[\\\\ ]+Software|Local[\\\\ ]+Extension[\\\\ ]+Settings|moz-extension'; then\n  echo '🛑 Blocked: reading private keys, wallet vaults, or credentials is not allowed. Use `solana address` for your pubkey.' >&2\n  exit 2\nfi\nexit 0"
+            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nHIT=$(printf '%s\\n' \"$CMD\" | grep -oE '\\.ssh/|\\.gnupg|\\.aws/|\\.config/solana/id\\.json|\\.npmrc|\\.git-credentials|\\.netrc|\\.cargo/credentials|\\.docker/config\\.json|\\.config/gh/hosts|\\.kube/config|\\.pypirc|\\.gem/credentials|gh auth token|--show-token|Application[\\\\ ]+Support/Google/Chrome|Application[\\\\ ]+Support/BraveSoftware|Application[\\\\ ]+Support/Microsoft[\\\\ ]+Edge|Application[\\\\ ]+Support/Firefox|Application[\\\\ ]+Support/Chromium|Application[\\\\ ]+Support/Vivaldi|Application[\\\\ ]+Support/Arc|Application[\\\\ ]+Support/com\\.operasoftware|\\.config/google-chrome|\\.config/BraveSoftware|\\.config/microsoft-edge|\\.mozilla/firefox|\\.config/chromium|\\.config/vivaldi|\\.config/opera|AppData/Local/Google/Chrome|AppData/Local/BraveSoftware|AppData/Local/Microsoft/Edge|AppData/Roaming/Mozilla/Firefox|AppData/Local/Chromium|AppData/Local/Vivaldi|AppData/Roaming/Opera[\\\\ ]+Software|Local[\\\\ ]+Extension[\\\\ ]+Settings|moz-extension' | head -n 1)\n[ -n \"$HIT\" ] || exit 0\necho \"🛑 Blocked: reading private keys, wallet vaults or credentials is not allowed ($HIT). Use \\`solana address\\` for the pubkey; ask the user to run anything that needs the secret.\" >&2\nexit 2",
+            "timeout": 10
           }
         ]
       },
@@ -416,17 +419,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'git commit' || exit 0\n\necho \"🔍 Running pre-commit checks...\"\n\nif [ -f \"Anchor.toml\" ] || grep -q \"solana-program\" Cargo.toml 2>/dev/null; then\n  cargo fmt --check || { cargo fmt; echo \"❌ rustfmt reformatted files — review and re-run the commit\" >&2; exit 2; }\n  cargo clippy --all-targets -- -D warnings || { echo \"❌ cargo clippy failed\" >&2; exit 2; }\n  cargo test --lib || { echo \"❌ cargo test --lib failed\" >&2; exit 2; }\nfi\n\nif [ -f \"package.json\" ]; then\n  npx prettier --check \"**/*.{ts,tsx,js,jsx,json}\" || { npx prettier --write \"**/*.{ts,tsx,js,jsx,json}\"; echo \"❌ prettier reformatted files — review and re-run the commit\" >&2; exit 2; }\n  if [ -f \"tsconfig.json\" ]; then\n    npx tsc --noEmit || { echo \"❌ tsc --noEmit failed\" >&2; exit 2; }\n  fi\nfi\n\necho \"✅ Pre-commit checks passed\""
-          }
-        ]
-      },
-
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "INPUT=$(cat)\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null || printf '%s' \"$INPUT\")\nprintf '%s' \"$CMD\" | grep -qE 'solana program deploy|anchor deploy' || exit 0\n\necho \"🚨 PRE-DEPLOY CHECKS\"\nNETWORK=$(solana config get 2>/dev/null | grep \"RPC URL\" | awk '{print $3}')\necho \"Network: $NETWORK\"\n\nif printf '%s\\n%s' \"$NETWORK\" \"$CMD\" | grep -q mainnet; then\n  if ! printf '%s' \"$CMD\" | grep -q 'CONFIRM_MAINNET=1'; then\n    echo \"⚠️ MAINNET DEPLOY blocked. Re-run with CONFIRM_MAINNET=1 prefixed to the command to confirm.\" >&2\n    exit 2\n  fi\n  echo \"⚠️ MAINNET DEPLOY confirmed via CONFIRM_MAINNET=1\"\nfi\n\nif [ -f \"Anchor.toml\" ]; then\n  ls target/deploy/*.so >/dev/null 2>&1 || { echo \"❌ No build found (target/deploy/*.so) — run anchor build first\" >&2; exit 2; }\nfi\n\necho \"✅ Pre-deploy checks passed\""
+            "command": "INPUT=$(cat)\ncase $INPUT in *solana*|*anchor*|*spl-token*) ;; *) exit 0 ;; esac\nCMD=$(printf '%s' \"$INPUT\" | jq -r '.tool_input.command // empty' 2>/dev/null) || CMD=$(printf '%s' \"$INPUT\" | sed -nE 's/.*\"command\"[[:space:]]*:[[:space:]]*\"(([^\"\\\\]|\\\\.)*)\".*/\\1/p')\nRE='(^|[;&|(]|\\$\\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|]*)?([;&|)]|$)'\nSEG=$(printf '%s\\n' \"$CMD\" | grep -oE \"$RE\")\n[ -n \"$SEG\" ] || exit 0\nif printf '%s\\n' \"$SEG\" | grep -qE -e '--final|--bypass-warning|program-v4 finalize|spl-token authorize[^;&|]*--disable'; then\n  echo \"🛑 Blocked: irreversible on-chain action (--final, program close --bypass-warning, program-v4 finalize or authorize --disable). If the user wants it, they run it themselves outside Claude.\" >&2\n  exit 2\nfi\nset -f\nCL= SRC='command flag' prev=\nfor w in $SEG; do\n  case $prev in --url|-u|--provider.cluster) CL=$w ;; esac\n  case $w in --url=*|--provider.cluster=*) CL=${w#*=} ;; -u?*) CL=${w#-u} ;; esac\n  prev=$w\ndone\nif [ -z \"$CL\" ]; then\n  case $SEG in\n    *anchor*) SRC=Anchor.toml; CL=$(awk -F'\"' '/^[[:space:]]*cluster[[:space:]]*=/{print $2; exit}' Anchor.toml 2>/dev/null) ;;\n    *) SRC='solana config'; CL=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}') ;;\n  esac\nfi\nCL=$(printf '%s' \"${CL#=}\" | tr '[:upper:]' '[:lower:]' | sed -E 's#^([a-z]+://[^/?]+).*#\\1#' | tr -cd 'a-z0-9:/._-')\ncase $CL in\n  m|*mainnet*) R=\"MAINNET (from $SRC): spends real SOL or changes a live program. Approve only if the user asked for mainnet.\" ;;\n  d|*devnet*) R=\"On-chain write to devnet (from $SRC).\" ;;\n  t|*testnet*) R=\"On-chain write to testnet (from $SRC).\" ;;\n  l|localnet|*localhost*|*127.0.0.1*) R=\"On-chain write to localnet (from $SRC).\" ;;\n  '') R='On-chain write to an unknown cluster (no --url, Anchor.toml or solana config found). Check the target before approving.' ;;\n  *) R=\"On-chain write to $CL (from $SRC). Check the cluster before approving.\" ;;\nesac\nprintf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"%s\"}}\\n' \"$R\"",
+            "timeout": 10
           }
         ]
       }

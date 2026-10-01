@@ -25,6 +25,8 @@ for dir in "$REPO_ROOT/.claude/skills/ext"/*/; do
   mkdir "$TEMP_DIR/.claude/skills/ext/$(basename "$dir")"
 done
 cp "$REPO_ROOT/validate.sh" "$REPO_ROOT/.env.example" "$REPO_ROOT/.mcp.json" "$TEMP_DIR/"
+# plugin/ is mostly symlinks into .claude/; -P copies them as links, so they resolve inside the fixture
+cp -RP "$REPO_ROOT/plugin" "$TEMP_DIR/"
 
 OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "0" "$RC" "validate.sh exits 0 when the ext/ submodules are not checked out"

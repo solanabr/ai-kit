@@ -27,7 +27,7 @@ disable-model-invocation: true
    git diff --cached --name-status
    ```
 4. **Confirm.** If nothing is staged (`git diff --cached --quiet`), report that the config is already tracked and stop. Otherwise show the staged list and wait for the user's go-ahead.
-5. **Commit:** `git commit -m "chore: track Solana AI Kit config"`. The kit's commit hook and any `.git/hooks/pre-commit` run as usual.
+5. **Commit:** `git commit -m "chore: track Solana AI Kit config"`. Any `.git/hooks/pre-commit` runs as usual.
 
 ## Notes
 

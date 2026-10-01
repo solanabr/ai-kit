@@ -253,6 +253,27 @@ else
 fi
 echo ""
 
+# --- Hook commands ---
+# Claude Code runs each hook with `sh -c`. A syntax error exits 2, which it treats as a
+# block, so one typo would stop every Bash call or session start.
+echo "[Hooks]"
+hooks_ok=0
+python3 - <<'PY' || hooks_ok=1
+import json, subprocess, sys
+bad = 0
+for path in (".claude/settings.json", "plugin/hooks/hooks.json"):
+    for event, entries in json.load(open(path)).get("hooks", {}).items():
+        for entry in entries:
+            for hook in entry.get("hooks", []):
+                r = subprocess.run(["sh", "-n"], input=hook.get("command", ""), capture_output=True, text=True)
+                if r.returncode:
+                    bad += 1
+                    print(f"  FAIL: {path} {event} hook: {r.stderr.strip()[:160]}")
+sys.exit(1 if bad else 0)
+PY
+check "Hook commands in settings.json and plugin/hooks/hooks.json parse with sh -n" "$hooks_ok"
+echo ""
+
 # --- Rules frontmatter ---
 # Claude Code reads only `paths:` from a rule. A rule without it (including one
 # that uses `globs:`) loads into every session and every subagent.

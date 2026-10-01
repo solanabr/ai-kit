@@ -11,7 +11,7 @@ Commit the current work with a conventional commit message. `$ARGUMENTS`, if giv
 3. **Format**, then re-stage what it touched (`git add -u`): `cargo fmt` for Rust, `npx prettier --write` on the changed TS/JS/JSON files, `ruff format` for Python.
 4. **Lint:** `cargo clippy --all-targets -- -D warnings`; `npm run lint` when `package.json` defines it. Fix what is quick and report the rest.
 5. **Message:** `type(scope): summary`, imperative, under 72 characters, written from `git diff --cached` rather than from file names. Types: feat, fix, refactor, perf, test, docs, style, chore, ci. Scope is the area touched (program, frontend, tests, docs, deps). Add a body with the why when the change is not obvious. No AI attribution or `Co-Authored-By` trailer (the kit sets `attribution` to empty strings in settings.json).
-6. **Commit.** Show `git diff --cached --stat` and the message, then `git commit`. The kit's PreToolUse hook on `git commit` re-runs `cargo fmt --check`, clippy and `cargo test --lib` for program crates, and prettier plus `tsc --noEmit` for JS/TS projects. It blocks the commit on a failure, or after it reformats files. Fix, re-stage and retry; don't skip hooks with `--no-verify`.
+6. **Commit.** Show `git diff --cached --stat` and the message, then `git commit`. If the project's own git pre-commit hook fails, fix, re-stage and retry; don't skip it with `--no-verify`.
 
 ## Output
 

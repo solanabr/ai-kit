@@ -78,6 +78,18 @@ assert_file_contains "$PLUGIN_HOOKS" "exit 2" "plugin secrets gate blocks with e
 for legacy in '"when"' command_matches CLAUDE_FILE_PATH CLAUDE_TOOL_EXIT_CODE CLAUDE_SUBAGENT_NAME; do
   assert_file_not_contains "$PLUGIN_HOOKS" "$legacy" "plugin hooks.json has no unsupported '$legacy'"
 done
+# Plugin installs get no permissions or sandbox policy, so the hooks carry the gates and must
+# match .claude/settings.json. SessionStart is the one variant: it stays quiet when a full
+# install is present, so the banner doesn't print twice.
+MIRROR="$(python3 -c "
+import json
+s = json.load(open('$REPO_ROOT/.claude/settings.json'))['hooks']
+p = json.load(open('$PLUGIN_HOOKS'))['hooks']
+rest = lambda h: {k: v for k, v in h.items() if k != 'SessionStart'}
+print('same' if rest(s) == rest(p) and 'SessionStart' in p else 'differ')
+" 2>/dev/null)"
+assert_eq "same" "$MIRROR" "plugin hooks.json matches settings.json hooks apart from SessionStart"
+assert_file_contains "$PLUGIN_HOOKS" '.claude/VERSION' "plugin SessionStart skips projects that have the full install"
 
 # --- plugin.json must not redeclare the auto-discovered default hooks path (issue #50: duplicate load error) ---
 # Claude Code auto-loads hooks/hooks.json from the plugin root; a manifest "hooks" entry
