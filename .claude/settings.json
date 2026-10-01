@@ -330,6 +330,14 @@
       "Read(~/AppData/Roaming/Opera Software/**)",
       "Read(**/Local Extension Settings/**)",
 
+      "Bash(mkfs*)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf ~/*)",
+      "Bash(rm -rf .git)",
+      "Bash(rm -rf .git/*)",
+      "Bash(git clean -fdx*)",
+      "Bash(git clean -fX*)",
+
       "Bash(solana program deploy *--final*)",
       "Bash(solana program set-upgrade-authority *--final*)",
       "Bash(anchor * --final*)",

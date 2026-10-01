@@ -137,6 +137,12 @@ for r in "Read(~/.ssh/**)" "Read(~/.config/solana/id.json)" "Bash(cat *keypair*.
          "Bash(solana program set-upgrade-authority *--final*)" "Bash(solana program close *--bypass-warning*)"; do
   assert_rule deny "$r" yes "permissions.deny has $r"
 done
+# Destructive filesystem and git commands stay hard blocks. "mkfs*" also catches mkfs.ext4,
+# which "mkfs *" misses, and deny wins over the "git clean *" ask rule for -fdx and -fX.
+for r in "Bash(mkfs*)" "Bash(rm -rf ~)" "Bash(rm -rf ~/*)" "Bash(rm -rf .git)" "Bash(rm -rf .git/*)" \
+         "Bash(git clean -fdx*)" "Bash(git clean -fX*)"; do
+  assert_rule deny "$r" yes "permissions.deny has $r"
+done
 # Deny rules for subcommands the Solana CLIs don't have are gone (their real counterparts ask),
 # and so are the blanket program-authority denies that also blocked reclaiming buffer SOL.
 for r in "Bash(spl-token set-authority *)" "Bash(solana withdraw-from-stake-account *)" \
