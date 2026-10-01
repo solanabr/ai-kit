@@ -183,4 +183,62 @@ assert_eq "$KIT_VERSION" "$PLUGIN_VERSION" "plugin.json version ($PLUGIN_VERSION
 MARKETPLACE_VERSION="$(python3 -c "import json; print(json.load(open('$MARKETPLACE'))['metadata']['version'])" 2>/dev/null)"
 assert_eq "$KIT_VERSION" "$MARKETPLACE_VERSION" "marketplace.json metadata.version ($MARKETPLACE_VERSION) matches .claude/VERSION ($KIT_VERSION)"
 
+# --- Links into ext/ have a documented next step in plugin installs (issue #84) ---
+# plugin/agents, plugin/commands and the bundled skills are the full install's files, so they
+# link into .claude/skills/ext/ and name `bash .claude/bin/skills.sh add <id>`. A plugin
+# install has neither. The hub carries the next step: its description (listed in every
+# session and subagent) says when to read it, and its missing-link section names each
+# fallback. Every pack those files point at needs the registry `source` that section uses.
+echo "[ext fallback]"
+assert_dir_not_exists "$PLUGIN_DIR/skills/ext" "plugin carries no ext/ packs"
+HUB_FALLBACK="$(python3 - "$PLUGIN_HUB" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+out = []
+front = text.split("---", 2)[1] if text.startswith("---") else ""
+desc = re.search(r"^description:\s*(.*)$", front, re.M)
+desc = desc.group(1) if desc else ""
+if not (re.search(r"\bext\b", desc) and "missing" in desc):
+    out.append("description does not say to use the hub for a missing ext link")
+section = re.search(r"^## [^\n]*\bext\b[^\n]*\bmissing\b[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+if not section:
+    out.append("no ext missing-link section (a ## heading naming ext and missing)")
+else:
+    # \x60 is a backtick; a literal one breaks how older bash parses this heredoc
+    for needle in ("solana-dev MCP", "https://aikit.superteam.codes/.claude/skills/ext",
+                   "skill-registry.json", "\x60source\x60", "skills.sh", "full install"):
+        if needle not in section.group(1):
+            out.append(f"missing-link section does not name {needle}")
+print("\n".join(out) or "OK")
+PY
+)"
+assert_eq "OK" "$HUB_FALLBACK" "plugin hub gives the next step for a missing ext/ link (description, solana-dev MCP, kit site, registry source, skills.sh, full install)"
+assert_file_contains "$REPO_ROOT/docs/install.md" "https://aikit.superteam.codes/.claude/skills/ext/" "docs/install.md's no-install route serves the ext/ paths the hub falls back to"
+EXT_REFS="$(python3 - "$PLUGIN_DIR" <<'PY'
+import glob, json, os, re, sys
+plugin = sys.argv[1]
+reg = json.load(open(os.path.join(plugin, "skills", "skill-registry.json"), encoding="utf-8"))
+source = {e["id"]: e.get("source") or "" for e in reg["entries"] if "tier" in e}
+counts, bad = [], []
+for group, pattern in (("agents", "agents/*.md"), ("commands", "commands/*.md"), ("skills", "skills/*/**/*.md")):
+    links = 0
+    for f in sorted(glob.glob(os.path.join(plugin, pattern), recursive=True)):
+        for n, line in enumerate(open(f, encoding="utf-8"), 1):
+            packs = []
+            for link in re.findall(r"\]\(([^)\s]+)\)", line):
+                if not link.startswith("http"):
+                    packs += re.findall(r"(?:^|/)ext/([a-z0-9-]+)", link)
+            links += len(packs)
+            for ids in re.findall(r"skills\.sh add ((?:[a-z0-9-]+ ?)+)\x60", line):
+                packs += ids.split()
+            for pack in sorted(set(packs)):
+                if not source.get(pack, "").startswith("https://"):
+                    bad.append(f"{os.path.relpath(f, plugin)}:{n} points at ext pack {pack}, which has no registry entry with a source")
+    counts.append(f"{group} {links}")
+print(", ".join(counts))
+print("\n".join(bad) or "OK")
+PY
+)"
+assert_eq "OK" "$(printf '%s\n' "$EXT_REFS" | tail -n +2)" "every ext/ link and skills.sh hint in plugin agents, commands and skills names a pack with a registry source (links: $(printf '%s\n' "$EXT_REFS" | head -1))"
+
 print_summary

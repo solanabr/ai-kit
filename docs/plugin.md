@@ -47,6 +47,8 @@ What the plugin **cannot** carry (Claude Code plugins are plain git clones — t
 - the curated permissions allowlist + sandbox policy — and therefore the [firewall tier](../README.md#firewall-tiers): a plugin's `settings` object honors only `agent` and `subagentStatusLine`, so its `permissions` and `sandbox` keys are dropped at load. A plugin install has hooks and no tier
 - the `ext/` skill packs: the core packs by default, extensions on demand (protocol, security, infra, ecosystem depth)
 
+The agents, commands and bundled skills are the files the full install uses, so they still link into those packs, and some name `bash .claude/bin/skills.sh add <id>`. Neither exists in a plugin install. The plugin's skill hub (the `solana-ai-kit` skill) gives the agent the next step: the solana-dev MCP, the same file from the [no-install route](install.md#no-install-read-the-kit-from-aikitsuperteamcodes), or the pack's upstream repository.
+
 For skill-pack depth, use the full install or the [no-install route](install.md#no-install-read-the-kit-from-aikitsuperteamcodes) rather than adding each pack's own marketplace (`sendaifun/skills`, `cloudflare/skills`, …): every marketplace is one more publisher to trust.
 
 Don't enable the plugin and the full install in the same project: both load the same commands, hooks and MCP servers, and `/doctor` warns about it.

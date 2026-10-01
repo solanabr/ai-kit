@@ -1,6 +1,6 @@
 ---
 name: solana-ai-kit
-description: Skill hub for the solana-ai-kit Claude Code plugin. Routes the bundled go-to-market skills and the opt-in add-on catalog, and points to upstream marketplaces or the install.sh full install for protocol, security and ecosystem depth.
+description: Skill hub for the solana-ai-kit Claude Code plugin. Routes the bundled go-to-market skills and the opt-in add-on catalog, and points to upstream marketplaces or the install.sh full install for protocol, security and ecosystem depth. Use it when a kit agent, command or skill links to a missing file in an ext skill pack.
 user-invocable: true
 ---
 
@@ -21,7 +21,7 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 
 These three skills are adapted from sendaifun/solana-new (MIT, telemetry removed).
 
-The kit's own [token-extensions](../token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the full install (Option B).
+The kit's own [token-extensions](../token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the `install.sh` full install.
 
 ## Security firewall (core)
 
@@ -50,6 +50,14 @@ curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh | b
 ```
 
 The project README ("External Skill Submodules" and "Install as a Claude Code plugin") explains when to pick the plugin or the full install; they are complementary. If both are active in one project, `/solana-ai-kit:doctor` flags the duplicate commands, hooks and MCP servers.
+
+## When a link into an `ext` pack is missing
+
+The plugin's agents, commands and bundled skills are the same files the full install uses. Many of their links go through `skills/ext` into the external skill packs, and some lines add "install first: `bash .claude/bin/skills.sh add <id>`". A plugin install has neither the packs nor `.claude/bin`, so the link is dead and that command cannot run. Use a fallback and keep going:
+
+- General Solana work (the `solana-dev` pack: Anchor, Pinocchio, `@solana/kit`, testing, security): ask the bundled solana-dev MCP.
+- The exact file: the kit's site serves the packs under `https://aikit.superteam.codes/.claude/skills/ext`; append the part of the link that follows `ext` (for a folder link, its `SKILL.md`). If the site doesn't have it, use the pack's own repository, the `source` of its `skill-registry.json` entry (the folder after `ext` is the pack id); paths there can differ from the commit the kit pins.
+- Tell the user once that the full install (`install.sh`) puts the packs in the project, where these links and `skills.sh` work.
 
 ## Task routing
 
