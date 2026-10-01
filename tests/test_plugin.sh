@@ -47,6 +47,20 @@ assert_contains "$PLUGIN_DEPS" '"safe-ai-skill"' "plugin.json declares safe-ai-s
 if command -v claude >/dev/null 2>&1; then
   assert_cmd_success "claude plugin validate '$REPO_ROOT'" "claude plugin validate (marketplace) exits 0"
   assert_cmd_success "claude plugin validate '$PLUGIN_DIR'" "claude plugin validate (plugin) exits 0"
+
+  # The validator does not follow symlinks, so the run above (the tree the marketplace serves)
+  # reads none of the linked agents, commands, skills or .mcp.json, which a session does load.
+  # Validate a dereferenced copy as well. --strict (Claude Code v2.1.145+) because a missing or
+  # unterminated frontmatter block is only a warning.
+  DEREF_DIR="$(mktemp -d)"
+  trap 'rm -rf "$DEREF_DIR"' EXIT
+  DEREF_OUT="$(cp -RL "$PLUGIN_DIR" "$DEREF_DIR/plugin" 2>&1 && claude plugin validate --strict "$DEREF_DIR/plugin" 2>&1)" && RC=0 || RC=$?
+  assert_eq "0" "$RC" "claude plugin validate --strict (plugin, symlinks dereferenced) exits 0"
+  [ "$RC" -eq 0 ] || echo "$DEREF_OUT" | sed -e '/^[[:space:]]*$/d' -e 's/^/    /'
+  # Control: with a malformed agent in the copy the same run must fail, or it isn't reading them either
+  printf -- '---\nname: zz-malformed\ndescription: "unterminated\n---\n' > "$DEREF_DIR/plugin/agents/zz-malformed.md"
+  claude plugin validate --strict "$DEREF_DIR/plugin" >/dev/null 2>&1 && RC=0 || RC=$?
+  assert_eq "1" "$RC" "claude plugin validate --strict fails on a malformed agent in the dereferenced copy"
 else
   echo "  NOTE: 'claude' CLI not on PATH — skipping 'claude plugin validate' checks"
 fi
