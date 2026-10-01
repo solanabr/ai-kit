@@ -263,7 +263,6 @@
       "Bash(git push -f *)",
       "Bash(git reset --hard *)",
       "Bash(git clean -fd *)",
-      "Bash(solana program deploy *mainnet*)",
       "Bash(solana transfer *)",
       "Bash(solana withdraw-from-nonce-account *)",
       "Bash(docker rm *)",

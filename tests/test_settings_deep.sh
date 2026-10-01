@@ -162,6 +162,15 @@ p = json.load(open('$SETTINGS'))['permissions']
 print(' '.join(sorted(set(p.get('ask', [])) & set(p['deny']))) or 'none')
 " 2>/dev/null)"
 assert_eq "none" "$OVERLAP" "no rule sits in both permissions.ask and permissions.deny"
+# Mainnet deploys ask like every other cluster. A deny glob on mainnet blocked /deploy's
+# "solana program deploy ... --url mainnet-beta" step instead of prompting.
+MAINNET_DENY="$(python3 -c "
+import fnmatch, json
+deny = json.load(open('$SETTINGS'))['permissions']['deny']
+cmd = 'solana program deploy target/verifiable/p.so --url mainnet-beta --use-rpc'
+print(' '.join(r for r in deny if 'mainnet' in r or (r.startswith('Bash(') and fnmatch.fnmatchcase(cmd, r[5:-1]))) or 'none')
+" 2>/dev/null)"
+assert_eq "none" "$MAINNET_DENY" "no permissions.deny rule targets mainnet or blocks /deploy's --url mainnet-beta step"
 # solana-keygen new/recover default to ~/.config/solana/id.json. The sandbox blocks that write,
 # but a retry outside it (or a machine without the sandbox) runs under the Bash(solana-keygen *)
 # allow rule, so --force/-f must ask. A different -o path without --force stays prompt-free.
