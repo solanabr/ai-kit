@@ -72,9 +72,15 @@ echo "[plugin hooks]"
 PLUGIN_HOOKS="$PLUGIN_DIR/hooks/hooks.json"
 assert_file_exists "$PLUGIN_HOOKS" "plugin hooks.json exists"
 assert_json_valid "$PLUGIN_HOOKS" "plugin hooks.json is valid JSON"
-assert_file_contains "$PLUGIN_HOOKS" "config/solana/id" "plugin hooks.json has the secrets-gate PreToolUse hook"
-assert_file_contains "$PLUGIN_HOOKS" "Blocked: reading private keys" "plugin secrets gate prints the block reason"
-assert_file_contains "$PLUGIN_HOOKS" "exit 2" "plugin secrets gate blocks with exit 2"
+# The guards are scripts now, symlinked into the plugin tree the same way agents, commands
+# and skills are. A plugin install has no .claude/, so hooks.json must reach them through
+# ${CLAUDE_PLUGIN_ROOT} -- a .claude/hooks path here would silently load nothing.
+assert_file_contains "$PLUGIN_HOOKS" 'CLAUDE_PLUGIN_ROOT' "plugin hooks reach their scripts through CLAUDE_PLUGIN_ROOT"
+assert_file_not_contains "$PLUGIN_HOOKS" '.claude/hooks/' "plugin hooks reference no .claude/ path (absent in a plugin install)"
+for guard in lib-headless.sh secrets-guard.sh onchain-guard.sh egress-guard.sh egress-guard.awk; do
+  assert_cmd_success "[ -e '$PLUGIN_DIR/hooks/$guard' ]" "plugin hooks/$guard resolves (symlink into .claude/hooks)"
+done
+assert_file_contains "$PLUGIN_DIR/hooks/secrets-guard.sh" "exit 2" "plugin secrets gate blocks with exit 2"
 for legacy in '"when"' command_matches CLAUDE_FILE_PATH CLAUDE_TOOL_EXIT_CODE CLAUDE_SUBAGENT_NAME; do
   assert_file_not_contains "$PLUGIN_HOOKS" "$legacy" "plugin hooks.json has no unsupported '$legacy'"
 done
@@ -85,8 +91,16 @@ MIRROR="$(python3 -c "
 import json
 s = json.load(open('$REPO_ROOT/.claude/settings.json'))['hooks']
 p = json.load(open('$PLUGIN_HOOKS'))['hooks']
-rest = lambda h: {k: v for k, v in h.items() if k != 'SessionStart'}
-print('same' if rest(s) == rest(p) and 'SessionStart' in p else 'differ')
+import re
+# The plugin reaches its scripts through CLAUDE_PLUGIN_ROOT and the full install through
+# CLAUDE_PROJECT_DIR/.claude. Normalize that one difference, then demand equality: any
+# other divergence means a guard shipped to one install path and not the other.
+norm = lambda c: re.sub(r'\\$\\{CLAUDE_(?:PLUGIN_ROOT\\}|PROJECT_DIR[^}]*\\}/\\.claude)/hooks/',
+                        'HOOKS/', c)
+def shape(hooks):
+    return [[norm(h.get('command', '')) for h in e.get('hooks', [])]
+            for k, evs in sorted(hooks.items()) if k != 'SessionStart' for e in evs]
+print('same' if shape(s) == shape(p) and 'SessionStart' in p else 'differ')
 " 2>/dev/null)"
 assert_eq "same" "$MIRROR" "plugin hooks.json matches settings.json hooks apart from SessionStart"
 assert_file_contains "$PLUGIN_HOOKS" '.claude/VERSION' "plugin SessionStart skips projects that have the full install"

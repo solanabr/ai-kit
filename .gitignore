@@ -319,3 +319,5 @@ bower_components
 .next
 .nuxt
 .docusaurus
+# memsearch plugin index (generated, machine-local)
+.memsearch/

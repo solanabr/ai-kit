@@ -6,8 +6,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-TEMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR"' EXIT
+# new_tmp (helpers.sh) falls back when `mktemp -d` is denied by the sandbox — reproduced
+# three times this session. That is the shipped bug this release fixes, so the migration
+# tests must not hang off it.
+TEMP_DIR="$(new_tmp)" || exit 1
+FW_DIR="$(new_tmp)" || exit 1
+trap 'rm -rf "$TEMP_DIR" "$FW_DIR"' EXIT
 
 echo "[test_update] Comprehensive update.sh validation"
 echo ""
@@ -41,7 +45,7 @@ fi
 
 # --- Counts after update ---
 assert_count "$TEMP_DIR/.claude/agents" "*.md" "15" "Agent count == 15 after update"
-assert_count "$TEMP_DIR/.claude/commands" "*.md" "31" "Command count == 31 after update"
+assert_count "$TEMP_DIR/.claude/commands" "*.md" "32" "Command count == 32 after update"
 
 # --- Dry-run mode ---
 echo "[dry-run]"
@@ -150,10 +154,112 @@ json.dump(s, open(sys.argv[1], "w"), indent=2)' "$SETTINGS"
 (cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
 assert_eq "true" "$(json_at "$SETTINGS" enableAllProjectMcpServers)" "newer installs keep the value (migration runs once)"
 
+# --- Only installs on the retired-defaults list are migrated ----------------
+# Both version fixtures above are hardcoded, so they pass whatever .claude/VERSION says
+# and would keep passing after the migration stopped applying. Pin the shipped version
+# against update.sh's own case list instead (issue #126): a release that forgot to drop
+# itself from that list would re-run a one-shot migration on every fresh install.
+echo "[retired-defaults version window]"
+RETIRED_CASE="$(awk '/case "\$CURRENT_VERSION" in/{getline; gsub(/^[[:space:]]+|\)[[:space:]]*$/, ""); print; exit}' \
+  "$REPO_ROOT/.claude/bin/update.sh")"
+SHIPPED_VERSION="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' "$REPO_ROOT/.claude/VERSION" | head -1)"
+TOTAL=$((TOTAL + 1))
+if [ -z "$RETIRED_CASE" ]; then
+  echo "  FAIL: could not read update.sh's retired-defaults case list"
+  FAIL=$((FAIL + 1))
+else
+  MATCHED=no
+  IFS='|' read -ra RETIRED_PATTERNS <<< "$RETIRED_CASE"
+  for pat in "${RETIRED_PATTERNS[@]}"; do
+    case "$SHIPPED_VERSION" in $pat) MATCHED=yes ;; esac
+  done
+  if [ "$MATCHED" = "no" ]; then
+    echo "  PASS: shipped VERSION $SHIPPED_VERSION is outside the retired-defaults window ($RETIRED_CASE)"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: shipped VERSION $SHIPPED_VERSION still matches the retired-defaults case list ($RETIRED_CASE)"
+    FAIL=$((FAIL + 1))
+  fi
+fi
+
+# --- Firewall tier migration: the three ways it can resolve ------------------
+# No security.json means a pre-firewall install. What happens next depends only on
+# whether the permissions block is still the one the kit shipped.
+echo "[firewall tier migration]"
+(cd "$FW_DIR" && git init -q)
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$FW_DIR" >/dev/null 2>&1
+FW_SETTINGS="$FW_DIR/.claude/settings.json"
+FW_SECURITY="$FW_DIR/.claude/security.json"
+# A settings.json the kit really shipped, straight from its tag, so the baseline hash in
+# update.sh is matched by construction rather than by a copy that drifts.
+git -C "$REPO_ROOT" show v2.1.0:.claude/settings.json > "$FW_DIR/pre-firewall.json" 2>/dev/null || true
+assert_json_valid "$FW_DIR/pre-firewall.json" "a pre-firewall settings.json is available from the v2.1.0 tag"
+
+fw_reset() {  # fw_reset <settings source> — back to a pre-firewall install
+  rm -f "$FW_SECURITY" "$FW_SETTINGS"
+  cp "$1" "$FW_SETTINGS"
+}
+fw_tier() {
+  python3 -c "
+import json
+try: print(json.load(open('$FW_SECURITY')).get('tier', '__MISSING__'))
+except Exception: print('__NOFILE__')" 2>/dev/null
+}
+fw_update() {
+  (cd "$FW_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh "$@" 2>&1) || true
+}
+
+# (1) baseline permissions -> adopt relaxed
+fw_reset "$FW_DIR/pre-firewall.json"
+FW_DRY="$(fw_update --dry-run)"
+assert_contains "$FW_DRY" "[would set] .claude/security.json: tier relaxed" \
+  "--dry-run reports adopting relaxed on a pre-firewall install"
+assert_eq "__NOFILE__" "$(fw_tier)" "--dry-run writes no security.json"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" ".claude/security.json: tier relaxed" "a baseline install adopts relaxed"
+assert_eq "relaxed" "$(fw_tier)" "security.json records tier relaxed"
+assert_json_valid "$FW_SETTINGS" "settings.json is still valid JSON after the migration"
+# Running again must not re-resolve: /firewall owns the tier once it is recorded.
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1])); d["tier"] = "high"
+json.dump(d, open(sys.argv[1], "w"), indent=2)' "$FW_SECURITY"
+fw_update >/dev/null
+assert_eq "high" "$(fw_tier)" "a recorded tier is never re-resolved by a later update"
+
+# (2) hand-edited permissions -> adopt off, say so, and touch nothing
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+d.setdefault("permissions", {}).setdefault("allow", []).append("Bash(my-own-tool *)")
+json.dump(d, open(sys.argv[2], "w"), indent=2)' "$FW_DIR/pre-firewall.json" "$FW_DIR/tuned.json"
+fw_reset "$FW_DIR/tuned.json"
+cp "$FW_SETTINGS" "$FW_DIR/tuned.before"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" "tier off (permissions were tuned here)" \
+  "a hand-edited policy adopts off instead of being rewritten"
+assert_contains "$FW_OUT" "Run /firewall relaxed to adopt the kit set" \
+  "the notice says how to opt in"
+assert_eq "off" "$(fw_tier)" "security.json records tier off"
+assert_cmd_success "cmp -s '$FW_DIR/tuned.before' '$FW_SETTINGS'" \
+  "a tuned permissions block is left byte-identical"
+assert_file_contains "$FW_SETTINGS" "Bash(my-own-tool *)" "the user's own rule survives"
+
+# (3) symlinked settings.json -> skipped, nothing written
+fw_reset "$FW_DIR/pre-firewall.json"
+mv "$FW_SETTINGS" "$FW_DIR/real-settings.json"
+ln -s "$FW_DIR/real-settings.json" "$FW_SETTINGS"
+cp "$FW_DIR/real-settings.json" "$FW_DIR/link.before"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" "[skipped] firewall tier:" "a symlinked settings.json is reported as skipped"
+assert_contains "$FW_OUT" "symlink" "the skip message says why"
+assert_eq "__NOFILE__" "$(fw_tier)" "no security.json is written when settings.json is a symlink"
+assert_cmd_success "cmp -s '$FW_DIR/link.before' '$FW_DIR/real-settings.json'" \
+  "the symlink target is left byte-identical"
+rm -f "$FW_SETTINGS"
+
 # --- Agents mode ---
 echo "[agents mode]"
-AGENTS_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR" "$AGENTS_DIR"' EXIT
+AGENTS_DIR="$(new_tmp)" || exit 1
+trap 'rm -rf "$TEMP_DIR" "$FW_DIR" "$AGENTS_DIR"' EXIT
 (cd "$AGENTS_DIR" && git init -q)
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
 

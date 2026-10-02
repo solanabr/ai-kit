@@ -1,0 +1,1 @@
+../../.claude/hooks/onchain-guard.sh
