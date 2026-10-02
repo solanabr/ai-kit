@@ -9,7 +9,7 @@ Build the program(s) in this workspace ($ARGUMENTS: optional program name) so `t
 1. Build:
    - Anchor: `anchor build` (`-p <name>` for one program). For a new, never-deployed program, run `anchor keys sync` after the first build and rebuild, so `declare_id!` and `Anchor.toml` match `target/deploy/<name>-keypair.json`. Skip it for a deployed program whose keypair is not in `target/deploy/`: it would rewrite `declare_id!` to a fresh address.
    - Pinocchio or native: `cargo build-sbf`.
-   - Anything headed to mainnet: `anchor build --verifiable`. It needs Docker, writes `target/verifiable/<name>.so`, and is deployed with `anchor deploy --verifiable`. Non-Anchor programs use `solana-verify build`.
+   - Anything headed to mainnet, Anchor or not: `solana-verify build --library-name <lib>` last. It needs Docker, rebuilds `target/deploy/<lib>.so`, and that file is both what you deploy and what `anchor verify` reproduces. `anchor build --verifiable` builds in a different Docker image, so its `target/verifiable/` output will not verify.
 2. Check the output: each `.so` and its size (deploy rent scales with it: `solana rent <bytes>`), the IDL for Anchor programs, and the program IDs (`solana address -k target/deploy/<name>-keypair.json`).
 3. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`.
 
