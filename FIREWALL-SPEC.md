@@ -87,7 +87,11 @@ Edit(//**/managed-settings.json)
 
 **Whole-binary denies** where subcommand granularity is defeated: `Bash(security *)` (`security -i` reads subcommands from stdin), `Bash(crontab*)`, `Bash(launchctl *)`, `Bash(defaults *)`, `Bash(gh alias *)` (aliases expand inside gh, invisible to the matcher).
 
-**NOT evasions** — do not add rules for these, the matcher already handles them: leading env assignments, subshells, command substitutions, control-flow bodies, and the `timeout`/`time`/`nice`/`nohup`/`stdbuf`/`command`/`builtin`/`noglob` wrappers plus bare `xargs`. (`env` and flagged `xargs` *are* evasions — hence the list above.)
+**NOT evasions for PERMISSION RULES** — Claude Code's matcher strips these before matching, so no rule is needed: leading env assignments, subshells, command substitutions, control-flow bodies, and the `timeout`/`time`/`nice`/`nohup`/`stdbuf`/`command`/`builtin`/`noglob` wrappers plus bare `xargs`. (`env` and flagged `xargs` *are* evasions even there — hence the deny list above.)
+
+**They ARE evasions for the HOOKS, and the first version of this section said otherwise.** A hook does its own matching against the raw command text; nothing strips a wrapper for it. Measured on `main`: every wrapper in that "not an evasion" list reached `onchain-guard.sh` with the wrapper attached and made it **silent** — including on `solana program-v4 finalize`, an irreversible action whose `exit 2` that hook is the *only* guard for, since the permission rule covering it has the two-wildcard shape. Worse, `Bash(command *)` and `Bash(xargs *)` sit in `allow`, so the wrapped form was pre-approved.
+
+The error was conflating two layers that match differently. **Every guard must normalise each statement before matching** — drop the wrapper, keep `VAR=` assignments so `ANCHOR_PROVIDER_URL=` still resolves, collapse whitespace — and the matching regex itself stays unchanged. Fixed in PR #138; a reader of this section before that merge would have concluded no defence was needed.
 
 ---
 
