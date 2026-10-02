@@ -47,4 +47,10 @@ done
 echo ""
 assert_eq "15" "$COUNT" "Total agent count is 15"
 
+echo ""
+echo "[test_agents] Checking #[error_code] guidance (every enum starts at 6000 unless offset is set)..."
+assert_file_not_contains "$AGENTS_DIR/anchor-engineer.md" 'One `#[error_code]` enum per program' "anchor-engineer.md drops the false one-enum rule"
+assert_file_contains "$AGENTS_DIR/anchor-engineer.md" '#[error_code(offset = N)]' "anchor-engineer.md names the offset fix for a second enum"
+assert_file_contains "$REPO_ROOT/.claude/commands/audit-solana.md" '**Error codes**' "audit-solana.md checks for overlapping #[error_code] ranges"
+
 print_summary

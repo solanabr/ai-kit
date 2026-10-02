@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_cleanup] Simulating /cleanup command contract"

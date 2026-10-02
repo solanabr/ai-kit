@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_install] Installing to temp directory: $TEMP_DIR"
@@ -36,7 +36,17 @@ assert_eq "15" "$AGENT_COUNT" "Agent count is 15"
 
 # Count commands
 CMD_COUNT=$(find "$TEMP_DIR/.claude/commands" -name "*.md" | wc -l | tr -d ' ')
-assert_eq "31" "$CMD_COUNT" "Command count is 31"
+assert_eq "32" "$CMD_COUNT" "Command count is 32"
+
+# The firewall ships its tier record and its generator; without both, a fresh install has
+# a policy nothing can describe or lower.
+assert_json_valid "$TEMP_DIR/.claude/security.json" ".claude/security.json is valid JSON"
+assert_file_exists "$TEMP_DIR/.claude/bin/firewall.sh" ".claude/bin/firewall.sh is installed"
+assert_cmd_success "[ -x '$TEMP_DIR/.claude/bin/firewall.sh' ]" ".claude/bin/firewall.sh is executable"
+assert_file_exists "$TEMP_DIR/.claude/commands/firewall.md" "/firewall is installed"
+assert_eq "relaxed" "$(python3 -c "
+import json; print(json.load(open('$TEMP_DIR/.claude/security.json')).get('tier', '__MISSING__'))" 2>/dev/null)" \
+  "a fresh install lands on the relaxed tier"
 
 # Check .gitignore was updated
 assert_file_exists "$TEMP_DIR/.gitignore" ".gitignore exists"

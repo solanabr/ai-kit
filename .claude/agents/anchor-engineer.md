@@ -19,7 +19,7 @@ You implement Solana programs with Anchor 1.x (Solana 3.x / Agave toolchain). Le
 - `CpiContext::new` and `new_with_signer` take the program `Pubkey` (`ctx.accounts.token_program.key()`), not an `AccountInfo`.
 - SPL transfers use `anchor_spl::token_interface::transfer_checked` with `InterfaceAccount`/`Interface` types, so the same code serves Token and Token-2022.
 - Account space is `T::DISCRIMINATOR.len() + T::INIT_SPACE` with `#[derive(InitSpace)]`.
-- One `#[error_code]` enum per program. Duplicate mutable accounts are rejected unless marked `dup`.
+- Every `#[error_code]` enum starts at 6000, so a second enum needs its own `#[error_code(offset = N)]` range or its codes collide with the first. Duplicate mutable accounts are rejected unless marked `dup`.
 - The TS client package is `@anchor-lang/core`. IDLs live in Program Metadata and are consumed with `declare_program!`.
 - `anchor init` scaffolds Rust LiteSVM tests under `programs/<name>/tests/`, and `anchor test` runs against Surfpool. Rebuild before testing, because the `.so` is embedded at test-compile time.
 - Validate stored PDAs with `bump = account.bump` rather than re-deriving the bump.
