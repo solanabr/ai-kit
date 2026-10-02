@@ -50,5 +50,16 @@ OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "1" "$RC" "validate.sh fails on a broken ext/ link"
 assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/solana-dev/moved.md" "link into a checked-out pack is still checked"
 assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/no-such-pack/SKILL.md" "link into a pack that does not exist still fails"
+rm "$TEMP_DIR/.claude/skills/zz-links.md"
+
+# A default MCP server on @latest (or any unpinned npx package) fails validation
+echo "[mcp pins]"
+sed -i.bak 's/"helius-mcp@[^"]*"/"helius-mcp@latest"/' "$TEMP_DIR/.mcp.json"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when .mcp.json uses @latest"
+assert_contains "$OUT" "helius:helius-mcp@latest" "the failure names the unpinned server"
+sed -i.bak 's/"helius-mcp@latest"/"helius-mcp"/' "$TEMP_DIR/.mcp.json"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when an npx package has no version"
 
 print_summary
