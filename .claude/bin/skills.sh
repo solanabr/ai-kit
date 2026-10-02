@@ -329,10 +329,13 @@ check_pin() {
 
 # Validate ids against the registry; "all" means every extension.
 expand_ids() {
-  local reg="$1" known id
+  local reg="$1" known id items=()
   shift
   known="$(registry_rows "$reg" | cut -f1)"
-  for id in $(printf '%s ' "$@" | tr ',' ' '); do
+  # read -a splits on whitespace without pathname expansion, so '*' stays '*'
+  read -ra items <<< "$(printf '%s ' "$@" | tr ',' ' ')"
+  [ "${#items[@]}" -gt 0 ] || return 0
+  for id in "${items[@]}"; do
     if [ "$id" = all ]; then tier_ids "$reg" extension; continue; fi
     has_line "$known" "$id" || die "unknown skill pack '$id' (see: skills.sh list)"
     echo "$id"
@@ -340,11 +343,20 @@ expand_ids() {
 }
 
 # Extensions a project installed. Installs from before the core/extension split
-# have no list and carried every pack, so they keep what is on disk.
+# have no list and carried every pack, so they keep what is on disk. Lines are
+# trimmed and lowercased; one that is not an extension id in this registry is
+# dropped with a warning, so a hand edit can't add a pack nobody chose.
 recorded_extensions() {
-  local cfg="$1" reg="$2" id
+  local cfg="$1" reg="$2" known id
   if [ -f "$cfg/skills/$LIST_FILE" ]; then
-    grep -vE '^[[:space:]]*(#|$)' "$cfg/skills/$LIST_FILE" || true
+    known="$(tier_ids "$reg" extension)"
+    while IFS= read -r id; do
+      if has_line "$known" "$id"; then
+        echo "$id"
+      else
+        echo "skills.sh: ignoring '$id' in $(basename "$cfg")/skills/$LIST_FILE: not a skill extension in this kit" >&2
+      fi
+    done < <(tr -d '\r' < "$cfg/skills/$LIST_FILE" | awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, ""); $0 = tolower($0) } NF && !/^#/ && !seen[$0]++')
   else
     for id in $(tier_ids "$reg" extension); do
       if installed "$cfg" "$id"; then echo "$id"; fi
@@ -435,7 +447,7 @@ cmd_select() {
     echo "! $id was not installed; retry with: bash $(basename "$dst")/bin/skills.sh add $id" >&2
     has_line "$recorded" "$id" || keep="$(printf '%s\n' "$keep" | grep -vxF -- "$id" || true)"
   done
-  write_list "$dst" $keep
+  write_list "$dst" "$keep"
   write_packs "$dst" "$reg"
   summary "$reg" "$keep" "$(basename "$dst")"
 }
@@ -453,7 +465,7 @@ cmd_prune() {
       echo "! $id was not updated; retry with: bash $CONFIG_NAME/bin/skills.sh add $id" >&2
     fi
   done
-  write_list "$CONFIG_DIR" $keep
+  write_list "$CONFIG_DIR" "$keep"
   write_packs "$CONFIG_DIR" "$reg"
   summary "$reg" "$keep" "$CONFIG_NAME"
 }
@@ -541,8 +553,8 @@ cmd_add() {
     ensure_upstream "$reg" "$CONFIG_DIR" "$id" "$force" || failed="$failed $id"
   done
   extensions="$(tier_ids "$reg" extension)"
-  write_list "$CONFIG_DIR" $(recorded_extensions "$CONFIG_DIR" "$reg") \
-    $(for id in $ids; do if has_line "$extensions" "$id" && ! has_word "$failed" "$id"; then echo "$id"; fi; done)
+  write_list "$CONFIG_DIR" "$(recorded_extensions "$CONFIG_DIR" "$reg")" \
+    "$(for id in $ids; do if has_line "$extensions" "$id" && ! has_word "$failed" "$id"; then echo "$id"; fi; done)"
   write_packs "$CONFIG_DIR" "$reg"
   [ -z "$failed" ] || die "not installed:$failed"
 }
