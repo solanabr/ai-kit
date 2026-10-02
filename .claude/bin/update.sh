@@ -737,6 +737,33 @@ if [ "$INSTR_FILE" = "AGENTS.md" ] && [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE
   CHANGES="$CHANGES  [updated] .gitignore — $INSTR_FILE added to the kit config block\n"
 fi
 
+# safe-ai-skill project policy (Claude Code installs only; its hooks don't run under
+# --agents): add it when missing, never overwrite it, and gitignore it with the kit
+# config while that block is present.
+POLICY=".safe-ai-skill/policy.yaml"
+POLICY_SRC="$TEMP_DIR/repo/$POLICY"
+[ -f "$POLICY_SRC" ] || POLICY_SRC="${LOCAL_SRC:+$LOCAL_SRC/$POLICY}"
+if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" ]; then
+  if [ ! -f "$TARGET_DIR/$POLICY" ]; then
+    if [ "$DRY_RUN" = true ]; then
+      CHANGES="$CHANGES  [would create] $POLICY\n"
+    else
+      mkdir -p "$TARGET_DIR/.safe-ai-skill" && cp "$POLICY_SRC" "$TARGET_DIR/$POLICY"
+      CHANGES="$CHANGES  [created] $POLICY\n"
+    fi
+  fi
+  if [ -f "$GITIGNORE" ] && grep -qF ">>> solana-ai-kit config" "$GITIGNORE" \
+    && ! sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF ".safe-ai-skill/"; then
+    if [ "$DRY_RUN" = true ]; then
+      CHANGES="$CHANGES  [would update] .gitignore — .safe-ai-skill/ added to the kit config block\n"
+    else
+      awk '/^# <<< solana-ai-kit config <<</ { print ".safe-ai-skill/" } { print }' "$GITIGNORE" > "$GITIGNORE.tmp" \
+        && cat "$GITIGNORE.tmp" > "$GITIGNORE" && rm -f "$GITIGNORE.tmp"
+      CHANGES="$CHANGES  [updated] .gitignore — .safe-ai-skill/ added to the kit config block\n"
+    fi
+  fi
+fi
+
 # CLAUDE.local.md is created organically by Claude when needed (gitignored)
 
 # Update submodules

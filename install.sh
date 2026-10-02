@@ -108,6 +108,7 @@ if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
   [ -f "$LOCAL_SRC/.env.example" ] && cp "$LOCAL_SRC/.env.example" "$TEMP_DIR/repo/.env.example"
   [ -f "$LOCAL_SRC/.gitmodules" ] && cp "$LOCAL_SRC/.gitmodules" "$TEMP_DIR/repo/.gitmodules"
   [ -f "$LOCAL_SRC/.claude/VERSION" ] && cp "$LOCAL_SRC/.claude/VERSION" "$TEMP_DIR/repo/.claude/VERSION"
+  [ -f "$LOCAL_SRC/.safe-ai-skill/policy.yaml" ] && cp -R "$LOCAL_SRC/.safe-ai-skill" "$TEMP_DIR/repo/.safe-ai-skill"
   # CHANGELOG.md stays in the repo — not shipped to user projects
 else
   # Resolve latest tagged release; fall back to main (only needed for a network clone)
@@ -396,6 +397,15 @@ if [ -f "$TEMP_DIR/repo/.mcp.json" ] && [ ! -f "$TARGET_DIR/.mcp.json" ]; then
   cp "$TEMP_DIR/repo/.mcp.json" "$TARGET_DIR/.mcp.json"
 fi
 
+# safe-ai-skill project policy: stops its session-start check sweeping ~/.claude/skills.
+# Written once, never overwritten. Claude Code only: its hooks don't run under --agents.
+POLICY=".safe-ai-skill/policy.yaml"
+if [ "$AGENTS_ONLY" = false ] && [ -f "$TEMP_DIR/repo/$POLICY" ] && [ ! -f "$TARGET_DIR/$POLICY" ]; then
+  mkdir -p "$TARGET_DIR/.safe-ai-skill"
+  cp "$TEMP_DIR/repo/$POLICY" "$TARGET_DIR/$POLICY"
+  ok "Created $POLICY (safe-ai-skill checks .claude/skills, not ~/.claude/skills)"
+fi
+
 # Copy CLAUDE-solana.md as the instruction file (CLAUDE.md, or AGENTS.md with --agents).
 # Back up only real edits: re-running the installer must not overwrite an earlier
 # backup of the user's own file with the kit's copy.
@@ -464,6 +474,7 @@ if ! grep -qF ">>> solana-ai-kit config" "$GITIGNORE"; then
     printf '%s/\n' "$CONFIG_DIR"
     printf '%s\n' "$INSTR_FILE"
     printf '.mcp.json\n'
+    [ "$AGENTS_ONLY" = true ] || printf '.safe-ai-skill/\n'
     printf '# <<< solana-ai-kit config <<<\n'
   } >> "$GITIGNORE"
   ok "Kit config gitignored by default — run /commit-claude-config to version it"
@@ -471,10 +482,13 @@ else
   # A block written by an earlier install can be missing this mode's entries: an
   # older --agents install listed CLAUDE.md, and a second install in the other mode
   # (--agents next to .claude/, or the reverse) left its config dir and instruction
-  # file untracked (.agents/ alone is 60MB of vendored trees). Ignore CRs when
-  # matching: Git for Windows checks a tracked .gitignore out with CRLF endings.
+  # file untracked (.agents/ alone is 60MB of vendored trees), and blocks from before
+  # the safe-ai-skill policy lack .safe-ai-skill/. Ignore CRs when matching: Git for
+  # Windows checks a tracked .gitignore out with CRLF endings.
   ADDED_IGNORE=""
-  for entry in "$CONFIG_DIR/" "$INSTR_FILE"; do
+  IGNORE_ENTRIES="$CONFIG_DIR/ $INSTR_FILE"
+  [ "$AGENTS_ONLY" = true ] || IGNORE_ENTRIES="$IGNORE_ENTRIES .safe-ai-skill/"
+  for entry in $IGNORE_ENTRIES; do
     if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF "$entry"; then
       continue
     fi

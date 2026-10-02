@@ -1,0 +1,10 @@
+# safe-ai-skill project policy, deep-merged over the plugin's default policy.
+# install.sh writes it once and /update adds it only when missing: edit freely.
+#
+# A list replaces the default instead of merging, so the session-start skill check
+# covers this project's .claude/skills and no longer sweeps your personal
+# ~/.claude/skills. verify_ext_submodules stays at its default (true) on purpose:
+# each ext/ pack is then checked on its own, so a finding quarantines one pack
+# rather than all of ext/.
+supply_chain:
+  verify_skills_dirs: [".claude/skills"]
