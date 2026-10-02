@@ -19,7 +19,7 @@ ImmutableOwner, MemoTransfer and CpiGuard live on token accounts and protect the
 
 ## MemoTransfer (required memos)
 
-- When enabled, every incoming transfer to the account (including confidential transfers, and self-transfers from it) needs a memo instruction immediately before the transfer, from the SPL Memo program (v1 or v3), or it fails with `NoMemo`. Only the program id is checked, not the memo text. Outgoing transfers need no memo.
+- When enabled, every incoming transfer to the account (including confidential transfers, and self-transfers from it) needs a memo instruction immediately before the transfer, from the SPL Memo program (v1 `Memo1Uhk…` or v3 `MemoSq4g…`), or it fails with `NoMemo`. Only the program id is checked, not the memo text. Outgoing transfers need no memo. Program v11.1.0 also accepts v4 `Memo4c2pN…`, and devnet and testnet run it, but mainnet is still on v11.0.0 and rejects v4, so keep mainnet senders on v3 (each cluster's deployed build names its release in its own on-chain `security.txt`; checked 2026-10-02).
 - For a transfer made by CPI, the calling program must invoke the memo program right before its transfer CPI, at the same level; a memo at the top of the transaction doesn't count.
 - The owner enables and disables it. On an account created without room, `Reallocate` first.
 - CLI: `spl-token enable-required-transfer-memos <ACCOUNT>` / `disable-required-transfer-memos` (they reallocate if needed); send with `spl-token transfer ... --with-memo <TEXT>`. Kit: `getEnableMemoTransfersInstruction({ token, owner })` / `getDisableMemoTransfersInstruction(...)`. Anchor: `memo_transfer_initialize(ctx)` enables it, despite the name; `memo_transfer_disable(ctx)`.

@@ -6,7 +6,7 @@ Both change only how a raw amount converts to a UI amount. Balances, supply, tra
 
 - Rate in basis points as an `i16`, so negative rates are allowed. Interest compounds continuously on the cluster clock, so the effective APY is higher than the stated rate.
 - The rate authority changes the rate with `UpdateRate`. The history collapses into one time-weighted average rate, stored as whole basis points, so UI amounts after several rate changes are approximate. Rotate the authority with SetAuthority `InterestRate` (CLI `interest-rate`).
-- CLI: `spl-token --program-2022 create-token --interest-rate <RATE_BPS>` (the rate authority is the mint authority), then `spl-token set-interest-rate <MINT> <RATE> [--rate-authority <SIGNER>]`.
+- CLI: `spl-token --program-2022 create-token --interest-rate <RATE_BPS>` (the rate authority is the mint authority), then `spl-token set-interest-rate <MINT> <RATE> [--rate-authority <SIGNER>]`. `set-interest-rate` has no `--multisig-signer` at all, so a multisig rate authority needs another client ([SKILL.md](../SKILL.md)).
 - Kit: `extension('InterestBearingConfig', { rateAuthority, initializationTimestamp: 0n, preUpdateAverageRate: rate, lastUpdateTimestamp: 0n, currentRate: rate })`; only `rateAuthority` and `currentRate` reach the initialize instruction. Later: `getUpdateRateInterestBearingMintInstruction({ mint, rateAuthority, rate })`.
 - Anchor 1.2.0: `interest_bearing_mint_initialize(ctx, rate_authority: Option<Pubkey>, rate: i16)` before `initialize_mint2`, and `interest_bearing_mint_update_rate(ctx, rate)`.
 
@@ -14,7 +14,7 @@ Both change only how a raw amount converts to a UI amount. Balances, supply, tra
 
 - UI amount = raw × multiplier (an `f64`), truncated to the mint's decimals. For stock splits, dividends paid as more units, and rebasing tokens.
 - The multiplier authority calls `UpdateMultiplier { multiplier, effective_timestamp }`. A timestamp at or before now applies immediately; a future one waits in a single pending slot, so a second update before it takes effect replaces the pending one. The multiplier must be a positive, finite, normal float, or the update fails with `InvalidScale`. Rotate the authority with SetAuthority `ScaledUiAmount` (CLI `scaled-ui-amount`).
-- CLI: `spl-token --program-2022 create-token --ui-amount-multiplier <MULTIPLIER>`, then `spl-token update-ui-amount-multiplier <MINT> <MULTIPLIER> [<UNIX_TIMESTAMP>]`. Without a timestamp the CLI uses the local clock.
+- CLI: `spl-token --program-2022 create-token --ui-amount-multiplier <MULTIPLIER>`, then `spl-token update-ui-amount-multiplier <MINT> <MULTIPLIER> [<UNIX_TIMESTAMP>]`. Without a timestamp the CLI uses the local clock. This one accepts `--multisig-signer` and then drops the member signers, so a multisig multiplier authority needs another client ([SKILL.md](../SKILL.md)).
 - Kit: `extension('ScaledUiAmountConfig', { authority, multiplier, newMultiplierEffectiveTimestamp: 0n, newMultiplier: multiplier })`. The Kit name is `ScaledUiAmountConfig`; in Rust the ExtensionType variant is `ScaledUiAmount` and the state struct is `ScaledUiAmountConfig`. Later: `getUpdateMultiplierScaledUiMintInstruction({ mint, authority, multiplier, effectiveTimestamp })`.
 - Anchor 1.2.0 has no helper for it. Build the instruction with `anchor_spl::token_interface::spl_token_2022::extension::scaled_ui_amount::instruction::initialize` or `update_multiplier`, then invoke it yourself.
 

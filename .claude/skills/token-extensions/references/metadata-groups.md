@@ -21,7 +21,7 @@ spl-token update-metadata <MINT> <name|symbol|uri|CUSTOM_KEY> <VALUE>   # --remo
 spl-token update-metadata-address <MINT> <ADDRESS>            # or --disable
 ```
 
-The CLI's metadata commands fund the extra rent themselves.
+The CLI's metadata commands fund the extra rent themselves. `initialize-metadata` and `update-metadata` register no `--multisig-signer`, so a multisig metadata update authority needs another client; `update-metadata-address` does take it ([SKILL.md](../SKILL.md)).
 
 ### Kit
 
@@ -89,6 +89,7 @@ Other helpers: `token_metadata_update_field(ctx, Field::Key("tier".into()), valu
 - `InitializeMember`: both the member mint's authority and the group update authority sign, and the group must be a Token-2022 mint. `member_number` becomes the new size, so the first member is 1. A mint can join one group, and can't be a member of itself.
 - A group whose update authority is None can never add members (`ImmutableGroup`). Past `max_size`, adding fails with `SizeExceedsMaxSize`. `UpdateGroupMaxSize` can't go below the current size (`SizeExceedsNewMaxSize`). Rotate the group update authority with `UpdateGroupAuthority` (CLI `spl-token authorize <MINT> group <NEW>`); the pointers use SetAuthority `GroupPointer` / `GroupMemberPointer`.
 - Group and member initializers grow the mint like metadata does and move no lamports either.
+- The CLI's `initialize-group`, `update-group-max-size` and `initialize-member` register no `--multisig-signer` either, so a multisig group update authority needs another client; `update-group-address` and `update-member-address` do take it ([SKILL.md](../SKILL.md)).
 
 | | Collection mint | Member mint |
 |---|---|---|

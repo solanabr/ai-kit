@@ -50,13 +50,15 @@ Holder-side account extensions (ImmutableOwner, MemoTransfer, CpiGuard), account
 
 Tooling gaps: anchor-spl 1.2.0 has no helpers for ScaledUiAmount, PermissionedBurn or the confidential extensions (it builds on spl-token-2022-interface 2.x, which has no PermissionedBurn), and spl-token-cli 5.6.1 can't initialize ConfidentialMintBurn.
 
+The same CLI can't drive a multisig extension authority at all, so give those authorities a client of your own (Kit, web3.js, or your program). Two shapes, and the second is the dangerous one: `set-interest-rate`, `set-transfer-fee`, `set-transfer-hook`, `initialize-metadata`, `update-metadata`, `initialize-group`, `update-group-max-size`, `initialize-member` and `update-confidential-transfer-settings` never register `--multisig-signer`, so passing it is an unknown-argument error you see immediately; `pause`, `resume` and `update-ui-amount-multiplier` accept the flag and then throw the member signers away (their arms rebuild the signer list from the authority alone, skipping the `config.multisigner_pubkeys` guard the other 26 arms use), so the transaction goes out under-signed while you believe the multisig signed it. SetAuthority rotation (`spl-token authorize`) and the pointer-address updates (`update-metadata-address`, `update-group-address`, `update-member-address`) do take a multisig.
+
 Confidential transfers need the ZK ElGamal Proof program enabled on the cluster (on mainnet since epoch 982, and on devnet), a per-account opt-in (Reallocate, then ConfigureAccount with a proof), and an owner who applies pending balances. Decisions and what is out of date in the linked Rust walkthrough: [confidential](references/confidential.md).
 
 ## Create a mint
 
 One transaction, in this order:
 
-1. Create the account, owned by Token-2022, with space for the fixed-size extensions only: `getMintSize(extensions)` (Kit), `ExtensionType::try_calculate_account_len::<Mint>(&types)` (Rust), `getMintLen(types)` (web3.js 1.x). `InitializeMint` rejects any other length (`InvalidAccountData`) and a mint below the rent-exempt minimum (`NotRentExempt`).
+1. Create the account, owned by Token-2022, with space for the extensions that initialize *before* the mint, and rent for all of them. TokenMetadata, TokenGroup and TokenGroupMember are the exception: they belong in the rent, not in the space (step 4). The sizers count whatever list you hand them — `getMintSize(extensions)` (Kit), `ExtensionType::try_calculate_account_len::<Mint>(&types)` (Rust, the only one that pushes back: `types` holding TokenMetadata fails with `InvalidArgument`, while TokenGroup and TokenGroupMember are fixed-size and pass), `getMintLen(types)` (web3.js 1.x) — so filter the list yourself. `InitializeMint` compares the account's length against the extensions written so far and rejects a mismatch (`InvalidAccountData`), as it does a mint below the rent-exempt minimum (`NotRentExempt`).
 2. Each extension's initialize instruction. On an initialized mint these fail with `AlreadyInUse`, so fixed-size extensions can't be added later.
 3. `InitializeMint2` (or `InitializeMint`).
 4. TokenMetadata, TokenGroup and TokenGroupMember. They grow the mint but move no lamports, so fund the mint for its final size in step 1 (Kit's `createMint` does), or transfer the difference to the mint before the initialize, in an earlier instruction of the same transaction (the CLI does) or in your program before the CPI.
@@ -87,7 +89,14 @@ await token.token2022.instructions
   .sendTransaction();
 ```
 
-Without the plugin, compose the same steps with `getMintSize`, `getPreInitializeInstructionsForMintExtensions`, `getInitializeMintInstruction` and `getPostInitializeInstructionsForMintExtensions`, or call `getCreateMintInstructionPlan(client, input)`.
+Without the plugin, compose the same steps with `getMintSize`, `getPreInitializeInstructionsForMintExtensions`, `getInitializeMintInstruction` and `getPostInitializeInstructionsForMintExtensions`, or call `getCreateMintInstructionPlan(client, input)`. Size and fund from two different lists, the way that plan does — on the example above, `getMintSize` over the full list over-allocates by the TokenMetadata entry and `InitializeMint` fails with `InvalidAccountData`:
+
+```ts
+// @solana-program/token-2022's own POST_INITIALIZE_EXTENSIONS
+const postInit = ['TokenMetadata', 'TokenGroup', 'TokenGroupMember'];
+const space = getMintSize(extensions.filter((e) => !postInit.includes(e.__kind)));
+const lamports = await client.getMinimumBalance(getMintSize(extensions));
+```
 
 CLI: `spl-token --program-2022 create-token --decimals 6 --enable-metadata` then `spl-token initialize-metadata <MINT> Example EXM https://example.com/exm.json`. After creation the CLI infers the program from the account's owner, so later commands don't need `--program-2022`, except with `--sign-only`, where it can't look the account up and defaults to classic Token.
 
@@ -113,6 +122,6 @@ Anchor 1.2.0: `init` on an `InterfaceAccount<'info, Mint>` accepts `extensions::
 
 ## Related
 
-- [kit/programs/token-2022.md](../ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the Kit client basics. [confidential-transfers.md](../ext/solana-dev/skills/solana-dev/references/confidential-transfers.md): the Rust confidential flow; [confidential](references/confidential.md) lists what in it is out of date. [testing.md](../ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM and Mollusk.
+- [kit/programs/token-2022.md](../ext/solana-dev/skills/solana-dev/references/kit/programs/token-2022.md): the Kit client basics. Its "Extension Initialization Order" section says extension instructions must come before mint initialization, with no exception — that holds for every extension except TokenMetadata, TokenGroup and TokenGroupMember, which come after `InitializeMint`; follow step 4 of "Create a mint" above. All three initializers read an initialized mint, so emitting them first fails with `UninitializedAccount`. [confidential-transfers.md](../ext/solana-dev/skills/solana-dev/references/confidential-transfers.md): the Rust confidential flow; [confidential](references/confidential.md) lists what in it is out of date. [testing.md](../ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM and Mollusk.
 - NFTs and collections: the skills hub also routes to the Metaplex skill (install first: `bash .claude/bin/skills.sh add metaplex`).
 - Official guides: https://solana.com/docs/tokens/extensions
