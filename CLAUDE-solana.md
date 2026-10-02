@@ -33,7 +33,6 @@ Helius, solana-dev and Context7 are configured in `.mcp.json`; Playwright, Surfp
 
 ## Project Learnings
 
-<!-- Written by the user, /diff-review and /dream. One line per entry. Add only conventions the
-     user confirmed or mistakes that repeated; put scratch notes in CLAUDE.local.md (gitignored).
-     Cross-project preferences belong in ~/.claude/CLAUDE.md. In a monorepo, add a CLAUDE.md per
-     package; it loads when Claude works in that directory. -->
+One flat list, one line per entry, appended by the user, `/diff-review` and `/dream` — no subsections. Add only a convention the user confirmed or a mistake that repeated; scratch notes belong in `CLAUDE.local.md` (gitignored), cross-project preferences in `~/.claude/CLAUDE.md`.
+
+<!-- In a monorepo, add a CLAUDE.md per package; it loads when Claude works in that directory. -->
