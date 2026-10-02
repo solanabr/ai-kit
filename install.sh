@@ -8,8 +8,9 @@ set -euo pipefail
 #   bash install.sh /path/to/project
 #   bash install.sh --agents /path/to/project   # installs into .agents/ instead of .claude/
 #   bash install.sh --with sendai,jupiter /path/to/project   # core skill packs plus these extensions (--with all: every one)
+# Env: SOLANA_AI_KIT_UPSTREAM overrides the repo cloned (as in update.sh and skills.sh)
 
-REPO_URL="https://github.com/solanabr/ai-kit.git"
+REPO_URL="${SOLANA_AI_KIT_UPSTREAM:-https://github.com/solanabr/ai-kit.git}"
 SCRIPT_VERSION="dev"
 
 # Parse flags
@@ -100,12 +101,39 @@ else
   LATEST_TAG=$(git ls-remote --tags --sort=-v:refname "$REPO_URL" 'refs/tags/v*' 2>/dev/null \
     | head -1 | sed 's|.*refs/tags/||; s|\^{}||')
   BRANCH="${LATEST_TAG:-main}"
-  # Parallel + shallow submodule fetch (pins preserved; far faster than serial)
-  git clone --recurse-submodules --shallow-submodules --jobs "$JOBS" --depth 1 --branch "$BRANCH" "$REPO_URL" "$TEMP_DIR/repo" 2>&1 | tail -1 || true
+  # No submodules yet: only the skill packs this install keeps are fetched, below.
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TEMP_DIR/repo" 2>&1 | tail -1 || true
 fi
 
 # Read version from source
 [ -f "$TEMP_DIR/repo/.claude/VERSION" ] && SCRIPT_VERSION="$(awk '{print $NF}' "$TEMP_DIR/repo/.claude/VERSION")"
+
+# Skill packs: keep the core ext/ packs, plus extensions named with --with or already
+# installed here (skills/skill-registry.json tiers). select removes the other ext/
+# directories, so a clone then fetches only what is left. Runs before the --agents
+# rewrite below, which would point .gitmodules away from the clone's paths.
+# Releases without skills.sh have no tiers and vendor every pack.
+if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+  bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
+fi
+if [ -d "$TEMP_DIR/repo/.git" ] && [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
+  PACK_PATHS=()
+  if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+    while IFS= read -r p; do PACK_PATHS+=("$p"); done < <(
+      cd "$TEMP_DIR/repo" && find .claude/skills/ext -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort
+    )
+  else
+    PACK_PATHS=(.)
+  fi
+  if [ "${#PACK_PATHS[@]}" -gt 0 ]; then
+    step "Fetching skill packs..."
+    # Parallel + shallow (pins preserved; far faster than serial)
+    if ! git -C "$TEMP_DIR/repo" submodule update -q --init --recursive --depth 1 --jobs "$JOBS" -- "${PACK_PATHS[@]}"; then
+      fail "Could not fetch the skill packs from $REPO_URL"
+      exit 1
+    fi
+  fi
+fi
 
 # ext/ skills are vendored copies: drop the fetched checkout's submodule
 # gitfiles, whose gitdir points into that checkout and would dangle here.
@@ -175,12 +203,6 @@ mkdir -p "$TARGET_DIR/$CONFIG_DIR"
 
 if [ -d "$TARGET_DIR/$CONFIG_DIR/agents" ]; then
   warn "Warning: $CONFIG_DIR/ already exists, merging..."
-fi
-
-# Skill packs: keep the core ext/ packs, plus extensions named with --with or already
-# installed here (skills/skill-registry.json tiers). Releases without skills.sh vendor every pack.
-if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
-  bash "$TEMP_DIR/repo/.claude/bin/skills.sh" select "$TEMP_DIR/repo/.claude" "$TARGET_DIR/$CONFIG_DIR" "$WITH_SKILLS"
 fi
 
 # Directories: always overwrite with upstream (same as update.sh).
