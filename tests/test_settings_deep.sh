@@ -85,12 +85,33 @@ assert_contains "$DENY_WRITE" "~/.config/solana/id.json" "sandbox.filesystem.den
 # macOS Seatbelt blocks listening sockets by default, so solana-test-validator, Surfpool
 # (anchor test) and dev servers need local binding.
 assert_eq "true" "$(json_get '["sandbox"]["network"]["allowLocalBinding"]')" "sandbox.network.allowLocalBinding == true"
-# SSH remotes need direct network and ~/.ssh, gh needs its config and keychain: neither
-# works inside the sandbox, so these run outside it (still behind the secrets hook and permissions).
-EXCLUDED="$(json_get '["sandbox"]["excludedCommands"]')"
-for c in "git push *" "git pull *" "git fetch *" "gh pr *" "gh run *"; do
-  assert_contains "$EXCLUDED" "\"$c\"" "sandbox.excludedCommands has '$c'"
-done
+# Every excludedCommands entry lifts the OS sandbox for the ENTIRE command line, not just
+# the matched program: `git push -h >/dev/null 2>&1; <read of a denied path>` exited 0 where
+# the bare read got EPERM. So every entry is a hole and the list stays short and justified.
+#
+# Surfpool cannot run inside the sandbox at all (it panics instantly on macOS
+# SystemConfiguration and takes `anchor test` with it). git/gh cannot authenticate inside
+# it either: the ssh-agent socket and the gh token are both read-denied. The bypass the
+# git/gh entries re-open is covered one layer up -- the secrets guard segments a command
+# on ; && || | and newline and inspects each statement, so the read in
+# `git push -h; cat <secret>` is still blocked. Belt and braces, not either/or.
+#
+# What must never appear here is a general-purpose interpreter or shell.
+EXCLUDED_LIST="$(python3 -c "
+import json
+print('\n'.join(json.load(open('$SETTINGS')).get('sandbox', {}).get('excludedCommands') or []))" 2>/dev/null)"
+assert_eq "anchor test*
+gh issue *
+gh pr *
+gh run *
+git fetch *
+git pull *
+git push *
+surfpool *" "$(printf '%s\n' "$EXCLUDED_LIST" | LC_ALL=C sort)" \
+  "sandbox.excludedCommands is exactly the justified set (surfpool, anchor test, git, gh)"
+# The real invariant: no entry may be a shell or interpreter, which would exempt anything.
+SHELL_EXCLUDED="$(printf '%s\n' "$EXCLUDED_LIST" | grep -E '^(sh|bash|zsh|env|python[0-9.]*|node|perl|ruby|make|just|xargs|eval)( |\*|$)' || true)"
+assert_eq "" "$SHELL_EXCLUDED" "no shell or interpreter in excludedCommands (it would exempt every command)"
 
 # --- Plugins, MCP approval, attribution ---
 echo "[user choices]"
@@ -137,10 +158,9 @@ for r in "Read(~/.ssh/**)" "Read(~/.config/solana/id.json)" "Bash(cat *keypair*.
          "Bash(solana program set-upgrade-authority *--final*)" "Bash(solana program close *--bypass-warning*)"; do
   assert_rule deny "$r" yes "permissions.deny has $r"
 done
-# Destructive filesystem and git commands stay hard blocks. "mkfs*" also catches mkfs.ext4,
-# which "mkfs *" misses, and deny wins over the "git clean *" ask rule for -fdx and -fX.
-for r in "Bash(mkfs*)" "Bash(rm -rf ~)" "Bash(rm -rf ~/*)" "Bash(rm -rf .git)" "Bash(rm -rf .git/*)" \
-         "Bash(git clean -fdx*)" "Bash(git clean -fX*)"; do
+# Destructive filesystem commands stay hard blocks. "mkfs*" also catches mkfs.ext4,
+# which "mkfs *" misses.
+for r in "Bash(mkfs*)" "Bash(rm -rf ~)" "Bash(rm -rf ~/*)" "Bash(rm -rf .git)" "Bash(rm -rf .git/*)"; do
   assert_rule deny "$r" yes "permissions.deny has $r"
 done
 # Deny rules for subcommands the Solana CLIs don't have are gone (their real counterparts ask),
@@ -149,12 +169,35 @@ for r in "Bash(spl-token set-authority *)" "Bash(solana withdraw-from-stake-acco
          "Bash(solana program set-upgrade-authority *)" "Bash(solana program close *)"; do
   assert_rule deny "$r" no "permissions.deny drops $r"
 done
-# Program deploys, upgrades, buffer writes, closes and authority changes ask on every cluster.
-for r in "Bash(solana program deploy *)" "Bash(solana program write-buffer *)" "Bash(solana program upgrade *)" \
-         "Bash(solana program set-upgrade-authority *)" "Bash(solana program close *)" "Bash(anchor deploy *)" \
-         "Bash(anchor upgrade *)" "Bash(spl-token transfer *)" "Bash(git push --force*)" "Bash(git clean *)"; do
-  assert_rule ask "$r" yes "permissions.ask has $r"
+# Clobbering the working tree with git clean -x is unrecoverable (it also removes ignored
+# files, .env included), so it stays denied however the rule is spelled. Checked by command
+# coverage, not by pattern string: the generator owns the spelling.
+# deny_covers <command> -> yes|no
+deny_covers() {
+  python3 -c "
+import fnmatch, json, sys
+deny = json.load(open('$SETTINGS'))['permissions']['deny']
+cmd = sys.argv[1]
+print('yes' if any(fnmatch.fnmatchcase(cmd, r[5:-1]) for r in deny
+                   if r.startswith('Bash(') and r.endswith(')')) else 'no')" "$1" 2>/dev/null
+}
+for c in "git clean -fdx" "git clean -fX" "git clean -xdf" "git clean -dfx"; do
+  assert_eq "yes" "$(deny_covers "$c")" "permissions.deny covers: $c"
 done
+# permissions.ask is not a reliable control: verified in-session, `git clean -n` matched an
+# ask rule and ran with no prompt while a deny rule blocked `sudo -n true`, with the sandbox
+# on. So every prompt is a hook returning permissionDecision "ask" (see test_hooks.sh), and
+# Relaxed emits no ask rules at all, which is what keeps it usable headless and in CI.
+ASK_LEN="$(json_len '["permissions"]["ask"]')"
+if [ "$ASK_LEN" = "0" ]; then
+  echo "  PASS: permissions.ask is empty; prompts come from hooks (tier is CI-safe)"
+  PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1))
+else
+  # A tier that does emit asks must not pretend to gate what the hook already gates.
+  for r in "Bash(solana program deploy *)" "Bash(anchor deploy *)"; do
+    assert_rule ask "$r" yes "permissions.ask has $r"
+  done
+fi
 # Deny wins over ask, so a rule in both lists never prompts.
 OVERLAP="$(python3 -c "
 import json
@@ -162,33 +205,75 @@ p = json.load(open('$SETTINGS'))['permissions']
 print(' '.join(sorted(set(p.get('ask', [])) & set(p['deny']))) or 'none')
 " 2>/dev/null)"
 assert_eq "none" "$OVERLAP" "no rule sits in both permissions.ask and permissions.deny"
-# Mainnet deploys ask like every other cluster. A deny glob on mainnet blocked /deploy's
-# "solana program deploy ... --url mainnet-beta" step instead of prompting.
-MAINNET_DENY="$(python3 -c "
-import fnmatch, json
-deny = json.load(open('$SETTINGS'))['permissions']['deny']
-cmd = 'solana program deploy target/verifiable/p.so --url mainnet-beta --use-rpc'
-print(' '.join(r for r in deny if 'mainnet' in r or (r.startswith('Bash(') and fnmatch.fnmatchcase(cmd, r[5:-1]))) or 'none')
-" 2>/dev/null)"
-assert_eq "none" "$MAINNET_DENY" "no permissions.deny rule targets mainnet or blocks /deploy's --url mainnet-beta step"
-# solana-keygen new/recover default to ~/.config/solana/id.json. The sandbox blocks that write,
-# but a retry outside it (or a machine without the sandbox) runs under the Bash(solana-keygen *)
-# allow rule, so --force/-f must ask. A different -o path without --force stays prompt-free.
-# ask_matches <command>: does any Bash(...) ask rule match it (* matches any text)?
-ask_matches() {
+# Mainnet writes are a hook ask below High and a hard deny at High, so whether a deny rule
+# may match /deploy's mainnet step depends on the tier in .claude/security.json. What holds
+# at EVERY tier: the deny anchors to the write verb, never to the cluster string, so
+# read-only commands that merely name mainnet keep working.
+TIER="$(python3 -c "
+import json
+try: print(json.load(open('$REPO_ROOT/.claude/security.json')).get('tier', 'relaxed'))
+except Exception: print('relaxed')" 2>/dev/null)"
+# deny_hits <command> -> the deny rules that match it, or 'none'
+deny_hits() {
   python3 -c "
 import fnmatch, json, sys
-ask = json.load(open('$SETTINGS'))['permissions'].get('ask', [])
+deny = json.load(open('$SETTINGS'))['permissions']['deny']
 cmd = sys.argv[1]
-print('yes' if any(fnmatch.fnmatchcase(cmd, r[5:-1]) for r in ask if r.startswith('Bash(') and r.endswith(')')) else 'no')
-" "$1" 2>/dev/null
+print(' '.join(r for r in deny if r.startswith('Bash(') and r.endswith(')')
+               and fnmatch.fnmatchcase(cmd, r[5:-1])) or 'none')" "$1" 2>/dev/null
 }
-for c in "solana-keygen new --force" "solana-keygen new -f" "solana-keygen new --no-bip39-passphrase -f" \
-         "solana-keygen new -o target/deploy/x-keypair.json --force" "solana-keygen recover --force" \
-         "solana-keygen recover -f" "solana-keygen recover ASK --force"; do
-  assert_eq "yes" "$(ask_matches "$c")" "an ask rule covers: $c"
+DEPLOY_MAINNET='solana program deploy target/verifiable/p.so --url mainnet-beta --use-rpc'
+if [ "$TIER" = "high" ]; then
+  TOTAL=$((TOTAL + 1))
+  if [ "$(deny_hits "$DEPLOY_MAINNET")" != "none" ]; then
+    echo "  PASS: tier high denies a mainnet deploy outright"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: tier high must deny a mainnet deploy, but no deny rule matches it"
+    FAIL=$((FAIL + 1))
+  fi
+else
+  assert_eq "none" "$(deny_hits "$DEPLOY_MAINNET")" \
+    "tier $TIER: no permissions.deny rule blocks /deploy's --url mainnet-beta step (the hook asks)"
+fi
+# True at every tier: these two are read-only and must never be caught by a cluster-string glob.
+for c in "anchor verify --provider.cluster mainnet" "solana program dump PID out.so --url mainnet-beta"; do
+  assert_eq "none" "$(deny_hits "$c")" "read-only command is not denied: $c"
 done
-assert_eq "no" "$(ask_matches "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" "a new keypair at another path without --force doesn't ask"
+# solana-keygen new/recover default to ~/.config/solana/id.json. The sandbox blocks that
+# write, but a retry outside it (or a machine without the sandbox) runs under the
+# Bash(solana-keygen *) allow rule, so every --force/-f spelling has to be gated — including
+# the zero-gap forms, since a mid-pattern * does not match an empty string (`solana-keygen
+# new -f` escaped `Bash(solana-keygen new * -f*)`). The gate is a rule when the tier emits
+# asks and the secrets hook otherwise (test_hooks.sh checks the hook side).
+# gated <command> -> yes|no: covered by an ask rule, or by a deny rule
+gated() {
+  python3 -c "
+import fnmatch, json, sys
+p = json.load(open('$SETTINGS'))['permissions']
+rules = (p.get('ask') or []) + (p.get('deny') or [])
+cmd = sys.argv[1]
+print('yes' if any(fnmatch.fnmatchcase(cmd, r[5:-1]) for r in rules
+                   if r.startswith('Bash(') and r.endswith(')')) else 'no')" "$1" 2>/dev/null
+}
+KEYGEN_FORCE="solana-keygen new --force
+solana-keygen new -f
+solana-keygen new --no-bip39-passphrase -f
+solana-keygen new -o target/deploy/x-keypair.json --force
+solana-keygen recover --force
+solana-keygen recover -f
+solana-keygen recover ASK --force"
+if [ "$ASK_LEN" = "0" ]; then
+  echo "  PASS: no ask rules at this tier; solana-keygen --force is gated by the secrets hook"
+  PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1))
+else
+  while IFS= read -r c; do
+    [ -z "$c" ] && continue
+    assert_eq "yes" "$(gated "$c")" "a rule gates: $c"
+  done <<< "$KEYGEN_FORCE"
+  assert_eq "no" "$(gated "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" \
+    "a new keypair at another path without --force stays prompt-free"
+fi
 
 # --- Hooks ---
 echo "[hooks]"
@@ -205,15 +290,33 @@ d = json.load(open('$SETTINGS'))
 print('true' if all('when' not in e for evs in d['hooks'].values() for e in evs) else 'false')
 " 2>/dev/null)"
 assert_eq "true" "$NO_WHEN" "no hook entry has a 'when' key (matchers only match tool names)"
-GATE_CMD="$(python3 -c "
-import json
+# The hook bodies live in .claude/hooks/*.sh now, not inline in settings.json: three
+# guards sharing one headless helper were unmaintainable as embedded one-liners. So the
+# contract is asserted against the referenced scripts, and settings.json is only checked
+# for referencing them.
+HOOK_SCRIPTS="$(python3 -c "
+import json, re
 d = json.load(open('$SETTINGS'))
 cmds = [h['command'] for e in d['hooks']['PreToolUse'] for h in e['hooks']]
-print(next((c for c in cmds if 'Blocked: reading private keys' in c), '__MISSING__'))
+print('\n'.join(sorted({m.group(1) for c in cmds for m in re.finditer(r'([A-Za-z0-9_./-]*\.claude/hooks/[A-Za-z0-9_-]+\.sh)', c)})))
 " 2>/dev/null)"
-assert_contains "$GATE_CMD" "exit 2" "secrets-gate PreToolUse hook blocks with exit 2"
-assert_contains "$GATE_CMD" "tool_input.command" "secrets-gate hook reads the command from stdin JSON"
-assert_contains "$HOOKS" 'permissionDecision\":\"ask' "on-chain write hook asks for approval through permissionDecision"
+assert_cmd_success "[ -n '$HOOK_SCRIPTS' ]" "PreToolUse hooks reference scripts under .claude/hooks/"
+SECRETS_SH="$REPO_ROOT/.claude/hooks/secrets-guard.sh"
+ONCHAIN_SH="$REPO_ROOT/.claude/hooks/onchain-guard.sh"
+assert_cmd_success "[ -r '$SECRETS_SH' ]" "secrets guard script exists"
+assert_cmd_success "[ -r '$ONCHAIN_SH' ]" "on-chain guard script exists"
+assert_file_contains "$SECRETS_SH" "exit 2" "secrets guard blocks with exit 2"
+# Both payload shapes: Grok Build sends camelCase toolInput and is fail-open on malformed
+# output, so a guard that reads only tool_input silently permits everything there.
+LIB_SH="$REPO_ROOT/.claude/hooks/lib-headless.sh"
+# Parsing and decision emission are the shared helper's job -- three guards duplicating a
+# JSON reader is how the two payload shapes drift apart. So assert the contract there, and
+# assert each guard actually sources it.
+assert_file_contains "$LIB_SH" "tool_input" "the shared helper reads the command from stdin JSON"
+assert_file_contains "$LIB_SH" "toolInput" "the shared helper also reads Grok's camelCase payload"
+assert_file_contains "$LIB_SH" "permissionDecision" "the shared helper emits permissionDecision"
+assert_file_contains "$SECRETS_SH" "lib-headless.sh" "secrets guard sources the shared helper"
+assert_file_contains "$ONCHAIN_SH" "lib-headless.sh" "on-chain guard sources the shared helper"
 # The model could add an env prefix itself; approval has to come from the user.
 assert_file_not_contains "$SETTINGS" "CONFIRM_MAINNET" "no CONFIRM_MAINNET env-prefix confirmation"
 assert_file_not_contains "$SETTINGS" "pre-commit checks" "no hook runs builds or tests on git commit"

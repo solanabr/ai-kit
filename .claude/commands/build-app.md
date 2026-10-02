@@ -7,7 +7,7 @@ Build the web client in $ARGUMENTS (default: the app directory whose `package.js
 ## Steps
 
 1. Install with the package manager that owns the lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`, `package-lock.json`), in frozen mode (`npm ci`, `pnpm install --frozen-lockfile`).
-2. Env: if `.env.local` is missing, copy it from `.env.example` without overwriting anything. Check that the program ID and RPC URL match the target cluster (compare with `.program-id-devnet` / `.program-id-mainnet` written by `/deploy`). If the program interface changed, regenerate the client first with `/generate-idl-client`.
+2. Env: don't read or copy `.env*`. If `.env.local` is missing, print `cp .env.example .env.local` for the user to run. The firewall covers `.env.local` under the same rules as `.env`, deliberately — it holds the same values. For what is set, use names and presence only (`bash .claude/bin/env-keys.sh .env.local`); for the program ID, compare `.program-id-devnet` / `.program-id-mainnet` (written by `/deploy`) against what the app logs at runtime, and ask the user to confirm the cluster rather than reading the RPC URL. If the program interface changed, regenerate the client first with `/generate-idl-client`.
 3. Type-check with `tsc --noEmit`: Vite builds do not type-check, `next build` does. Run the `lint` script if there is one.
 4. Build with `<pm> run build`. Output: `.next/` (Next.js), `dist/` (Vite), `build/` (CRA).
 5. Verify: no `*.map` files in the production output unless intended; note the largest JS chunks; preview with `<pm> run start` (Next.js) or `<pm> run preview` (Vite).
@@ -22,6 +22,7 @@ Build the web client in $ARGUMENTS (default: the app directory whose `package.js
 ## Guardrails
 
 - Every `NEXT_PUBLIC_` / `VITE_` value ships in the bundle. Keep RPC URLs that embed an API key (Helius and similar) behind a server route.
+- Never print an env value, including an RPC URL that embeds a key. Report key names and whether they are set.
 
 ## Output
 

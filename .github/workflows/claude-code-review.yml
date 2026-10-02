@@ -1,0 +1,105 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    # Every PR is reviewed once when it opens, leaves draft, or reopens.
+    # `synchronize` is left out on purpose: PRs here are often stacked and
+    # rebased, so a review on every push would mostly re-review the same diff.
+    # For a fresh review of a later head, comment `@claude review` (claude.yml).
+    types: [opened, ready_for_review, reopened]
+
+jobs:
+  claude-review:
+    # - Drafts wait for ready_for_review, so they aren't reviewed twice.
+    # - Fork and Dependabot PRs get no repository secrets on `pull_request`, so
+    #   the action could only fail there. A maintainer reviews those by
+    #   commenting `@claude review`, which runs claude.yml with secrets.
+    #   Dependabot submodule bumps also get the Submodule review job.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+
+    # One review per PR at a time: a newer run cancels the one in flight, so a
+    # review of an older head is never posted as current. Job-level, so a run
+    # whose `if` is false never cancels anything.
+    concurrency:
+      group: claude-code-review-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # post the review on the PR
+      issues: write # PR conversation comments use the issues-comments API
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Required: without it the review runs but is never published. It
+          # forces tag mode, which posts the report as a tracking comment.
+          track_progress: true
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: |
+            Run /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            with these solana-ai-kit priorities layered on top.
+
+            This repo is a configuration kit: agents, commands, skills, hooks, permissions
+            and install/update scripts that ship into users' Solana projects. A defect here
+            reaches every installed project, and some of it guards mainnet deploys and keypairs.
+
+            First read CLAUDE.md: the Token Loading Model, the Ripple Map, the Common Mistakes
+            list and the frozen-region note in .claude/bin/update.sh. If the PR body says
+            "Closes #N", read issue #N (gh issue view N) and its comments (later comments often
+            correct the issue body), then check the diff meets each acceptance item. Say which
+            items are unmet. A PR that says "Part of #N" only has to meet what it claims.
+
+            Scrutinize these hardest. They must never ship broken:
+            - Safety gates: the PreToolUse hooks and permissions in .claude/settings.json and
+              plugin/hooks/hooks.json (secrets gate, on-chain write gate). They must fail closed
+              (only exit 2 blocks; a hook error or timeout lets the call through), keep the two
+              hook sets in step, and not be bypassable by wrappers, env prefixes or quoting. No
+              permissions.allow rule may shadow an ask/deny rule, and nothing may widen reads of
+              keypairs, ~/.ssh, credentials or .env, or let a mainnet deploy, upgrade-authority
+              change or account close run without a prompt.
+            - update.sh self-update: lines 1-93 of .claude/bin/update.sh must stay byte-identical
+              to v2.1.0 (bash resumes the overwritten script by byte offset, so any edit there
+              breaks the next update of every install). The shipped .claude/VERSION must not match
+              the retired-defaults `case`. update.sh must never overwrite a user's settings.json,
+              .mcp.json, .env or CLAUDE.md.
+            - User data in install.sh, update.sh and .claude/bin/skills.sh: every rm -rf and
+              overwrite must be confined to kit-owned paths, guarded against empty variables,
+              symlink-safe, and honour --dry-run. Both install modes (default and --agents) must
+              keep working.
+            - Supply chain: submodule pins and .gitmodules URLs agree with
+              .claude/skills/skill-registry.json; the anthropic-skills commit pin and licence gate
+              (DENIED_SKILLS, Apache-2.0 check) aren't weakened; MCP servers in .mcp.json stay
+              version-pinned; the safe-ai-skill marketplace sha stays pinned; GitHub Actions are
+              pinned by SHA; no new curl|bash, postinstall or unpinned remote code.
+            - Shipped Solana guidance: agents, commands, skills and CLAUDE-solana.md (loaded in
+              every user session and subagent, kept under 60 lines). A wrong deploy, verify,
+              upgrade-authority, keypair or Token-2022 instruction makes users lose funds or
+              programs, so check such claims against the cited source.
+            - Ripple Map drift: counts, README/QUICK-START trees, the plugin manifest version
+              (= .claude/VERSION) and the tests that hardcode them move together. Behaviour
+              changes come with tests in tests/, and validate.sh still passes.
+
+            Repo conventions to hold the PR to: no AI or Claude attribution in commits or the PR
+            body; plugin/skills/ hub files contain no ext/ links; write for a strong model (terse,
+            no NEVER/ALWAYS shouting).
+
+            Output: lead with BLOCKING findings (correctness, security, or does-not-meet-acceptance),
+            then non-blocking suggestions. Be decisive, cite file:line, and skip nits.
+            This review is ADVISORY: CI (validate.sh and tests/run_all.sh) is the hard gate, and a
+            maintainer signs off on anything touching the safety gates, update.sh, install/skills
+            scripts, supply-chain pins or deploy guidance. Never suggest or imply a self-merge.
