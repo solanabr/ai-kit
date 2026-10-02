@@ -27,6 +27,18 @@ MARKET_NAME="$(python3 -c "import json; print(json.load(open('$MARKETPLACE'))['n
 assert_eq "$MARKET_NAME" "stbr" "marketplace name is stbr"
 PLUGIN_ENTRY_NAME="$(python3 -c "import json; print(json.load(open('$MARKETPLACE'))['plugins'][0]['name'])" 2>/dev/null)"
 assert_eq "$PLUGIN_ENTRY_NAME" "solana-ai-kit" "marketplace plugin entry name is solana-ai-kit"
+# The entry mirrors plugin.json's license, homepage and keywords, and its description
+# names no agent/command/MCP counts (nothing would keep them in sync)
+KIT_ENTRY="$(python3 -c "
+import json, re
+m = json.load(open('$MARKETPLACE'))['plugins'][0]
+p = json.load(open('$PLUGIN_MANIFEST'))
+bad = [k for k in ('license', 'homepage', 'keywords') if m.get(k) != p.get(k)]
+if re.search(r'\d+\s+(agents|commands|MCP)', m.get('description', '')):
+    bad.append('description counts')
+print(' '.join(bad) or 'ok')
+" 2>/dev/null)"
+assert_eq "ok" "$KIT_ENTRY" "marketplace solana-ai-kit entry mirrors plugin.json license/homepage/keywords and hardcodes no counts"
 
 # safe-ai-skill is core: a second entry fetched from its own repo (git-subdir, pinned to a
 # full commit SHA, not vendored) that the kit plugin declares as a dependency
