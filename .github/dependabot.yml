@@ -20,8 +20,10 @@ updates:
     groups:
       skill-packs:
         patterns: ["*"]
-    # Skip upstream commits younger than a week: a bad or compromised push has time
-    # to be noticed and reverted before the kit pins it.
+    # Skip upstream commits younger than a week, so a broken push has usually been fixed
+    # before the kit pins it. This is a convenience delay, not a defence: for submodules
+    # the age is the commit's committer date, which whoever makes the commit sets freely.
+    # The content review is .github/workflows/submodule-review.yml plus a human merge.
     cooldown:
       default-days: 7
     open-pull-requests-limit: 2

@@ -88,6 +88,7 @@ When X changes, also update Y:
 - **Never** `git add .claude/skills/ext/<dir>` — commits as tree, not submodule. Use `git submodule add <url> .claude/skills/ext/<name>` then `git add .gitmodules .claude/skills/ext/<name>`.
 - Path renames in upstream submodules ripple into all agents + commands that reference skill files. Grep for old path before committing.
 - install.sh silently skips submodule init if target isn't a git repo — intentional, not a bug.
+- Submodule bump PRs (Dependabot or manual) are never auto-merged: a person reads the `Submodule review` job summary (hooks, scripts, new hosts, installers, credential names, licence changes) before merging, because agents read and may run what a pack ships.
 
 ## When Editing This Repo
 
