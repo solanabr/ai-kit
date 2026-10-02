@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_install_agents_only] Installing --agents to temp directory: $TEMP_DIR"
@@ -44,6 +44,25 @@ assert_file_exists "$TEMP_DIR/.agents/skills/SKILL.md" "SKILL.md exists in .agen
 # settings.json should exist in .agents/
 assert_json_valid "$TEMP_DIR/.agents/settings.json" ".agents/settings.json is valid JSON"
 
+# --agents mode is unfirewalled, and ships nothing that pretends otherwise. Nothing there
+# reads a permission block: Grok reads .claude/settings.json, Codex reads AGENTS.md plus
+# .agents/skills/ with hooks in .codex/hooks.json. So the tier record, the generator and
+# /firewall are all skipped, and firewall.sh apply never runs. (.agents/settings.json is
+# equally unread but predates this; it stays installed — removing it is its own change.)
+assert_file_not_exists "$TEMP_DIR/.agents/security.json" "no .agents/security.json (--agents is unfirewalled)"
+assert_file_not_exists "$TEMP_DIR/.agents/bin/firewall.sh" "no .agents/bin/firewall.sh"
+assert_file_not_exists "$TEMP_DIR/.agents/commands/firewall.md" "no /firewall in --agents mode"
+for skipped in "security.json" "bin/firewall.sh" "commands/firewall.md"; do
+  TOTAL=$((TOTAL + 1))
+  if grep -qF "$skipped" <<< "$(sed -n 's/^AGENTS_SKIP_FILES=.\(.*\).$/\1/p' "$REPO_ROOT/install.sh")"; then
+    echo "  PASS: install.sh AGENTS_SKIP_FILES skips $skipped"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: install.sh AGENTS_SKIP_FILES does not skip $skipped"
+    FAIL=$((FAIL + 1))
+  fi
+done
+
 # Count agents (should match full install)
 AGENT_COUNT=$(find "$TEMP_DIR/.agents/agents" -name "*.md" | wc -l | tr -d ' ')
 assert_eq "15" "$AGENT_COUNT" "Agent count is 15"
@@ -51,7 +70,10 @@ assert_eq "15" "$AGENT_COUNT" "Agent count is 15"
 # Count commands (should match full install)
 CMD_COUNT=$(find "$TEMP_DIR/.agents/commands" -name "*.md" | wc -l | tr -d ' ')
 KIT_CMDS=$(find "$REPO_ROOT/.claude/commands" -name "*.md" | wc -l | tr -d ' ')
-assert_eq "$((KIT_CMDS - 1))" "$CMD_COUNT" "Command count is the kit's minus the Claude-Code-only /cleanup"
+# Two commands are Claude-Code-only: /cleanup, and /firewall (it writes a permission
+# block that nothing reads under .agents/ — Grok reads .claude/, Codex reads AGENTS.md
+# plus .agents/skills/ with its hooks in .codex/hooks.json).
+assert_eq "$((KIT_CMDS - 2))" "$CMD_COUNT" "Command count is the kit's minus the two Claude-Code-only commands"
 
 # AGENTS.md (read by Codex and opencode) should exist at project root; CLAUDE.md stays Claude Code's
 assert_file_exists "$TEMP_DIR/AGENTS.md" "AGENTS.md exists at project root"
@@ -65,7 +87,7 @@ assert_contains "$GITIGNORE_CONTENT" ".gitmodules" ".gitignore contains .gitmodu
 assert_contains "$GITIGNORE_CONTENT" "solana-ai-kit config" ".gitignore has config markers for /commit-claude-config"
 
 # ── Agents-mode layout checks (CI runs them on ubuntu and macOS via run_all.sh) ──
-WORK="$(mktemp -d)"
+WORK="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR" "$WORK"' EXIT
 export SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" NO_COLOR=1
 
@@ -314,7 +336,7 @@ done
 # the project when the project is a linked worktree. Matching only "inside the
 # target" deletes live submodules there.
 echo "[git worktree target]"
-WT_ROOT="$(mktemp -d)"
+WT_ROOT="$(new_tmp)" || exit 1
 git init -q "$WT_ROOT/main"
 git -C "$WT_ROOT/main" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 git -C "$WT_ROOT/main" worktree add -q "$WT_ROOT/wt" -b wtb
@@ -332,7 +354,7 @@ rm -rf "$WT_ROOT"
 
 # ── Dual install: .agents/ must join an existing .claude/ gitignore block ────
 echo "[dual install gitignore]"
-DUAL="$(mktemp -d)"
+DUAL="$(new_tmp)" || exit 1
 (cd "$DUAL" && git init -q)
 bash "$REPO_ROOT/install.sh" "$DUAL" >/dev/null 2>&1 || true
 install_agents "$DUAL" || true

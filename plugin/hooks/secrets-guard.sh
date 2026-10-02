@@ -1,0 +1,1 @@
+../../.claude/hooks/secrets-guard.sh
