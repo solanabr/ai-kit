@@ -7,6 +7,28 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+# new_tmp — a writable temp dir, or exit 1 having said why.
+#
+# `mktemp -d` is itself denied under the Bash sandbox on some machines ("mkdtemp failed
+# ... Operation not permitted"), which is the shipped bug this release fixes. A bare
+# `mktemp -d` under `set -e` kills the suite, and an unguarded empty result truncated a
+# tracked file once, so every caller goes through here and every result is checked.
+_TMP_SEQ=0
+new_tmp() {
+  local d
+  d="$(mktemp -d 2>/dev/null || true)"
+  if [ -z "$d" ] || [ ! -d "$d" ]; then
+    _TMP_SEQ=$((_TMP_SEQ + 1))
+    d="${TMPDIR:-/tmp}/sak-test.$$.$_TMP_SEQ"
+    mkdir -p "$d" 2>/dev/null || true
+  fi
+  if [ -z "$d" ] || [ ! -d "$d" ]; then
+    echo "  FAIL: no writable temp dir (tried mktemp -d and \$TMPDIR)" >&2
+    return 1
+  fi
+  printf '%s' "$d"
+}
+
 assert_eq() {
   local expected="$1"
   local actual="$2"
