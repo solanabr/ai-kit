@@ -38,6 +38,8 @@ That's it. Claude now has Solana superpowers.
 
 > The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
 
+> A full install starts on the **Relaxed** firewall tier, meant for local development: it blocks SSH and GPG keys, keychains, browser profiles, shell startup files and history, and it deliberately leaves your Solana config dir and the project's `.env` readable so the toolchain works. `/firewall` switches tier; [README → Firewall tiers](README.md#firewall-tiers) has the full matrix and the limits.
+
 > The kit's security firewall, [safe-ai-skill](https://github.com/solanabr/safe-ai-skill), is a Claude Code plugin that `.claude/settings.json` enables. After you trust the folder, install it once with `claude plugin install safe-ai-skill@stbr --scope project`. The README's "Security firewall: safe-ai-skill" section covers what it gates and how to opt out.
 
 ---
@@ -100,7 +102,7 @@ The kit pins no effort level, agent teams or LSP plugins; README's "Settings the
 
 Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [README → Agents](README.md#agents) for the routing.
 
-### 31 Slash Commands
+### 32 Slash Commands
 
 **Building:**
 - `/build-program` - Build Anchor or native programs
@@ -130,6 +132,7 @@ Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable
 - `/quick-commit` - Format, lint, and commit
 - `/commit-claude-config` - Version the kit config in git (un-ignore + commit)
 - `/setup-ci-cd` - Setup CI/CD pipeline
+- `/firewall` - Show or switch the firewall tier (Off / Relaxed / Medium / High)
 - `/setup-mcp` - Configure MCP servers
 - `/resync` - Resync external skill submodules
 - `/add-skill` - Install a pinned skill extension on demand, or list them
@@ -202,7 +205,7 @@ your-project/
 ├── CLAUDE.md              # ← Main config (copied from CLAUDE-solana.md)
 ├── .claude/
 │   ├── agents/            # 15 specialized AI agents
-│   ├── commands/          # 31 slash commands
+│   ├── commands/          # 32 slash commands
 │   ├── skills/            # Progressive knowledge
 │   │   ├── SKILL.md           # Unified hub (start here)
 │   │   ├── ext/               # Skill packs: core by default, extensions as installed
@@ -221,7 +224,8 @@ your-project/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   └── deployment.md     # Deploy workflows
-│   └── settings.json      # Permissions
+│   ├── security.json      # Firewall tier in force (Relaxed by default)
+│   └── settings.json      # Permissions, sandbox and hooks, generated from the tier
 ├── .mcp.json              # MCP server configs (project root)
 ├── programs/              # Your Solana programs
 ├── app/                   # Your frontend
@@ -289,7 +293,7 @@ Edit your `CLAUDE.md` to add:
 
 ### Adjust Permissions
 
-Edit `.claude/settings.json` to customize allowed commands.
+Run `/firewall` to switch tier. The permission and sandbox block in `.claude/settings.json` is generated from the tier and rewritten whole when it changes, so put your own rules in `.claude/settings.local.json`, which `/update` never touches — the kit's rewrite only replaces the rules it wrote itself. [README → Firewall tiers](README.md#firewall-tiers) covers what each tier opens and closes, and what the tiers cannot enforce.
 
 ### Configure MCP Servers
 

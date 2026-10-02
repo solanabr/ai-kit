@@ -12,7 +12,7 @@ assert_cmd_success "cd '$REPO_ROOT' && bash validate.sh" "validate.sh exits 0"
 
 # --- A clone without --recurse-submodules: every ext/ dir exists but is empty ---
 echo "[uninitialized submodules]"
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 mkdir -p "$TEMP_DIR/.claude/skills/ext"
 for item in "$REPO_ROOT/.claude"/*; do
