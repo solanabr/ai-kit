@@ -13,7 +13,7 @@ PACK="anthropic-skills"
 # docx, pdf, pptx and xlsx are proprietary, doc-coauthoring has no license.
 DENIED="docx pdf pptx xlsx doc-coauthoring"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_anthropic_skills] Anthropic's Apache-2.0 skills as a cross-agent extension"
