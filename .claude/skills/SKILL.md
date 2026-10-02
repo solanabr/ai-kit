@@ -25,7 +25,7 @@ When sources overlap: the program-code house rules in the project instruction fi
 | Toolchain version pairing | [compatibility-matrix.md](ext/solana-dev/skills/solana-dev/references/compatibility-matrix.md) |
 | Security review | [security.md](ext/solana-dev/skills/solana-dev/references/security.md), [safe-solana-builder](ext/safe-solana-builder/SKILL.md) (security-first scaffolding, Anchor/native/Pinocchio) |
 | Financial math, Quasar zero-copy | [RUST.md](ext/quicknode-anchor/skills/solana/RUST.md), [ANCHOR.md](ext/quicknode-anchor/skills/solana/ANCHOR.md), [QUASAR.md](ext/quicknode-anchor/skills/solana/QUASAR.md) from [quicknode-anchor](ext/quicknode-anchor/); reference files only, skip that repo's SKILL.md workflow layer (install: `bash .claude/bin/skills.sh add quicknode-anchor`) |
-| Formal verification (Lean 4) | [qedgen](ext/qedgen/skills/qedgen/SKILL.md) from [QEDGen](ext/qedgen/); needs the `qedgen` CLI and `MISTRAL_API_KEY` (install: `bash .claude/bin/skills.sh add qedgen`) |
+| Formal verification (Lean 4) | [qedgen](ext/qedgen/skills/qedgen/SKILL.md) from [QEDGen](ext/qedgen/); needs the `qedgen` CLI, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY` depending on the command (install: `bash .claude/bin/skills.sh add qedgen`) |
 | Port from Solidity/EVM | [eth-to-sol](ext/eth-to-sol/SKILL.md) from [eth-to-sol](ext/eth-to-sol/): [type-mapping](ext/eth-to-sol/translation/type-mapping.md), [pattern-mapping](ext/eth-to-sol/translation/pattern-mapping.md), [stdlib-mapping](ext/eth-to-sol/translation/stdlib-mapping.md), [mental-model](ext/eth-to-sol/translation/mental-model.md), [translation/](ext/eth-to-sol/translation/), [security/](ext/eth-to-sol/security/), [optimization/](ext/eth-to-sol/optimization/); concept map: [solana-vs-evm.md](ext/solana-new/skills/idea/solana-beginner/references/solana-vs-evm.md) (install: `bash .claude/bin/skills.sh add eth-to-sol solana-new`) |
 
 Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers through `token_interface::transfer_checked`, account space `T::DISCRIMINATOR.len() + T::INIT_SPACE`, Rust LiteSVM tests under `programs/<name>/tests/` (`anchor test` runs Surfpool).
@@ -97,7 +97,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | trailofbits | Security audits: vulnerability scans, audit prep, code maturity, token integration review | `bash .claude/bin/skills.sh add trailofbits` |
 | ghostsecurity | AppSec scans of app and infra code: SAST, dependencies, secrets | `bash .claude/bin/skills.sh add ghostsecurity` |
 | defending-code | Threat models, vulnerability triage, security patches | `bash .claude/bin/skills.sh add defending-code` |
-| qedgen | Formal verification with Lean 4 (needs the `qedgen` CLI and `MISTRAL_API_KEY`) | `bash .claude/bin/skills.sh add qedgen` |
+| qedgen | Formal verification with Lean 4 (needs the `qedgen` CLI, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY`) | `bash .claude/bin/skills.sh add qedgen` |
 | sendai | DeFi and other protocols (Raydium, Orca, Meteora, Kamino, marginfi, Sanctum, Pyth, Switchboard, Squads, pump.fun, bridges), web3.js to Kit migration | `bash .claude/bin/skills.sh add sendai` |
 | jupiter | Jupiter swap, lend, perps, trigger and recurring orders | `bash .claude/bin/skills.sh add jupiter` |
 | metaplex | NFTs: Core, Token Metadata, Bubblegum, Candy Machine, Umi | `bash .claude/bin/skills.sh add metaplex` |
