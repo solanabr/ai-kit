@@ -19,13 +19,47 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Solana
-        uses: solana-labs/setup-solana@v1
-        with:
-          solana-version: '2.1.0'
+      # Toolchain versions come from the project, not from this file:
+      # Anchor.toml [toolchain] solana_version / anchor_version, and rust-toolchain.toml.
+      - name: Read toolchain versions
+        id: versions
+        shell: bash
+        run: |
+          toolchain_value() {
+            [ -f Anchor.toml ] || return 0
+            awk -v key="$1" '
+              /^[[:space:]]*\[/ { in_tc = ($0 ~ /^[[:space:]]*\[toolchain\]/); next }
+              in_tc && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+                sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); gsub(/["\047[:space:]]/, ""); print; exit
+              }' Anchor.toml
+          }
+          echo "solana=$(toolchain_value solana_version)" >> "$GITHUB_OUTPUT"
+          echo "anchor=$(toolchain_value anchor_version)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        shell: bash
+        run: |
+          # rustup installs the channel pinned in rust-toolchain.toml; without one, stable.
+          if [ -f rust-toolchain.toml ] || [ -f rust-toolchain ]; then
+            rustup toolchain install
+          else
+            rustup toolchain install stable --profile minimal
+          fi
+          rustc --version
+
+      - name: Setup Solana (Agave)
+        shell: bash
+        env:
+          SOLANA_VERSION: ${{ steps.versions.outputs.solana }}
+        run: |
+          if [ -n "$SOLANA_VERSION" ]; then
+            channel="v${SOLANA_VERSION#v}"
+          else
+            echo "::warning::No solana_version in Anchor.toml [toolchain]; installing the stable channel"
+            channel=stable
+          fi
+          sh -c "$(curl -sSfL "https://release.anza.xyz/$channel/install")"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,7 +67,14 @@ jobs:
           node-version: '20'
 
       - name: Install Anchor
-        run: cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v1.0.2 --locked
+        if: steps.versions.outputs.anchor != ''
+        shell: bash
+        env:
+          ANCHOR_VERSION: ${{ steps.versions.outputs.anchor }}
+        run: |
+          cargo install --git https://github.com/solana-foundation/anchor avm --tag "v${ANCHOR_VERSION#v}" --locked
+          avm install "${ANCHOR_VERSION#v}"
+          avm use "${ANCHOR_VERSION#v}"
 
       - name: Claude Code
         uses: anthropics/claude-code-action@v1

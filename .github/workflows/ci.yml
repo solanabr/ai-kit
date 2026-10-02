@@ -29,6 +29,18 @@ jobs:
       - name: Run test suite
         run: bash tests/run_all.sh
 
+  # Templates are copied into user projects, so GitHub never resolves their actions;
+  # check every uses: under .github/ against the API so a deleted action fails here.
+  actions-resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Every uses: under .github/ resolves"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/list-actions.sh --resolve
+
   smoke-test:
     needs: validate
     runs-on: ubuntu-latest
