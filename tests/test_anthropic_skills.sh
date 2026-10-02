@@ -13,7 +13,7 @@ PACK="anthropic-skills"
 # docx, pdf, pptx and xlsx are proprietary, doc-coauthoring has no license.
 DENIED="docx pdf pptx xlsx doc-coauthoring"
 
-TEMP_DIR="$(new_tmp)" || exit 1
+TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_anthropic_skills] Anthropic's Apache-2.0 skills as a cross-agent extension"
@@ -84,18 +84,32 @@ check "The kit ships no skills/*.lock (per-project state)" test -z "$(find "$REP
 # --- Offline stand-in for anthropics/skills with every license case ---
 # SKILL.md bodies mention .claude/ so the --agents path rewrite would show up in a diff.
 FIX="$TEMP_DIR/mirror/$PACK"
-APACHE="$(printf '%s\n' '                                 Apache License' '                           Version 2.0, January 2004')"
+# The full Apache-2.0 text, and frontend-design's variant: the same text cut off
+# before the APPENDIX.
+APACHE="$(cat "$SCRIPT_DIR/fixtures/apache-2.0-LICENSE.txt")"
+APACHE_NO_APPENDIX="$(sed '/END OF TERMS AND CONDITIONS/q' "$SCRIPT_DIR/fixtures/apache-2.0-LICENSE.txt")"
+PROPRIETARY="(c) 2025 Anthropic, PBC. All rights reserved."
 fixture_skill() {  # fixture_skill <folder> <LICENSE.txt text, empty for none> [frontmatter name]
   mkdir -p "$FIX/skills/$1"
-  printf -- '---\nname: %s\ndescription: Fixture copy of %s.\n---\n\nSee .claude/skills/ for more.\n' "${3:-$1}" "$1" > "$FIX/skills/$1/SKILL.md"
+  printf -- '---\nname: %s\ndescription: Fixture copy of %s.\n---\n\nSee .claude/skills/ for more.\n' "${3:-$1}" "${3:-$1}" > "$FIX/skills/$1/SKILL.md"
   if [ -n "$2" ]; then printf '%s\n' "$2" > "$FIX/skills/$1/LICENSE.txt"; fi
 }
 for name in $ALLOW theme-factory; do fixture_skill "$name" "$APACHE"; done
+fixture_skill "${ALLOW##* }" "$APACHE_NO_APPENDIX"
 mkdir -p "$FIX/skills/$FIRST/scripts" && printf 'print("fixture")\n' > "$FIX/skills/$FIRST/scripts/helper.py"
-for name in docx pdf pptx xlsx; do fixture_skill "$name" "(c) 2025 Anthropic, PBC. All rights reserved."; done
+for name in docx pdf pptx xlsx; do fixture_skill "$name" "$PROPRIETARY"; done
 fixture_skill doc-coauthoring ""
 fixture_skill mit-skill "MIT License"
 fixture_skill renamed "$APACHE" other-name
+# Licenses that name Apache 2.0 without being it: a denial, and the real text plus a reservation.
+fixture_skill denies-apache "This work is NOT offered under the Apache License. Version 2.0 of our PROPRIETARY terms applies. No redistribution."
+fixture_skill apache-reserved "$(printf '%s\n\n%s' "$APACHE" "Copyright 2026 Example Corp. All rights reserved.")"
+fixture_skill apache-copyright "$(printf '%s\n' "$APACHE" | sed 's/Copyright \[yyyy\] \[name of copyright owner\]/Copyright 2026 Anthropic, PBC./')"
+# Nested folders travel with the copy: a denied skill, or another license, inside an Apache one.
+fixture_skill nests-docx "$APACHE"
+fixture_skill nests-docx/vendor/docx "$PROPRIETARY" docx
+fixture_skill nests-license "$APACHE"
+mkdir -p "$FIX/skills/nests-license/lib" && printf 'MIT License\n' > "$FIX/skills/nests-license/lib/LICENSE"
 fixture_commit() {
   git -C "$FIX" add -A
   git -C "$FIX" -c user.name=test -c user.email=test@example.com -c commit.gpgsign=false commit -qm "$1"
@@ -200,6 +214,17 @@ for name in $DENIED; do
 done
 refused "skills.sh add refuses a skill without an Apache-2.0 LICENSE.txt" "no Apache-2.0 LICENSE.txt" skills '["mit-skill"]'
 assert_dir_not_exists "$P4/.claude/skills/mit-skill" "...and installs nothing"
+refused "skills.sh add refuses a LICENSE.txt that names Apache 2.0 but is not its text" "no Apache-2.0 LICENSE.txt" skills '["denies-apache"]'
+refused "skills.sh add refuses the Apache-2.0 text with \"All rights reserved\" added" "reserves rights" skills '["apache-reserved"]'
+assert_dir_not_exists "$P4/.claude/skills/apache-reserved" "...and installs nothing"
+refused "skills.sh add refuses a denied skill nested inside an allowed folder" "contains vendor/docx/SKILL.md, a skill the kit refuses" skills '["nests-docx"]'
+assert_dir_not_exists "$P4/.claude/skills/nests-docx" "...and installs nothing"
+refused "skills.sh add refuses a nested license file that is not Apache-2.0" "lib/LICENSE is not an Apache-2.0 license" skills '["nests-license"]'
+check "skills.sh add accepts the Apache-2.0 text with its copyright line filled in" try_add skills '["apache-copyright"]'
+check "...and installs it" test -f "$P4/.claude/skills/apache-copyright/SKILL.md"
+rm -rf "${P4:?}/.claude/skills/apache-copyright" "$P4/.claude/skills/$PACK.lock"
+grep -vx "$PACK" "$P4/.claude/skills/extensions.txt" > "$TEMP_DIR/extensions.txt" || true
+cp "$TEMP_DIR/extensions.txt" "$P4/.claude/skills/extensions.txt"
 refused "skills.sh add refuses a folder whose SKILL.md carries another name" "is named 'other-name'" skills '["renamed"]'
 refused "skills.sh add refuses a name that is not a plain skill name" "invalid skill name" skills '["../escape"]'
 mkdir -p "$P4/.claude/skills/$FIRST" && printf 'mine\n' > "$P4/.claude/skills/$FIRST/SKILL.md"
@@ -211,6 +236,24 @@ refused "skills.sh add fails cleanly when the pinned commit is not upstream" "co
 assert_dir_not_exists "$P4/.claude/skills/$FIRST" "...and installs nothing"
 check "No refused attempt is recorded as installed" test -z "$(grep -x "$PACK" "$P4/.claude/skills/extensions.txt" || true)"
 
+# --- Lock state: an unfinished copy, and a denied skill the lock claims ---
+echo "[lock state]"
+list_state() { bash "$1/.claude/bin/skills.sh" list | awk -v p="$PACK" '$1 == p { print $3 }'; }
+P6="$(new_project lock-state)"
+install_kit --with "$PACK" "$P6"
+LOCK6="$P6/.claude/skills/$PACK.lock"
+sed 's/^commit .*/commit pending/' "$LOCK6" > "$TEMP_DIR/pending.lock" && cp "$TEMP_DIR/pending.lock" "$LOCK6"
+rm -rf "${P6:?}/.claude/skills/$FIRST"
+assert_eq "-" "$(list_state "$P6")" "skills.sh list does not report a pack whose lock is still pending as installed"
+P7="$(new_project denied-lock)"
+install_kit --with "$PACK" "$P7"
+set_field "$P7/.claude/skills/skill-registry.json" skills "[$(for n in $ALLOW docx; do printf '"%s", ' "$n"; done | sed 's/, $//')]"
+printf 'skill docx\n' >> "$P7/.claude/skills/$PACK.lock"
+fixture_skill docx "$PROPRIETARY" && cp -R "$FIX/skills/docx" "$P7/.claude/skills/docx"
+PRUNE="$(bash "$P7/.claude/bin/skills.sh" prune 2>&1 || true)"
+assert_contains "$PRUNE" "refusing docx" "A registry and lock that both list docx do not pass as current"
+assert_dir_not_exists "$P7/.claude/skills/docx" "...and the docx folder the lock claimed is removed"
+
 # --- The real anthropics/skills at the pinned commit (network) ---
 echo "[anthropics/skills at the pin]"
 unset SOLANA_AI_KIT_PACK_MIRROR
@@ -220,6 +263,7 @@ cp "$SKILLS_SH" "$P5/.claude/bin/"
 cp "$REGISTRY" "$P5/.claude/skills/"
 upstream_add() { bash "$P5/.claude/bin/skills.sh" add "$PACK" >/dev/null 2>&1; }
 if upstream_add || upstream_add; then
+  assert_file_contains "$P5/.claude/skills/$PACK.lock" "commit $COMMIT" "The pinned commit $COMMIT resolves in anthropics/skills"
   assert_eq "$(sorted $ALLOW)" "$(top_dirs "$P5/.claude/skills")" "Only the allowlisted skills are installed from anthropics/skills"
   VALID="$(python3 - "$P5/.claude/skills" $ALLOW <<'PY'
 import os, re, sys
@@ -267,8 +311,13 @@ elif [ -n "${CI:-}" ] || git ls-remote https://github.com/anthropics/skills.git 
   FAIL=$((FAIL + 1))
   echo "  FAIL: skills.sh add $PACK from github.com at $COMMIT"
   bash "$P5/.claude/bin/skills.sh" add "$PACK" 2>&1 | sed 's/^/    /' || true
+elif [ "${ALLOW_OFFLINE:-}" = 1 ]; then
+  echo "  SKIP: github.com is unreachable here (ALLOW_OFFLINE=1); the pin $COMMIT is NOT checked"
 else
-  echo "  SKIP: github.com is unreachable here; CI runs the checks against the pinned commit"
+  # A pin bump is checked here; passing without the network would bless a commit that may not exist.
+  TOTAL=$((TOTAL + 1))
+  FAIL=$((FAIL + 1))
+  echo "  FAIL: github.com is unreachable, so the pin $COMMIT was not checked (ALLOW_OFFLINE=1 skips this)"
 fi
 
 print_summary

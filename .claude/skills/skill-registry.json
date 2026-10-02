@@ -473,7 +473,7 @@
       "path": ".claude/skills",
       "commit": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
       "skills": ["frontend-design", "webapp-testing", "mcp-builder"],
-      "description": "Anthropic's frontend-design (distinctive UI direction), webapp-testing (Playwright tests of a local web app) and mcp-builder (MCP servers for a program or API), installed as top-level skills in .claude/skills/<name>/, which agents load natively (Claude Code, Codex, Grok Build and other Agent Skills clients). skills.sh fetches only these folders at the pinned commit and copies them unchanged, LICENSE.txt included.",
+      "description": "Anthropic's frontend-design (distinctive UI direction), webapp-testing (Playwright tests of a local web app) and mcp-builder (MCP servers for a program or API), installed as top-level skills: .claude/skills/<name>/ in a default install (Claude Code, Grok Build), or .agents/skills/<name>/ with install.sh --agents (Codex, Cursor, Copilot and other Agent Skills clients). One install serves one of the two families. skills.sh fetches only these folders at the pinned commit and copies them unchanged, LICENSE.txt included.",
       "triggers": ["UI design direction", "Playwright tests of a local web app", "building an MCP server"],
       "source": "https://github.com/anthropics/skills",
       "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add anthropic-skills", "env": [] },
