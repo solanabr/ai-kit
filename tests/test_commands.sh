@@ -34,7 +34,10 @@ for f in "$CMDS_DIR"/*.md; do
 done
 
 echo ""
-assert_eq "31" "$COUNT" "Total command count is 31"
+assert_eq "32" "$COUNT" "Total command count is 32"
+assert_file_exists "$CMDS_DIR/firewall.md" "/firewall exists (shows and switches the security tier)"
+# /firewall drives the generator; it must not hand-edit the block it regenerates.
+assert_file_contains "$CMDS_DIR/firewall.md" "firewall.sh" "firewall.md calls bin/firewall.sh rather than editing settings.json by hand"
 
 echo ""
 echo "[test_commands] Checking setup-mcp.md covers every .env.example key..."

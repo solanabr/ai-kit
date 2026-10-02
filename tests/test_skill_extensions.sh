@@ -10,7 +10,7 @@ REGISTRY="$REPO_ROOT/.claude/skills/skill-registry.json"
 HUB="$REPO_ROOT/.claude/skills/SKILL.md"
 SKILLS_SH="$REPO_ROOT/.claude/bin/skills.sh"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_skill_extensions] Core and extension skill packs"
