@@ -13,6 +13,7 @@ Review this branch's changes against the base branch ($ARGUMENTS, default `main`
    - PDAs reuse the stored bump (`bump = acct.bump`); handlers do not call `find_program_address`.
    - CPIs validate the target program and `.reload()` accounts they mutate.
    - Token code uses `transfer_checked` with `token_interface` and handles Token-2022 transfer hooks and fees where the mint may be Token-2022.
+   - A new `#[error_code]` enum sets an `offset` whose range misses every other enum's (each defaults to 6000).
    - Pre-1.0 Anchor habits: `@coral-xyz/anchor` imports (now `@anchor-lang/core`), `CpiContext::new` given an `AccountInfo`, plain `transfer`, hardcoded `8 +` in `space`.
    - Clients keep amounts as `bigint`/`BN`, mix web3.js 1.x and `@solana/kit` types only through an interop layer ([kit-web3-interop.md](../skills/ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md)), and regenerate the IDL client when the program interface changed (`/generate-idl-client`).
    - No hardcoded addresses or RPC URLs outside constants or config; no API keys in client code.

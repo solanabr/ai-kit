@@ -17,6 +17,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          # Tags, not just the tip: tests/test_update.sh reads the v2.1.0 settings.json and
+          # the frozen update.sh byte range straight from the tag, so the migration baseline
+          # is matched by construction instead of by a vendored copy that drifts.
+          fetch-depth: 0
 
       - name: Validate JSON files
         run: |

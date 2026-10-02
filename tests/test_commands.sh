@@ -34,7 +34,10 @@ for f in "$CMDS_DIR"/*.md; do
 done
 
 echo ""
-assert_eq "31" "$COUNT" "Total command count is 31"
+assert_eq "32" "$COUNT" "Total command count is 32"
+assert_file_exists "$CMDS_DIR/firewall.md" "/firewall exists (shows and switches the security tier)"
+# /firewall drives the generator; it must not hand-edit the block it regenerates.
+assert_file_contains "$CMDS_DIR/firewall.md" "firewall.sh" "firewall.md calls bin/firewall.sh rather than editing settings.json by hand"
 
 echo ""
 echo "[test_commands] Checking setup-mcp.md covers every .env.example key..."
@@ -55,5 +58,12 @@ echo ""
 echo "[test_commands] Checking --agents install-mode support..."
 assert_file_contains "$CMDS_DIR/resync.md" ".agents/bin" "resync.md supports --agents installs (.agents/bin)"
 assert_file_contains "$CMDS_DIR/update.md" ".agents/bin" "update.md supports --agents installs (.agents/bin)"
+
+echo ""
+echo "[test_commands] Checking Anchor error codes are decoded by discriminant, not declaration order..."
+for f in test-rust.md test-ts.md test-and-fix.md; do
+  assert_file_contains "$CMDS_DIR/$f" '`offset` (default 6000) + discriminant' "$f decodes #[error_code] ids as offset + discriminant"
+  assert_file_not_contains "$CMDS_DIR/$f" "declaration order" "$f does not claim declaration order"
+done
 
 print_summary
