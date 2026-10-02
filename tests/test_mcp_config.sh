@@ -44,6 +44,12 @@ assert_file_not_contains "$MCP_FILE" "mcp-remote" "no mcp-remote bridge"
 # falls back to its stored key instead of using "${HELIUS_API_KEY}" as the key
 assert_contains "$MCP_CONTENT" '"HELIUS_API_KEY": "${HELIUS_API_KEY:-}"' "helius key defaults to empty when unset"
 
+# Every session runs these with npx -y, so they are pinned like the kit's other dependencies
+assert_file_not_contains "$MCP_FILE" "@latest" "default MCP servers are not on @latest"
+assert_contains "$MCP_CONTENT" '"helius-mcp@' "helius-mcp has a pinned version"
+assert_contains "$MCP_CONTENT" '"@upstash/context7-mcp@' "context7-mcp has a pinned version"
+assert_contains "$MCP_CONTENT" '"context-mode@' "context-mode has a pinned version"
+
 # Project servers keep Claude Code's approval prompt (headless runs load them anyway)
 assert_file_not_contains "$SETTINGS_FILE" "enableAllProjectMcpServers" "settings.json does not auto-approve project MCP servers"
 

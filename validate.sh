@@ -288,6 +288,25 @@ if [ -f .mcp.json ]; then
   else
     check ".mcp.json is valid JSON" 1
   fi
+  # npx -y runs whatever was published last, with no prompt; default servers are pinned
+  # like everything else the kit ships (CLAUDE.md ripple map: "Bump a default MCP server").
+  unpinned="$(python3 -c 'import json, re
+d = json.load(open(".mcp.json"))
+bad = []
+for name, s in (d.get("mcpServers") or {}).items():
+    if s.get("command") != "npx":
+        continue
+    pkgs = [a for a in s.get("args") or [] if not a.startswith("-")][:1]
+    for a in pkgs:
+        # Exact x.y.z only, on purpose: prereleases (1.2.3-beta.1) and ranges are rejected too
+        if not re.search(r"@\d+\.\d+\.\d+$", a[1:]):
+            bad.append(name + ":" + a)
+print(" ".join(bad))' 2>/dev/null || echo "unparsed")"
+  if [ -z "$unpinned" ]; then
+    check ".mcp.json pins every npx server to an exact version (no @latest)" 0
+  else
+    check ".mcp.json pins every npx server to an exact version (no @latest): $unpinned" 1
+  fi
 fi
 echo ""
 
