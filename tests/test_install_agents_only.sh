@@ -136,7 +136,8 @@ commands/commit-claude-config.md
 commands/doctor.md
 commands/resync.md
 commands/scaffold.md
-commands/update.md'
+commands/update.md
+skills/skill-registry.json'
 
 # snapshot <dir> [paths...] — checksums of every file (default: whole tree minus .git/)
 snapshot() {

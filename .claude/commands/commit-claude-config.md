@@ -32,4 +32,5 @@ disable-model-invocation: true
 ## Notes
 
 - To go back to ignoring the config, re-run `install.sh` (it re-adds the block only if absent), or run `git rm --cached -r .claude CLAUDE.md .mcp.json .gitmodules` (`.agents AGENTS.md` in `--agents` installs) and restore the `.gitignore` lines.
+- Committing the config redistributes what it holds. If `$CONFIG_DIR/skills/anthropic-skills.lock` exists, the skill folders it lists are Anthropic's, under Apache-2.0 rather than the kit's MIT: name them in the confirmation and keep each folder's `LICENSE.txt` with it.
 - To version the `ext/` submodules as well (rarely needed; they are large upstream trees), remove the `$CONFIG_DIR/skills/ext/` line from `.gitignore` and run `git submodule update --init` so real gitlinks exist before `git add`.

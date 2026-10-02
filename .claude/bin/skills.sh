@@ -114,7 +114,11 @@ has_word() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
 # keeps a registry or lock entry from naming a path outside skills/.
 valid_name() { printf '%s\n' "$1" | grep -qxE '[a-z0-9]+(-[a-z0-9]+)*'; }
 
-installed() { [ -f "$1/skills/$2.lock" ] || [ -n "$(ls -A "$1/skills/ext/$2" 2>/dev/null)" ]; }
+# A lock still at "commit pending" is a copy that never finished: not installed.
+installed() {
+  { [ -f "$1/skills/$2.lock" ] && [ "$(lock_value "$1/skills/$2.lock" commit)" != pending ]; } \
+    || [ -n "$(ls -A "$1/skills/ext/$2" 2>/dev/null)" ]
+}
 
 lock_value() { if [ -f "$1" ]; then awk -v k="$2" '$1 == k { print $2 }' "$1"; fi; }
 
@@ -134,6 +138,9 @@ upstream_current() {
   local reg="$1" cfg="$2" id="$3" lock="$2/skills/$3.lock" name
   [ -f "$lock" ] || return 1
   [ "$(lock_value "$lock" commit)" = "$(entry_value "$reg" "$id" commit)" ] || return 1
+  for name in $(lock_value "$lock" skill); do
+    if has_word "$DENIED_SKILLS" "$name"; then return 1; fi
+  done
   [ "$(lock_value "$lock" skill | sort)" = "$(entry_value "$reg" "$id" skills | sort)" ] || return 1
   for name in $(lock_value "$lock" skill); do
     [ -f "$cfg/skills/$name/SKILL.md" ] || return 1
@@ -162,18 +169,58 @@ fetch_paths() {
     && git -C "$dir" -c advice.detachedHead=false checkout -q FETCH_HEAD -- "$@"
 }
 
-# An upstream skill folder the kit may install: a SKILL.md named after the folder, an
-# Apache-2.0 LICENSE.txt that travels with every copy, and no symlinks.
-check_skill() {
-  local dir="$1" name="$2" named
-  [ -f "$dir/SKILL.md" ] || { echo "no SKILL.md"; return 1; }
-  named="$(awk 'NR == 1 { if ($0 != "---") exit; next } $0 == "---" { exit }
-    sub(/^name:[[:space:]]*/, "") { gsub(/["'\''[:space:]]/, ""); print; exit }' "$dir/SKILL.md")"
-  [ "$named" = "$name" ] || { echo "its SKILL.md is named '$named'"; return 1; }
-  if ! grep -q 'Apache License' "$dir/LICENSE.txt" 2>/dev/null || ! grep -q 'Version 2\.0' "$dir/LICENSE.txt"; then
-    echo "no Apache-2.0 LICENSE.txt"; return 1
+# The Apache License 2.0 as git blob ids of its normalised text (CRs dropped, each
+# whitespace run one space): the header and terms through "END OF TERMS AND
+# CONDITIONS", and the APPENDIX with its copyright line put back to the template's
+# "[yyyy] [name of copyright owner]". Both match apache.org/licenses/LICENSE-2.0.txt.
+APACHE_TERMS=e4963138c85362572abad346c4773ecdebf11522
+APACHE_APPENDIX=aad5408a30d833e1d46729eb152635c107476d5b
+
+# <file> is the Apache License 2.0, with its APPENDIX or without it (frontend-design's
+# copy stops before it). Otherwise it prints why and fails.
+apache_license() {
+  local text terms rest
+  [ -f "$1" ] || { echo "missing"; return 1; }
+  if grep -qiE 'all rights reserved|may not.*retain copies' "$1"; then
+    echo "it reserves rights"; return 1
   fi
+  text="$(tr -d '\r' < "$1" | tr -s ' \t\n' '   ' | sed 's/^ //; s/ $//')"
+  terms="${text%%END OF TERMS AND CONDITIONS*}END OF TERMS AND CONDITIONS"
+  rest="${text#"$terms"}"
+  rest="$(printf '%s' "${rest# }" | sed -E 's/^(.* )?Copyright [][A-Za-z0-9 ,.()&-]{1,120} Licensed under/\1Copyright [yyyy] [name of copyright owner] Licensed under/')"
+  if [ "$(printf '%s' "$terms" | git hash-object --stdin)" != "$APACHE_TERMS" ] \
+    || { [ -n "$rest" ] && [ "$(printf '%s' "$rest" | git hash-object --stdin)" != "$APACHE_APPENDIX" ]; }; then
+    echo "its text is not the Apache License 2.0"; return 1
+  fi
+}
+
+skill_name() {  # the name: in <SKILL.md>'s frontmatter
+  awk 'NR == 1 { if ($0 != "---") exit; next } $0 == "---" { exit }
+    sub(/^name:[[:space:]]*/, "") { gsub(/["'\''[:space:]]/, ""); print; exit }' "$1"
+}
+
+# An upstream skill folder the kit may install: a SKILL.md named after the folder, an
+# Apache-2.0 LICENSE.txt that travels with every copy, and no symlinks. The copy takes
+# the whole subtree, so a nested skill or license file is held to the same rules.
+check_skill() {
+  local dir="$1" name="$2" named why f rel
+  [ -f "$dir/SKILL.md" ] || { echo "no SKILL.md"; return 1; }
+  named="$(skill_name "$dir/SKILL.md")"
+  [ "$named" = "$name" ] || { echo "its SKILL.md is named '$named'"; return 1; }
+  why="$(apache_license "$dir/LICENSE.txt")" || { echo "no Apache-2.0 LICENSE.txt ($why)"; return 1; }
   [ -z "$(find "$dir" -type l)" ] || { echo "it contains symlinks"; return 1; }
+  while IFS= read -r f; do
+    rel="${f#"$dir"/}"
+    if [ "$(basename "$f")" = SKILL.md ]; then
+      named="$(skill_name "$f")"
+      if has_word "$DENIED_SKILLS" "$(basename "$(dirname "$f")")" || has_word "$DENIED_SKILLS" "$named"; then
+        echo "it contains $rel, a skill the kit refuses"; return 1
+      fi
+    elif ! why="$(apache_license "$f")"; then
+      echo "its $rel is not an Apache-2.0 license ($why)"; return 1
+    fi
+  done < <(find "$dir" -mindepth 2 -type f \( -name SKILL.md -o -iname 'licen[cs]e*' -o -iname 'copying*' \);
+           find "$dir" -mindepth 1 -maxdepth 1 -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' \) ! -name LICENSE.txt)
 }
 
 # Install upstream pack <id> into <cfg>/skills/<name>/, one folder per skill the
@@ -184,12 +231,23 @@ check_skill() {
 # argument "force" refetches a pack that looks current.
 ensure_upstream() {
   local reg="$1" cfg="$2" id="$3" force="${4:-}" lock="$2/skills/$3.lock" commit skills url owned name why tmp paths=()
+  skills="$(entry_value "$reg" "$id" skills | tr '\n' ' ')"
+  owned="$(lock_value "$lock" skill | tr '\n' ' ')"
+  # The denylist answers before the lock does: a registry and lock that both list a
+  # denied skill would otherwise read as current and keep it.
+  for name in $skills; do
+    has_word "$DENIED_SKILLS" "$name" || continue
+    if has_word "$owned" "$name" && valid_name "$name" && [ -e "$cfg/skills/$name" ]; then
+      rm -rf "${cfg:?}/skills/${name:?}"
+      echo "skills.sh: $id: removed $(basename "$cfg")/skills/$name, which its lock listed" >&2
+    fi
+    echo "skills.sh: $id: refusing $name: its license does not allow installing it here (Claude users get it from Anthropic)" >&2
+    return 1
+  done
   [ "$force" != force ] && upstream_current "$reg" "$cfg" "$id" && return 0
   commit="$(entry_value "$reg" "$id" commit)"
-  skills="$(entry_value "$reg" "$id" skills | tr '\n' ' ')"
   url="$(entry_value "$reg" "$id" source)"
   [ -z "${SOLANA_AI_KIT_PACK_MIRROR:-}" ] || url="$SOLANA_AI_KIT_PACK_MIRROR/$id"
-  owned="$(lock_value "$lock" skill | tr '\n' ' ')"
   if ! printf '%s\n' "$commit" | grep -qxE '[0-9a-f]{40}'; then
     echo "skills.sh: $id: the registry commit must be a full 40-character SHA" >&2
     return 1
@@ -201,10 +259,6 @@ ensure_upstream() {
   for name in $skills; do
     if ! valid_name "$name"; then
       echo "skills.sh: $id: invalid skill name '$name'" >&2
-      return 1
-    fi
-    if has_word "$DENIED_SKILLS" "$name"; then
-      echo "skills.sh: $id: refusing $name: its license does not allow installing it here (Claude users get it from Anthropic)" >&2
       return 1
     fi
     if [ -e "$cfg/skills/$name" ] && ! has_word "$owned" "$name"; then
