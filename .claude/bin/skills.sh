@@ -11,6 +11,7 @@ set -euo pipefail
 # Usage, from the project root (.agents/bin/skills.sh for --agents installs):
 #   bash .claude/bin/skills.sh list              # packs, tier, installed or not, when to install
 #   bash .claude/bin/skills.sh add <id> [...]    # install extensions at the commit the kit pins
+#   bash .claude/bin/skills.sh add --force <id>  # reinstall a pack, e.g. one a killed copy left partial
 #
 # Called by install.sh, update.sh and resync.sh:
 #   skills.sh select <kit .claude dir> <project config dir> [ids]   # trim a kit checkout before install copies it
@@ -148,10 +149,11 @@ check_skill() {
 # registry lists, from its source at the pinned commit. Every folder is checked
 # before anything is written, and a folder the kit did not install is never
 # replaced. On failure it says why on stderr and returns non-zero; the project keeps
-# what it had. Callers test the status, which turns off errexit in here.
+# what it had. Callers test the status, which turns off errexit in here. A fourth
+# argument "force" refetches a pack that looks current.
 ensure_upstream() {
-  local reg="$1" cfg="$2" id="$3" lock="$2/skills/$3.lock" commit skills url owned name why tmp paths=()
-  upstream_current "$reg" "$cfg" "$id" && return 0
+  local reg="$1" cfg="$2" id="$3" force="${4:-}" lock="$2/skills/$3.lock" commit skills url owned name why tmp paths=()
+  [ "$force" != force ] && upstream_current "$reg" "$cfg" "$id" && return 0
   commit="$(entry_value "$reg" "$id" commit)"
   skills="$(entry_value "$reg" "$id" skills | tr '\n' ' ')"
   url="$(entry_value "$reg" "$id" source)"
@@ -311,15 +313,45 @@ cmd_uninstalled() {
   done
 }
 
+# Copy kit pack <from> to <dest> through a staging folder beside it, so <dest> is
+# either the whole pack or absent. A killed copy leaves only <id>.partial.*, which
+# the next add of <id> removes. STAGING names the folder for cmd_add's exit trap.
+STAGING=""
+copy_pack() {
+  local from="$1" dest="$2" old
+  rm -rf "${dest:?}".partial.*
+  STAGING="$(mktemp -d "$dest.partial.XXXXXX")" || return 1
+  # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit checkout
+  if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} +; }; then
+    rm -rf "$STAGING"; STAGING=""
+    return 1
+  fi
+  old=""
+  if [ -e "$dest" ]; then old="$STAGING.old" && mv "$dest" "$old"; fi
+  mv "$STAGING" "$dest" || return 1
+  STAGING=""
+  [ -z "$old" ] || rm -rf "$old"
+}
+
 cmd_add() {
-  local reg="$CONFIG_DIR/skills/skill-registry.json" ids id todo="" upstream="" failed="" src tmp url branch local_src extensions paths=()
-  [ "$#" -gt 0 ] || die "usage: skills.sh add <id> [<id>...] (see: skills.sh list)"
+  local reg="$CONFIG_DIR/skills/skill-registry.json" ids id todo="" upstream="" failed="" force="" src tmp="" url branch local_src extensions args=() paths=()
+  for id in "$@"; do
+    case "$id" in
+      -f|--force) force=force ;;
+      -*) die "unknown option '$id' (use: skills.sh add [--force] <id>...)" ;;
+      *) args+=("$id") ;;
+    esac
+  done
+  [ "${#args[@]}" -gt 0 ] || die "usage: skills.sh add [--force] <id> [<id>...] (see: skills.sh list)"
   [ -f "$reg" ] || die "no skill registry at $reg"
-  ids="$(expand_ids "$reg" "$@")"
+  trap 'rm -rf ${tmp:+"$tmp"} ${STAGING:+"$STAGING"}' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  ids="$(expand_ids "$reg" "${args[@]}")"
   for id in $ids; do
     if has_line "$(upstream_ids "$reg")" "$id"; then
-      if upstream_current "$reg" "$CONFIG_DIR" "$id"; then echo "✓ $id is already installed"; else upstream="$upstream $id"; fi
-    elif installed "$CONFIG_DIR" "$id"; then echo "✓ $id is already installed"; else todo="$todo $id"; fi
+      if [ -z "$force" ] && upstream_current "$reg" "$CONFIG_DIR" "$id"; then echo "✓ $id is already installed"; else upstream="$upstream $id"; fi
+    elif [ -z "$force" ] && installed "$CONFIG_DIR" "$id"; then echo "✓ $id is already installed (reinstall: skills.sh add --force $id)"; else todo="$todo $id"; fi
   done
   if [ -n "$todo" ]; then
     local_src="${SOLANA_AI_KIT_LOCAL_SRC:-${SOLANA_CLAUDE_LOCAL_SRC:-}}"
@@ -329,7 +361,6 @@ cmd_add() {
       url="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-https://github.com/solanabr/ai-kit.git}}"
       branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-main}}"
       tmp="$(mktemp -d)"
-      trap 'rm -rf "$tmp"' EXIT
       echo "Fetching the pinned packs from $url ($branch)..."
       git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit"
       for id in $todo; do paths+=(".claude/skills/ext/$id"); done
@@ -340,15 +371,13 @@ cmd_add() {
     for id in $todo; do
       [ -n "$(ls -A "$src/.claude/skills/ext/$id" 2>/dev/null)" ] \
         || die "$id is empty in $src (run: git submodule update --init there)"
-      rm -rf "${CONFIG_DIR:?}/skills/ext/${id:?}"
-      cp -R "$src/.claude/skills/ext/$id" "$CONFIG_DIR/skills/ext/$id"
-      # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit checkout
-      find "$CONFIG_DIR/skills/ext/$id" -name .git -prune -exec rm -rf {} +
+      copy_pack "$src/.claude/skills/ext/$id" "${CONFIG_DIR:?}/skills/ext/${id:?}" \
+        || die "could not copy $id into $CONFIG_NAME/skills/ext/ (nothing was installed for it)"
       echo "✓ Installed $id in $CONFIG_NAME/skills/ext/$id"
     done
   fi
   for id in $upstream; do
-    ensure_upstream "$reg" "$CONFIG_DIR" "$id" || failed="$failed $id"
+    ensure_upstream "$reg" "$CONFIG_DIR" "$id" "$force" || failed="$failed $id"
   done
   extensions="$(tier_ids "$reg" extension)"
   write_list "$CONFIG_DIR" $(recorded_extensions "$CONFIG_DIR" "$reg") \
@@ -375,6 +404,6 @@ case "${1:-list}" in
   select) shift; [ "$#" -ge 2 ] || die "usage: skills.sh select <kit .claude dir> <config dir> [ids]"; cmd_select "$@" ;;
   prune) cmd_prune ;;
   uninstalled) cmd_uninstalled ;;
-  -h|--help|help) sed -n '4,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '4,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac

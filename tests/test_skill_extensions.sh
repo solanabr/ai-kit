@@ -170,6 +170,38 @@ else
   PASS=$((PASS + 1))
 fi
 
+# A partial pack counts as installed; add --force reinstalls it
+rm -f "$P1/.claude/skills/ext/solana-game/skill/SKILL.md"
+(cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add --force solana-game) >/dev/null 2>&1
+assert_file_exists "$P1/.claude/skills/ext/solana-game/skill/SKILL.md" "skills.sh add --force restores a truncated pack"
+assert_eq "1" "$(grep -cx solana-game "$P1/.claude/skills/extensions.txt")" "...and records it once"
+
+# The copy goes through a staging folder: a failed or killed copy leaves no ext/<id>
+SHIM="$TEMP_DIR/shim"
+mkdir -p "$SHIM"
+printf '#!/bin/sh\n/bin/cp "$@"\nexit 1\n' > "$SHIM/cp"
+chmod +x "$SHIM/cp"
+TOTAL=$((TOTAL + 1))
+if (cd "$P1" && PATH="$SHIM:$PATH" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) >/dev/null 2>&1; then
+  echo "  FAIL: skills.sh add reported success after its copy failed"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS: skills.sh add fails when its copy fails"
+  PASS=$((PASS + 1))
+fi
+assert_dir_not_exists "$P1/.claude/skills/ext/sendai" "A failed copy leaves no ext/sendai"
+assert_eq "" "$(ls -A "$P1/.claude/skills/ext" | grep partial || true)" "A failed copy leaves no staging folder"
+assert_file_not_contains "$P1/.claude/skills/extensions.txt" "sendai" "A failed copy is not recorded"
+# SIGKILL mid-copy: no trap runs, so the staging folder stays, but ext/sendai does not exist
+printf '#!/bin/sh\n/bin/cp "$@"\nkill -9 $PPID\n' > "$SHIM/cp"
+(cd "$P1" && PATH="$SHIM:$PATH" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) >/dev/null 2>&1 || true
+assert_dir_not_exists "$P1/.claude/skills/ext/sendai" "A killed copy leaves no ext/sendai"
+(cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) >/dev/null 2>&1
+assert_dir_exists "$P1/.claude/skills/ext/sendai" "The next add installs the pack a killed copy left out"
+assert_eq "" "$(ls -A "$P1/.claude/skills/ext" | grep partial || true)" "...and removes the staging folder the kill left"
+rm -rf "$P1/.claude/skills/ext/sendai"
+grep -vx sendai "$P1/.claude/skills/extensions.txt" > "$TEMP_DIR/ext.txt" && mv "$TEMP_DIR/ext.txt" "$P1/.claude/skills/extensions.txt"
+
 # --- update.sh keeps what the project has, adds no other extensions ---
 echo "[update]"
 (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
