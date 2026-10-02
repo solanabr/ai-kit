@@ -3,7 +3,7 @@
 # Solana AI Kit
 
 [![CI](https://github.com/solanabr/ai-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/solanabr/ai-kit/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Solana](https://img.shields.io/badge/Solana-black?logo=solana)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-powered-orange)
@@ -72,7 +72,7 @@ curl -fsSL https://aikit.superteam.codes | bash
 
 `aikit.superteam.codes` and `aikit.superteam.codes/install.sh` both redirect to [`install.sh` on `main`](https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh).
 
-**From a clone.** Use this to pin a release, or to review every file it installs, not just the installer, before it reaches your project. Clone the kit outside your project; to pin a release, add `--branch` with a tag from the [tags page](https://github.com/solanabr/ai-kit/tags), e.g. `--branch v2.1.0`:
+**From a clone.** Use this to pin a release, or to review every file it installs, not just the installer, before it reaches your project. Clone the kit outside your project; to pin a release, add `--branch` with a tag from the [tags page](https://github.com/solanabr/ai-kit/tags), e.g. `--branch v2.2.0`:
 
 ```bash
 git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/solanabr/ai-kit.git "$HOME/ai-kit"
@@ -136,7 +136,7 @@ Use the Solana AI Kit from https://aikit.superteam.codes for this session, witho
 
 Trade-offs:
 
-- **Not pinned.** The site deploys this repository's `main` branch, so a file can change between two sessions. Pinned copies of the kit's own files are on GitHub at a release tag, e.g. https://raw.githubusercontent.com/solanabr/ai-kit/v2.1.0/CLAUDE-solana.md. That host doesn't serve the `ext/` packs (they are git submodules), so a pinned pack file comes from the pack's own repository, at the commit the kit pins.
+- **Not pinned.** The site deploys this repository's `main` branch, so a file can change between two sessions. Pinned copies of the kit's own files are on GitHub at a release tag, e.g. https://raw.githubusercontent.com/solanabr/ai-kit/v2.2.0/CLAUDE-solana.md. That host doesn't serve the `ext/` packs (they are git submodules), so a pinned pack file comes from the pack's own repository, at the commit the kit pins.
 - **A trust decision.** What the agent fetches becomes instructions it follows. Point it only at a host you trust, and read the files you rely on as you would a dependency.
 - **Instructions only.** Nothing registers agents or commands, runs hooks (such as the mainnet-deploy gate), configures MCP servers or applies the permission and sandbox policy. The agent needs a web-fetch tool or network access for `curl` (Codex, for example, asks before it uses the internet), and every file costs a fetch.
 
@@ -174,10 +174,10 @@ The full install uses this mechanism for one plugin, [safe-ai-skill](#security-f
 
 If you use the plugin anyway, keep the exposure small:
 
-1. Add the marketplace pinned to a release tag instead of the default branch. Replace `v2.1.0` with the newest tag on the [tags page](https://github.com/solanabr/ai-kit/tags):
+1. Add the marketplace pinned to a release tag instead of the default branch. Replace `v2.2.0` with the newest tag on the [tags page](https://github.com/solanabr/ai-kit/tags):
 
    ```text
-   /plugin marketplace add solanabr/ai-kit#v2.1.0
+   /plugin marketplace add solanabr/ai-kit#v2.2.0
    ```
 
 2. Read what it runs, at that tag: the hooks in [`plugin/hooks/hooks.json`](plugin/hooks/hooks.json) and the MCP servers in [`.mcp.json`](.mcp.json).
@@ -417,7 +417,7 @@ The pin moves by hand, not through Dependabot: review the upstream diff of the t
 ├── .github/templates/
 │   └── claude-code.yml              # Claude Code action template (copy into a project's own workflows/)
 └── .claude/
-    ├── VERSION                  # Semver version (e.g. 2.1.0)
+    ├── VERSION                  # Semver version (e.g. 2.2.0)
     ├── agents/                  # 15 specialized agents
     ├── bin/
     │   ├── update.sh                # In-place update from upstream

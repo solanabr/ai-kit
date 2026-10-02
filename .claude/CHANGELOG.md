@@ -2,6 +2,47 @@
 
 All notable changes to solana-ai-kit.
 
+## [2.2.0] - 2026-10-02
+
+
+### Added
+- **Core and extension skill packs** — a full install ships only the core packs (`solana-dev`, `safe-solana-builder`); the other `ext/` packs stay pinned and install on demand with `install.sh --with <id>`, `bash .claude/bin/skills.sh add <id>` or the new `/add-skill` command (command count 30 → 31). `skill-registry.json` gains `tier`, `path` and `triggers`; the hub lists every extension with when to use it. Adds the official MagicBlock and Alchemy packs. Dependabot bumps the pins weekly in one grouped PR.
+- **safe-ai-skill as a core plugin** — the `stbr` marketplace lists safe-ai-skill (SHA-pinned), `plugin.json` depends on it, and a full install registers the marketplace and enables `safe-ai-skill@stbr` for the project.
+- **anthropic-skills extension** — installs Anthropic's Apache-2.0 skills (`frontend-design`, `webapp-testing`, `mcp-builder`) at a pinned commit into `<config>/skills/<name>/`, so Codex, Grok Build and other Agent Skills clients see them. `DENIED_SKILLS` refuses the proprietary document skills before any fetch.
+- **token-extensions skill** — a kit-owned skill covering every Token-2022 extension (choosing and combining, creation order, sizing, fees, hooks, metadata and groups, issuer controls, confidential transfers, display amounts), replacing `token-2022.md`. Routed from token-engineer and both skill hubs, and bundled in the plugin.
+- **Model routing** — agents and commands run on `opus`, `sonnet` or inherit the session model; `tests/test_model_routing.sh` enforces allowed values and README drift.
+- **Mainnet and wallet permission gates** — ask rules plus a PreToolUse hook that names the resolved cluster replace the `CONFIRM_MAINNET=1` prefix for program deploys, upgrades, closes, authority changes, token transfers and stake withdrawals. `solana-keygen new`/`recover` with `--force` asks before overwriting the default wallet.
+- **README: other agents and a no-install route** — sections for Codex, Grok Build and other AGENTS.md tools, a no-install route through aikit.superteam.codes, and copy-paste install steps (installer, one-liner, from a clone; plugin marketplace last).
+- **Tests** — `test_hooks.sh`, `test_resync.sh`, `test_local_skills.sh`, `test_skill_extensions.sh`, `test_anthropic_skills.sh`, `test_validate.sh`; `test_plugin.sh` validates a dereferenced copy of the plugin tree; `test_cross_references.sh` follows the from-a-clone install steps.
+
+### Changed
+- **Always-loaded context cut ~91%** — the five `.claude/rules/` files used `globs:`, which Claude Code ignores, so all of them loaded every session. They are gone; CLAUDE-solana.md drops to 36 lines, agent descriptions are routing-only, and agent, command and hub bodies are slimmed. `validate.sh` fails on an unscoped rule and on over-budget descriptions.
+- **settings.json stops pinning session behavior** — drops the agent-teams env flag, `enableAllProjectMcpServers`, the top-level `defaultMode`, the LSP `enabledPlugins` and `modelDefaults`. `/update` removes these from installs made by kit 2.1.0 or earlier, only where they still hold the kit's value.
+- **Default MCP servers trimmed** to helius, solana-dev (now native HTTP) and context7. playwright, surfpool and context-mode are opt-in; memsearch is dropped.
+- **Hooks** — read stdin JSON and block with exit 2; the Stop, SubagentStop, PostToolUse and git-commit hooks are removed; SessionStart shows the banner to the user and gives Claude the RPC host and wallet. The plugin's `hooks.json` mirrors settings.json, including the secrets gate.
+- **Sandbox** — git push/pull/fetch and `gh pr/run/issue` run outside it; local binding is allowed for validators and dev servers; `gh auth token` is denied.
+- **`install.sh --agents`** writes AGENTS.md (HTML comments stripped), rewrites project `.claude/` paths to `.agents/`, registers `ext/` packs under `.agents/skills/ext/`, and no longer installs `/cleanup`.
+- **Repo renamed** to `solanabr/ai-kit` (the frozen `update.sh:16` keeps the old URL; GitHub redirects it).
+- **Skill submodules resynced** to upstream HEAD, with moved paths updated in agents, commands and the hub.
+- **Plugin skills hub** moved to `plugin/skills/solana-ai-kit/SKILL.md` so every bundled skill registers.
+
+### Fixed
+- `/resync` and `/update` work in `--agents` installs; `/resync` no longer reports links into uninstalled extensions as broken; `resync.sh` runs from its target dir regardless of cwd.
+- install and update no longer fail when a config subdir is a symlink.
+- `update.sh --dry-run` no longer deletes `.agents/commands/cleanup.md`; `install.sh --agents` removes a `/cleanup` an older install left behind.
+- The `.gitignore` config block is backfilled in both install orders, without duplicates on CRLF files.
+- The manual install clones into `solana-ai-kit/`, so its `cp` steps find the files.
+- `validate.sh` skips, rather than fails, links into uninitialized submodules.
+- Destructive-command deny rules restored; the mainnet deploy deny rule dropped so `/deploy`'s mainnet step gets the approval prompt.
+- `plugin.json` no longer declares a redundant hooks path (duplicate load error).
+- Anchor TS package is `@anchor-lang/core`; `anchor-specialist` references point to `anchor-engineer`; `settings.json` syntax error fixed; `/setup-mcp` covers every `.env.example` key.
+
+### Removed
+- `.claude/rules/` (anchor, dotnet, pinocchio, rust, typescript).
+- `.claude/skills/token-2022.md` (replaced by the token-extensions skill).
+- Drift and Ranger Finance references (protocols gone).
+- The live `claude-code.yml` workflow (moved to a template, stopping duplicate `@claude` runs).
+
 ## [2.1.0] - 2026-06-26
 
 ### Added
