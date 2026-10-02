@@ -21,7 +21,7 @@ Harness setup (Kit LiteSVM plugin, embedded Surfpool under vitest): [testing.md]
 
 - `@anchor-lang/core` throws `AnchorError` with `error.errorCode.code` (the variant name) and `logs`; for a `SendTransactionError`, `await err.getLogs(connection)`. `anchor test` also streams program logs to `.anchor/program-logs/`.
 - Kit: a failed preflight is `SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`, with logs in `e.context.logs` and the instruction error in `e.cause`. Codama clients export `is<Program>Error(e, ...)` for custom codes.
-- Anchor error codes: 2000-2999 constraints (2006 seeds mismatch), 3000-3999 accounts (3012 not initialized), 6000+ your `#[error_code]` variants in declaration order.
+- Anchor error codes: 2000-2999 constraints (2006 seeds mismatch), 3000-3999 accounts (3012 not initialized), your `#[error_code]` variants at `offset` (default 6000) + discriminant: the variant's explicit `= N` if it sets one, else the previous variant's + 1.
 - Kit returns `bigint` for u64 and lamports; compare with `1_000n`. Jest shows "Do not know how to serialize a BigInt" instead of the real assertion when a failing value is a bigint; rerun with `--runInBand` to see it.
 - `AccountNotFound` for mainnet accounts under `anchor test`: Anchor starts Surfpool offline; set `[surfpool] online = true` and `datasource_rpc_url` in Anchor.toml. `ECONNREFUSED ::1:8899`: use `127.0.0.1`, not `localhost`. Other environment errors: [common-errors.md](../skills/ext/solana-dev/skills/solana-dev/references/common-errors.md).
 

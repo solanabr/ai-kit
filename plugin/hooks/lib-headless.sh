@@ -1,0 +1,1 @@
+../../.claude/hooks/lib-headless.sh
