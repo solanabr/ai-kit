@@ -211,4 +211,17 @@ PY
 )"
 assert_eq "" "$LINK_DRIFT" "Relative links and anchors in README, QUICK-START and docs/ resolve"
 
+# --- One deploy artifact: the solana-verify build output, which verification reproduces ---
+# `anchor build --verifiable` builds in Anchor's image, `solana-verify` and `anchor verify`
+# rebuild in solanafoundation/solana-verifiable-build, so target/verifiable/ never verifies.
+echo "[verifiable-build]"
+for f in CLAUDE-solana.md .claude/commands/deploy.md .claude/commands/setup-ci-cd.md \
+         .claude/commands/audit-solana.md .claude/commands/build-program.md .claude/skills/deployment.md; do
+  assert_file_contains "$REPO_ROOT/$f" "solana-verify build" "$f names solana-verify build as the deploy artifact"
+done
+DEPLOYS_VERIFIABLE="$(grep -rlE 'anchor deploy --verifiable|deploy target/verifiable' \
+  "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.claude/commands" "$REPO_ROOT/.claude/agents" \
+  "$REPO_ROOT"/.claude/skills/*.md "$REPO_ROOT"/.claude/skills/*/SKILL.md 2>/dev/null || true)"
+assert_eq "" "$DEPLOYS_VERIFIABLE" "No shipped file deploys target/verifiable/"
+
 print_summary
