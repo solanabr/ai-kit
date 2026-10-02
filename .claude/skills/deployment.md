@@ -10,9 +10,9 @@ The runbook behind `/deploy`; `/setup-ci-cd` owns the CI workflow. Kit policy: d
 ## Anchor 1.x changes that affect deploys
 
 - `anchor deploy` also uploads the IDL to Program Metadata (`--no-idl` skips it). `anchor idl init|upgrade --filepath target/idl/<name>.json` republishes it; the program ID comes from the IDL's `address`.
-- A program deployed with Anchor 0.32 or older that has a legacy IDL account: close it with the 0.32 CLI (`anchor idl close <PROGRAM_ID>`) while the 0.32 binary is still deployed, then deploy the 1.x binary, or that rent is stranded. See [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md), sections 5 and 10.
+- A program deployed with Anchor 0.32 or older that has a legacy IDL account: close it with `anchor legacy-idl close <PROGRAM_ID>` (`--print-only` prints the instruction for a multisig authority) while the 0.32 binary is still deployed, since the close is an instruction that binary handles; then deploy the 1.x binary, or that rent is stranded. In 1.x, `anchor idl close` closes the Program Metadata account instead. See [migrating-v0.32-to-v1.md](ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md), sections 5 and 10.
 - Anchor no longer shells out to the `solana` CLI. Loader flags go after `--`: `anchor deploy -- --with-compute-unit-price 50000`. `anchor program deploy|upgrade|write-buffer|set-buffer-authority|set-upgrade-authority|show|dump|close` mirror the `solana program` commands used below, and newer CLIs deprecate top-level `anchor deploy`/`anchor upgrade` in their favor.
-- `anchor verify <PROGRAM_ID>` wraps `solana-verify` since 0.32; binaries built with older Anchor will not verify with it.
+- `anchor verify <PROGRAM_ID>` wraps `solana-verify verify-from-repo` since 0.32 and needs `--current-dir` or `--repo-url <URL>`; pass the cluster after `--` (`-- -um`), since `--provider.cluster` is not forwarded. Binaries built with older Anchor will not verify with it.
 
 ## Build once, deploy that artifact
 
@@ -46,7 +46,8 @@ anchor deploy -p <name> --provider.cluster mainnet -- --with-compute-unit-price 
 solana program show <PROGRAM_ID> -u mainnet-beta
 anchor idl fetch <PROGRAM_ID> --provider.cluster mainnet    # diff against target/idl/<name>.json
 solana-verify verify-from-repo -um --program-id <PROGRAM_ID> <REPO_URL> --commit-hash <SHA> \
-  --library-name <lib> --mount-path <program dir> --remote  # accept the verify-PDA upload
+  --library-name <lib> --mount-path <program dir>           # accept the verify-PDA upload, signed by the upgrade authority
+solana-verify remote submit-job --program-id <PROGRAM_ID> --uploader <UPGRADE_AUTHORITY>
 ```
 
 ## Upgrade-authority staging
@@ -88,4 +89,4 @@ The workflow file comes from `/setup-ci-cd`; it needs these jobs:
 - test: `cargo test` / `anchor test` (LiteSVM, Surfpool), `cargo clippy -- -D warnings`, `cargo audit`.
 - deploy-devnet: on the integration branch, with a devnet-only key from CI secrets.
 - mainnet-buffer: write the buffer and move its authority to the Squads vault. CI never holds the mainnet upgrade authority.
-- verify: `solana-verify verify-from-repo --remote` against the release commit after the multisig executes.
+- verify: after the multisig executes, `solana-verify verify-from-repo` against the release commit (solana-verify 0.5.2 aborts on `--remote`), then the vault uploads the verify PDA and queues `remote submit-job` as in the Squads section above.
