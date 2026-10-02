@@ -236,6 +236,21 @@ echo ""
 # for every user (effort, experimental modes, LSP plugins, MCP auto-approval) or were
 # dead; update.sh strips them from older installs.
 echo "[Settings]"
+# A bare `Bash` or `Bash(*)` entry in permissions.ask is silently voided for any command
+# that runs sandboxed, and the kit ships the sandbox on — so such a rule reads as a gate
+# and is not one. A content-scoped ask like Bash(git push *) does fire, in default and in
+# bypass mode, so the problem is the bare form specifically, not `ask` itself.
+bare_ask="$(python3 -c 'import json
+d = json.load(open(".claude/settings.json"))
+ask = (d.get("permissions") or {}).get("ask") or []
+print(" ".join(r for r in ask if r.strip() in ("Bash", "Bash(*)")))' 2>/dev/null || true)"
+if [ -z "$bare_ask" ]; then
+  check "no bare Bash entry in permissions.ask (the sandbox voids it for sandboxed commands)" 0
+else
+  echo "  FAIL: permissions.ask contains $bare_ask; scope it to a command or use a hook"
+  FAIL=$((FAIL + 1))
+fi
+
 retired_keys="$(python3 -c 'import json
 d = json.load(open(".claude/settings.json"))
 env = d.get("env") or {}

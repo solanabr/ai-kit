@@ -192,8 +192,27 @@ FW_SETTINGS="$FW_DIR/.claude/settings.json"
 FW_SECURITY="$FW_DIR/.claude/security.json"
 # A settings.json the kit really shipped, straight from its tag, so the baseline hash in
 # update.sh is matched by construction rather than by a copy that drifts.
-git -C "$REPO_ROOT" show v2.1.0:.claude/settings.json > "$FW_DIR/pre-firewall.json" 2>/dev/null || true
+#
+# The tag is not present in a shallow clone, which is what `actions/checkout` produces by
+# default — so try to fetch it, and if it still is not there, skip this section loudly
+# instead of failing. A test that needs network or full history must say so rather than
+# reporting a feature as broken.
+FW_TAG_OK=yes
+if ! git -C "$REPO_ROOT" show v2.1.0:.claude/settings.json > "$FW_DIR/pre-firewall.json" 2>/dev/null; then
+  git -C "$REPO_ROOT" fetch -q --depth=1 origin tag v2.1.0 >/dev/null 2>&1 || true
+  git -C "$REPO_ROOT" show v2.1.0:.claude/settings.json > "$FW_DIR/pre-firewall.json" 2>/dev/null || FW_TAG_OK=no
+fi
+if [ "$FW_TAG_OK" = no ]; then
+  echo "  SKIP: firewall tier migration needs the v2.1.0 tag (shallow clone and no network)"
+else
 assert_json_valid "$FW_DIR/pre-firewall.json" "a pre-firewall settings.json is available from the v2.1.0 tag"
+
+# The frozen byte range, asserted here because the tag is in hand. update.sh's copy loop
+# overwrites the running script and bash resumes reading by byte offset, so a change in
+# lines 1-93 breaks self-update for every existing install. Nothing else checked this.
+assert_eq "$(git -C "$REPO_ROOT" show v2.1.0:.claude/bin/update.sh | head -93 | shasum | cut -d' ' -f1)" \
+  "$(head -93 "$REPO_ROOT/.claude/bin/update.sh" | shasum | cut -d' ' -f1)" \
+  "update.sh lines 1-93 are byte-identical to v2.1.0 (the frozen range)"
 
 fw_reset() {  # fw_reset <settings source> — back to a pre-firewall install
   rm -f "$FW_SECURITY" "$FW_SETTINGS"
@@ -255,6 +274,7 @@ assert_eq "__NOFILE__" "$(fw_tier)" "no security.json is written when settings.j
 assert_cmd_success "cmp -s '$FW_DIR/link.before' '$FW_DIR/real-settings.json'" \
   "the symlink target is left byte-identical"
 rm -f "$FW_SETTINGS"
+fi  # FW_TAG_OK
 
 # --- Agents mode ---
 echo "[agents mode]"

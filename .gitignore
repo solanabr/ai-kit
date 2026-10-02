@@ -321,3 +321,6 @@ bower_components
 .docusaurus
 # memsearch plugin index (generated, machine-local)
 .memsearch/
+
+# agent git worktrees (transient)
+.claude/worktrees/

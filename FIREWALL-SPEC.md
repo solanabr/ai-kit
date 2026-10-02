@@ -6,14 +6,16 @@ Four tiers (**Off / Relaxed / Medium / High**, default **Relaxed**) gating file 
 
 ## 1. Three findings that reshape the approved matrix
 
-### 1.1 `permissions.ask` is not a reliable control — the hook is
+### 1.1 Prompts belong in the hooks, because `ask` cannot be CI-safe
 
 Verified in-session, twice:
 
 - `git clean -n` matches `Bash(git clean *)` in the **ask** list → **ran silently, no prompt**.
 - `sudo -n true` matches `Bash(sudo *)` in **deny** → **blocked**.
 
-So the permission layer is live but the ask layer is inert, in a session with `sandbox.enabled: true` and bypass mode active. Two candidate causes, indistinguishable from inside: `sandbox.autoAllowBashIfSandboxed` (defaults true) auto-allowing sandboxed Bash over the ask rule, or bypass suppressing ask. **Both demand the same fix.**
+**Correction (T2, settled after this section was written): both candidate causes above are wrong, and the heading overstates it.** A *content-scoped* ask rule like `Bash(git push *)` does fire, in default mode **and** under bypass, with `autoAllowBashIfSandboxed` at its default `true`. What the sandbox voids is only a **bare `Bash` or `Bash(*)`** ask. The published documentation even uses `Bash(git clean *)` as its worked example of an ask that fires — so the `git clean -n` observation above remains unexplained, and is consistent only with the live rule having been bare or not matching. It stays UNVERIFIED as to cause.
+
+The design is unchanged, for a reason that has nothing to do with reliability: **an `ask` is a hard failure under `claude -p`, and a hook can decide not to prompt when there is no interactive user.** That is what makes Relaxed CI-safe, and no permission rule can express it. So prompts stay in the hooks — not because `ask` does not work, but because `ask` cannot be made CI-safe. `validate.sh` now rejects a bare `Bash` entry in `permissions.ask`, which is the real defect this section was circling.
 
 > **Every prompt is expressed as a hook returning `permissionDecision: "ask"`. Every hard block is hook `exit 2` or a `permissions.deny` rule. No tier distinction rests on `permissions.ask`.**
 
@@ -125,7 +127,7 @@ Medium asking for the one file High allows makes Medium **stricter than High** o
 "sandbox": { "filesystem": { "allowRead": ["./target", "./.anchor"] } }
 ```
 
-**Gated on test T3 (§6).** Note `target/deploy/*-keypair.json` is multi-segment so gets no any-depth promotion — it misses `programs/x/target/deploy/` and any `CARGO_TARGET_DIR`. And `*-keypair.json` does not match `keypair.json`. Also: deny rules get any-depth promotion, **allow rules do not** — so an allow must be written `Read(**/.anchor/**)`, never `Read(.anchor/**)`.
+**T3 is settled, and this design does not work — struck.** Precedence is *narrower path wins*, not *allow wins*, which §1.3 of this very document already states. The wildcard deny `Read(**/*-keypair.json)` is narrower than the directory allow `./target`, so the deny holds — and it holds for the subprocess too, which would break `anchor build`, `anchor test` and `anchor deploy`. `allowRead: ["./target"]` was a no-op for widening in the first place. **The shipped behaviour is the plain `allow`.** If the model-versus-subprocess asymmetry is wanted later, the route is a `PreToolUse` hook on `Read`: only `Read(...)` *deny rules* project into the sandbox, so a hook blocks the model without touching the subprocess. Note `target/deploy/*-keypair.json` is multi-segment so gets no any-depth promotion — it misses `programs/x/target/deploy/` and any `CARGO_TARGET_DIR`. And `*-keypair.json` does not match `keypair.json`. Also: deny rules get any-depth promotion, **allow rules do not** — so an allow must be written `Read(**/.anchor/**)`, never `Read(.anchor/**)`.
 
 ### 3.3 The Solana config dir cannot be dir-denied
 
