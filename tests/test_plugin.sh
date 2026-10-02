@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/helpers.sh"
 MARKETPLACE="$REPO_ROOT/.claude-plugin/marketplace.json"
 PLUGIN_DIR="$REPO_ROOT/plugin"
 PLUGIN_MANIFEST="$PLUGIN_DIR/.claude-plugin/plugin.json"
-PLUGIN_HUB="$PLUGIN_DIR/skills/SKILL.md"
+PLUGIN_HUB="$PLUGIN_DIR/skills/solana-ai-kit/SKILL.md"
 
 echo "[test_plugin] Claude Code plugin packaging (marketplace + core plugin)..."
 
@@ -66,6 +66,31 @@ for link in agents commands .mcp.json VERSION \
     FAIL=$((FAIL + 1))
   fi
 done
+
+# --- Skills layout: every plugin skill is skills/<name>/SKILL.md (issue #83) ---
+# A SKILL.md directly in skills/ makes Claude Code load that directory as one skill and stop
+# there, so the skills in its subdirectories never register. The hub needs its own directory.
+echo "[plugin skills layout]"
+assert_file_not_exists "$PLUGIN_DIR/skills/SKILL.md" "no SKILL.md directly in plugin/skills/ (it would hide the bundled skills)"
+for skill in solana-ai-kit idea-sprint pitch-deck hackathon token-extensions; do
+  assert_file_exists "$PLUGIN_DIR/skills/$skill/SKILL.md" "plugin skill is discoverable: skills/$skill/SKILL.md"
+done
+HUB_NAME="$(sed -n 's/^name:[[:space:]]*//p' "$PLUGIN_HUB" 2>/dev/null | head -1 || true)"
+assert_eq "solana-ai-kit" "$HUB_NAME" "plugin hub frontmatter name matches its directory"
+# The hub's links are relative to its own directory, so each one must resolve from there
+HUB_LINKS=0
+while IFS= read -r link; do
+  HUB_LINKS=$((HUB_LINKS + 1))
+  TOTAL=$((TOTAL + 1))
+  if [ -e "$(dirname "$PLUGIN_HUB")/$link" ]; then
+    echo "  PASS: plugin hub link resolves: $link"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: plugin hub link does not resolve from skills/solana-ai-kit/: $link"
+    FAIL=$((FAIL + 1))
+  fi
+done < <(grep -oE '\]\([^)]+\)' "$PLUGIN_HUB" 2>/dev/null | sed 's/^](//; s/)$//; s/#.*$//' | grep -vE '^(https?:|$)' | sort -u)
+assert_cmd_success "[ $HUB_LINKS -gt 0 ]" "plugin hub has relative links to check"
 
 # --- Plugin hooks (real file, mirrors .claude/settings.json hooks) ---
 echo "[plugin hooks]"
