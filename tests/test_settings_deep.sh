@@ -132,6 +132,18 @@ assert_rule() {
   fi
 }
 
+# Agents install the extension packs they link into without a prompt (#96), but only through
+# list and add: prune, select and uninstalled still ask.
+assert_rule allow "Bash(bash .claude/bin/skills.sh list)" yes "permissions.allow has skills.sh list"
+assert_rule allow "Bash(bash .claude/bin/skills.sh add *)" yes "permissions.allow has skills.sh add"
+SKILLS_ALLOW="$(python3 -c "
+import fnmatch, json
+allow = [r[5:-1] for r in json.load(open('$SETTINGS'))['permissions']['allow'] if r.startswith('Bash(')]
+for c in ('list', 'add sendai', 'prune', 'select a b', 'uninstalled'):
+    print(c.split()[0] + '=' + ('yes' if any(fnmatch.fnmatchcase('bash .claude/bin/skills.sh ' + c, r) for r in allow) else 'no'))
+" 2>/dev/null | tr '\n' ' ')"
+assert_eq "list=yes add=yes prune=no select=no uninstalled=no " "$SKILLS_ALLOW" "only skills.sh list and add run without a prompt"
+
 # Secret access and irreversible on-chain actions are hard blocks.
 for r in "Read(~/.ssh/**)" "Read(~/.config/solana/id.json)" "Bash(cat *keypair*.json)" "Bash(gh auth token *)" \
          "Bash(solana program set-upgrade-authority *--final*)" "Bash(solana program close *--bypass-warning*)"; do

@@ -43,6 +43,7 @@ assert_file_exists "$TEMP_DIR/.agents/skills/SKILL.md" "SKILL.md exists in .agen
 
 # settings.json should exist in .agents/
 assert_json_valid "$TEMP_DIR/.agents/settings.json" ".agents/settings.json is valid JSON"
+assert_file_contains "$TEMP_DIR/.agents/settings.json" "Bash(bash .agents/bin/skills.sh add *)" ".agents/settings.json allows skills.sh add at its .agents/ path"
 
 # Count agents (should match full install)
 AGENT_COUNT=$(find "$TEMP_DIR/.agents/agents" -name "*.md" | wc -l | tr -d ' ')

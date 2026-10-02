@@ -234,6 +234,8 @@
       "Bash(cross *)",
       "Bash(cargo-generate *)",
       "Bash(solana-install *)",
+      "Bash(bash .claude/bin/skills.sh list)",
+      "Bash(bash .claude/bin/skills.sh add *)",
 
       "Read(*)",
       "Edit(*)",
