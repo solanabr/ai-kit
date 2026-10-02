@@ -51,6 +51,8 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
     desc = m.group(1).strip().strip("\"'") if m else ""
     report(0 < len(desc) <= 1024, f"{name}: description present and <= 1024 chars ({len(desc)})")
     report(f"({name}/SKILL.md)" in hub, f"{name}: routed from .claude/skills/SKILL.md")
+    lines = len(text.splitlines())
+    report(lines <= 500, f"{name}: SKILL.md within the 500-line guidance ({lines})")
 
     broken = []
     checked = 0
@@ -70,5 +72,14 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
            ("" if not broken else " (broken: " + "; ".join(broken[:5]) + ")"))
 PY
 )
+
+echo ""
+echo "[test_local_skills] token-extensions facts checked against source (issue #124)..."
+TX="$REPO_ROOT/.claude/skills/token-extensions"
+assert_file_contains "$TX/SKILL.md" "without TokenMetadata, TokenGroup and TokenGroupMember" "Kit mint space excludes the post-initialize extensions"
+assert_file_contains "$TX/SKILL.md" "update-confidential-transfer-settings\` reject \`--multisig-signer\`" "SKILL.md names the CLI commands that reject --multisig-signer"
+assert_file_contains "$TX/SKILL.md" "\`update-ui-amount-multiplier\` accept it" "SKILL.md names the CLI commands that ignore --multisig-signer"
+assert_file_contains "$TX/SKILL.md" "Extension Initialization Order" "SKILL.md overrides the linked Kit doc's extension ordering"
+assert_file_contains "$TX/references/account-extensions.md" "Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH" "MemoTransfer notes memo v4 as accepted from program v11.1.0"
 
 print_summary

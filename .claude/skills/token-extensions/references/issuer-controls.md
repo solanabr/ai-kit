@@ -27,7 +27,7 @@ Each authority below is rotated with SetAuthority, signed by the current holder 
 - Still allowed while paused: approve, revoke, freeze and thaw, SetAuthority, closing accounts, creating accounts, and harvesting or withdrawing withheld fees.
 - Plain `Transfer` from any token account of the mint fails with `MintRequiredForTransfer`, paused or not.
 - The authority can't be None at initialize. Rotate it with SetAuthority `Pause` (CLI `pause`). Setting it to None while paused leaves the mint paused forever.
-- CLI: `create-token --enable-pause` (authority = mint authority), `spl-token pause <MINT>`, `spl-token resume <MINT>`. CLI 5.6.1's pause and resume drop multisig signers, so a multisig pause authority needs another client.
+- CLI: `create-token --enable-pause` (authority = mint authority), `spl-token pause <MINT>`, `spl-token resume <MINT>`. CLI 5.6.1's pause and resume ignore `--multisig-signer`, so a multisig pause authority needs another client ([tooling gaps](../SKILL.md#combinations)).
 - Kit: `extension('PausableConfig', { authority, paused: false })`, `getPauseInstruction({ mint, authority })`, `getResumeInstruction({ mint, authority })`. These two builders take no multisig signers.
 - Anchor: `extensions::pausable::authority = ...` on `init`, or `pausable_initialize(ctx, authority)`; then `pausable_pause(ctx)` and `pausable_resume(ctx)`.
 
