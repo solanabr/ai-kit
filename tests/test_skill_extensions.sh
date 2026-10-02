@@ -230,6 +230,59 @@ else
   PASS=$((PASS + 1))
 fi
 
+# --- A pack the registry no longer lists goes; folders the user made stay ---
+echo "[orphans]"
+assert_file_not_exists "$REPO_ROOT/.claude/skills/kit-packs.txt" "The kit ships no skills/kit-packs.txt (it is per-project state)"
+assert_eq "$(sorted $CORE sendai jupiter)" "$(grep -v '^#' "$P2/.claude/skills/kit-packs.txt" | sort | tr '\n' ' ' | sed 's/ $//')" "Install records the packs it put in the project"
+mkdir -p "$P2/.claude/skills/ext/old-core/x" "$P2/.claude/skills/ext/old-ext/x" "$P2/.claude/skills/ext/my-pack/x" "$P2/.claude/skills/ext/jupiter.partial.AbC123/x"
+echo old-core >> "$P2/.claude/skills/kit-packs.txt"
+echo old-ext >> "$P2/.claude/skills/extensions.txt"
+mkdir -p "$P2/.claude/skills/old-skill" "$P2/.claude/skills/my-skill"
+printf '# old-up: skill folders bin/skills.sh copied unchanged\n# from x at the commit below. skills.sh and update.sh manage this file.\ncommit %s\nskill old-skill\n' "$(printf '0%.0s' $(seq 40))" > "$P2/.claude/skills/old-up.lock"
+printf 'commit 1\nskill my-skill\n' > "$P2/.claude/skills/mine.lock"
+PRUNE_OUT="$(cd "$P2" && bash .claude/bin/skills.sh prune 2>&1)"
+assert_dir_not_exists "$P2/.claude/skills/ext/old-core" "prune removes a pack kit-packs.txt lists and the registry dropped"
+assert_dir_not_exists "$P2/.claude/skills/ext/old-ext" "prune removes an extension extensions.txt lists and the registry dropped"
+assert_dir_not_exists "$P2/.claude/skills/ext/jupiter.partial.AbC123" "prune removes the staging folder a killed add left"
+assert_dir_exists "$P2/.claude/skills/ext/my-pack" "prune keeps an ext/ folder the kit did not install"
+assert_dir_not_exists "$P2/.claude/skills/old-skill" "prune removes an upstream pack the registry dropped, by its lock"
+assert_file_not_exists "$P2/.claude/skills/old-up.lock" "...and its lock"
+assert_dir_exists "$P2/.claude/skills/my-skill" "prune leaves a .lock the kit did not write alone"
+assert_contains "$PRUNE_OUT" "Removed old-core" "prune says which packs it removed"
+assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "prune keeps the core packs and recorded extensions"
+
+# --- A reformatted registry is refused rather than read as zero packs ---
+echo "[registry layout]"
+P5="$TEMP_DIR/reformatted"
+mkdir -p "$P5/.claude/bin" "$P5/.claude/skills/ext"
+cp "$SKILLS_SH" "$P5/.claude/bin/"
+python3 -c 'import json, sys; json.dump(json.load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=4)' "$REGISTRY" "$P5/.claude/skills/skill-registry.json"
+for cmd in list prune uninstalled "add jupiter"; do
+  TOTAL=$((TOTAL + 1))
+  # shellcheck disable=SC2086
+  if OUT="$(cd "$P5" && bash .claude/bin/skills.sh $cmd 2>&1)"; then
+    echo "  FAIL: skills.sh $cmd accepted a reformatted registry"
+    FAIL=$((FAIL + 1))
+  elif printf '%s\n' "$OUT" | grep -q "lost the layout"; then
+    echo "  PASS: skills.sh $cmd refuses a reformatted registry and says why"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: skills.sh $cmd failed on a reformatted registry without naming the layout: $OUT"
+    FAIL=$((FAIL + 1))
+  fi
+done
+P6="$TEMP_DIR/reformatted-kit"
+mkdir -p "$P6/kit/skills/ext/jupiter" "$P6/project"
+cp "$P5/.claude/skills/skill-registry.json" "$P6/kit/skills/"
+TOTAL=$((TOTAL + 1))
+if bash "$SKILLS_SH" select "$P6/kit" "$P6/project/.claude" >/dev/null 2>&1; then
+  echo "  FAIL: skills.sh select kept every pack of a kit whose registry it could not read"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS: skills.sh select refuses a kit registry it cannot read"
+  PASS=$((PASS + 1))
+fi
+
 # --- --agents installs use .agents/bin/skills.sh and .agents/skills/ext ---
 echo "[--agents]"
 P3="$TEMP_DIR/agents"

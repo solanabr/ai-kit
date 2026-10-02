@@ -19,7 +19,9 @@ set -euo pipefail
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
-# those and the core packs. skills/<id>.lock records an upstream pack's commit and
+# those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
+# here, so a pack a later kit drops is removed without touching folders the user
+# made. skills/<id>.lock records an upstream pack's commit and
 # folders. Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a local checkout
 # (offline, tests); SOLANA_AI_KIT_UPSTREAM and SOLANA_AI_KIT_BRANCH override the
 # source (default: main); SOLANA_AI_KIT_PACK_MIRROR=/dir fetches upstream pack <id>
@@ -29,6 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_NAME="$(basename "$CONFIG_DIR")"
 LIST_FILE="extensions.txt"
+PACKS_FILE="kit-packs.txt"
 
 # Never installed, whatever the registry lists: anthropics/skills' docx, pdf, pptx and
 # xlsx are proprietary (use only within Anthropic's services; no copies or
@@ -40,7 +43,9 @@ die() { echo "skills.sh: $*" >&2; exit 1; }
 
 # id<TAB>tier<TAB>triggers for each kit pack. The registry keeps one key per line
 # and arrays inline, so awk reads it without jq or python; the test suite holds it
-# to that layout (tests/test_skill_extensions.sh).
+# to that layout (tests/test_skill_extensions.sh), and check_registry refuses a file
+# that lost it. triggers is display text for people and agents (the INSTALL WHEN
+# column of list); nothing matches on it.
 registry_rows() {
   awk -F'"' '
     /^    \{/               { id = ""; tier = ""; trig = "" }
@@ -49,6 +54,16 @@ registry_rows() {
     /^      "triggers": \[/ { for (i = 4; i < NF; i += 2) trig = trig (trig == "" ? "" : ", ") $i }
     /^    \}/               { if (tier != "") printf "%s\t%s\t%s\n", id, tier, trig }
   ' "$1"
+}
+
+# A reformatted registry is still valid JSON, but the awk above then reads fewer
+# packs, or none, and select would keep every pack. Refuse it instead.
+check_registry() {
+  local reg="$1" rows tiers
+  [ -f "$reg" ] || die "no skill registry at $reg"
+  rows="$(registry_rows "$reg" | grep -c . || true)"
+  tiers="$(grep -cE '"tier"[[:space:]]*:' "$reg" || true)"
+  [ "$rows" = "$tiers" ] || die "read $rows of the $tiers packs in $reg: it lost the layout skills.sh reads (each entry's braces on their own lines at 4 spaces, one key per line at 6, arrays inline). Restore the kit's copy, e.g. with $CONFIG_NAME/bin/update.sh"
 }
 
 tier_ids() { registry_rows "$1" | awk -F'\t' -v t="$2" '$2 == t { print $1 }'; }
@@ -262,6 +277,46 @@ drop_others() {
   done
 }
 
+# Record the ext/ packs the kit installed in <cfg>: the core packs and the recorded
+# extensions. Called after write_list.
+write_packs() {
+  local cfg="$1" reg="$2"
+  {
+    echo "# Skill packs bin/skills.sh installed in this project. When a kit update drops one"
+    echo "# from skill-registry.json, update.sh removes it; ext/ folders not listed here stay."
+    { tier_ids "$reg" core; recorded_extensions "$cfg" "$reg"; } | awk 'NF' | sort -u
+  } > "$cfg/skills/$PACKS_FILE"
+}
+
+# Remove the packs a previous kit installed in <cfg> that this registry no longer
+# lists: an ext/ folder named in kit-packs.txt or extensions.txt, an upstream pack
+# by its lock, and staging folders a killed add left. Folders the user made stay.
+prune_orphans() {
+  local cfg="$1" reg="$2" known managed dir id lock
+  known="$(registry_rows "$reg" | cut -f1)"
+  managed="$(cat "$cfg/skills/$PACKS_FILE" "$cfg/skills/$LIST_FILE" 2>/dev/null | grep -vE '^[[:space:]]*(#|$)' || true)"
+  for dir in "$cfg"/skills/ext/*; do
+    [ -d "$dir" ] || continue
+    id="$(basename "$dir")"
+    case "$id" in
+      *.partial.*) id="${id%%.partial.*}" ;;
+      *) if has_line "$known" "$id"; then continue; fi ;;
+    esac
+    has_line "$known" "$id" || has_line "$managed" "$id" || continue
+    rm -rf "${dir:?}"
+    case "$dir" in *.partial.*) ;; *) echo "- Removed $id: this kit version no longer ships it" ;; esac
+  done
+  for lock in "$cfg"/skills/*.lock; do
+    [ -f "$lock" ] || continue
+    id="$(basename "$lock" .lock)"
+    valid_name "$id" || continue
+    if has_line "$known" "$id"; then continue; fi
+    grep -q 'skills.sh and update.sh manage this file' "$lock" || continue
+    remove_upstream "$cfg" "$id"
+    echo "- Removed $id: this kit version no longer ships it"
+  done
+}
+
 summary() {
   local reg="$1" keep="$2" name="$3" ext
   ext="$(printf '%s\n' "$keep" | awk 'NF' | tr '\n' ' ')"
@@ -272,10 +327,11 @@ summary() {
 cmd_select() {
   local src="$1" dst="$2" reg="$1/skills/skill-registry.json" recorded keep id
   shift 2
-  [ -f "$reg" ] || die "no skill registry at $reg"
+  check_registry "$reg"
   recorded="$(recorded_extensions "$dst" "$reg")"
   keep="$( { printf '%s\n' "$recorded"; expand_ids "$reg" "$@"; } | awk 'NF && !seen[$0]++')"
   drop_others "$src" "$reg" "$keep"
+  prune_orphans "$dst" "$reg"
   # Upstream packs are not in the kit checkout: fetch the kept ones into the project.
   for id in $(upstream_ids "$reg"); do
     has_line "$keep" "$id" || continue
@@ -284,14 +340,17 @@ cmd_select() {
     has_line "$recorded" "$id" || keep="$(printf '%s\n' "$keep" | grep -vxF -- "$id" || true)"
   done
   write_list "$dst" $keep
+  write_packs "$dst" "$reg"
   summary "$reg" "$keep" "$(basename "$dst")"
 }
 
 cmd_prune() {
   local reg="$CONFIG_DIR/skills/skill-registry.json" keep id
   [ -f "$reg" ] || return 0
+  check_registry "$reg"
   keep="$(recorded_extensions "$CONFIG_DIR" "$reg")"
   drop_others "$CONFIG_DIR" "$reg" "$keep"
+  prune_orphans "$CONFIG_DIR" "$reg"
   # Installed upstream packs move to the commit this kit version pins.
   for id in $(upstream_ids "$reg"); do
     if has_line "$keep" "$id" && ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
@@ -299,6 +358,7 @@ cmd_prune() {
     fi
   done
   write_list "$CONFIG_DIR" $keep
+  write_packs "$CONFIG_DIR" "$reg"
   summary "$reg" "$keep" "$CONFIG_NAME"
 }
 
@@ -307,6 +367,7 @@ cmd_prune() {
 cmd_uninstalled() {
   local reg="$CONFIG_DIR/skills/skill-registry.json" keep id
   [ -f "$reg" ] || return 0
+  check_registry "$reg"
   keep="$(recorded_extensions "$CONFIG_DIR" "$reg")"
   for id in $(tier_ids "$reg" extension); do
     has_line "$keep" "$id" || echo "$id"
@@ -343,7 +404,7 @@ cmd_add() {
     esac
   done
   [ "${#args[@]}" -gt 0 ] || die "usage: skills.sh add [--force] <id> [<id>...] (see: skills.sh list)"
-  [ -f "$reg" ] || die "no skill registry at $reg"
+  check_registry "$reg"
   trap 'rm -rf ${tmp:+"$tmp"} ${STAGING:+"$STAGING"}' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
@@ -382,12 +443,13 @@ cmd_add() {
   extensions="$(tier_ids "$reg" extension)"
   write_list "$CONFIG_DIR" $(recorded_extensions "$CONFIG_DIR" "$reg") \
     $(for id in $ids; do if has_line "$extensions" "$id" && ! has_word "$failed" "$id"; then echo "$id"; fi; done)
+  write_packs "$CONFIG_DIR" "$reg"
   [ -z "$failed" ] || die "not installed:$failed"
 }
 
 cmd_list() {
   local reg="$CONFIG_DIR/skills/skill-registry.json" id tier trig state
-  [ -f "$reg" ] || die "no skill registry at $reg"
+  check_registry "$reg"
   printf '%-20s %-10s %-10s %s\n' PACK TIER STATE "INSTALL WHEN THE TASK INVOLVES"
   registry_rows "$reg" | while IFS=$'\t' read -r id tier trig; do
     state="-"
@@ -404,6 +466,6 @@ case "${1:-list}" in
   select) shift; [ "$#" -ge 2 ] || die "usage: skills.sh select <kit .claude dir> <config dir> [ids]"; cmd_select "$@" ;;
   prune) cmd_prune ;;
   uninstalled) cmd_uninstalled ;;
-  -h|--help|help) sed -n '4,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '4,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac
