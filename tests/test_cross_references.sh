@@ -224,4 +224,16 @@ DEPLOYS_VERIFIABLE="$(grep -rlE 'anchor deploy --verifiable|deploy target/verifi
   "$REPO_ROOT"/.claude/skills/*.md "$REPO_ROOT"/.claude/skills/*/SKILL.md 2>/dev/null || true)"
 assert_eq "" "$DEPLOYS_VERIFIABLE" "No shipped file deploys target/verifiable/"
 
+# --- Deploy commands that abort or hit the wrong account (solana-verify 0.5.2, Anchor 1.2.0) ---
+echo "[deploy-commands]"
+DEPLOY_MD="$REPO_ROOT/.claude/commands/deploy.md"
+DEPLOYMENT_MD="$REPO_ROOT/.claude/skills/deployment.md"
+assert_file_not_contains "$DEPLOYMENT_MD" "verify-from-repo --remote" "deployment.md: CI verify job drops --remote (aborts in solana-verify 0.5.2)"
+assert_file_not_contains "$DEPLOYMENT_MD" "dir> --remote" "deployment.md: first-deploy verify-from-repo drops --remote (aborts in solana-verify 0.5.2)"
+assert_file_contains "$DEPLOYMENT_MD" "remote submit-job --program-id <PROGRAM_ID> --uploader <UPGRADE_AUTHORITY>" "deployment.md queues the remote job with submit-job"
+assert_file_not_contains "$DEPLOY_MD" "anchor verify <PROGRAM_ID> --provider.cluster" "deploy.md: anchor verify no longer relies on --provider.cluster"
+assert_file_contains "$DEPLOY_MD" "anchor verify <PROGRAM_ID> --current-dir -- -um" "deploy.md: anchor verify passes --current-dir and the cluster after --"
+assert_file_contains "$DEPLOYMENT_MD" "anchor legacy-idl close <PROGRAM_ID>" "deployment.md closes the legacy IDL with anchor legacy-idl close"
+assert_file_not_contains "$DEPLOYMENT_MD" "(\`anchor idl close <PROGRAM_ID>\`)" "deployment.md no longer sends legacy IDL closes to anchor idl close"
+
 print_summary
