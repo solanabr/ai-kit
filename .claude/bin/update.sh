@@ -168,7 +168,7 @@ if [ "$CONFIG_NAME" = ".agents" ]; then
   agents_paths "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/.gitmodules"
   if [ "$DRY_RUN" = false ]; then
     while IFS= read -r rel; do agents_paths "$TARGET_DIR/$CONFIG_NAME/$rel"; done < <(
-      cd "$TEMP_DIR/repo/.claude" && find agents commands rules skills -path skills/ext -prune -o -type f -print 2>/dev/null
+      cd "$TEMP_DIR/repo/.claude" && find agents commands skills -path skills/ext -prune -o -type f -print 2>/dev/null
     )
     # Older --agents installs registered ext/ under .claude/ paths; drop those
     # stale entries unless a regular .claude/ install still uses them.
