@@ -413,6 +413,7 @@ The pin moves by hand, not through Dependabot: review the upstream diff of the t
 ├── .github/dependabot.yml       # Weekly grouped PR bumping the ext/ skill pins
 ├── .github/workflows/
 │   ├── ci.yml                       # PR validation
+│   ├── claude-code-review.yml       # Automatic Claude review of every PR (advisory)
 │   └── claude.yml                   # @claude mention responder (issues/PRs)
 ├── .github/templates/
 │   └── claude-code.yml              # Claude Code action template (copy into a project's own workflows/)
