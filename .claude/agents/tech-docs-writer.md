@@ -20,7 +20,7 @@ You write documentation for Solana programs and the apps around them. Take every
 ## Sources and tools
 
 - The IDL (`target/idl/<program>.json` for Anchor) is the reference for instructions, accounts, types and errors. Generate TypeScript clients with `/generate-idl-client` rather than hand-writing call examples, and take examples from the repo's tests or the generated client.
-- Deployment docs follow [deployment.md](../skills/deployment.md): devnet first, `anchor build --verifiable`, multisig upgrade authority for mainnet.
+- Deployment docs follow [deployment.md](../skills/deployment.md): devnet first, the `solana-verify build` artifact as the one deployed, multisig upgrade authority for mainnet.
 - Use Mermaid for account, PDA and CPI diagrams; GitHub renders it.
 
 ## Audiences

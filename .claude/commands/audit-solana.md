@@ -29,7 +29,7 @@ Audit the program(s) in $ARGUMENTS (default: every program in the workspace) for
    - **Pinocchio/native**: `create_account` on a PDA fails if someone pre-funded it (use allocate + assign + transfer); zero-copy casts check length and alignment and never reference fields of `repr(packed)` structs; writable and signer flags enforced.
    - **Economics**: slippage bounds; oracle staleness and confidence; first-depositor or donation inflation of share prices; loops over caller-controlled lengths (CU exhaustion).
 4. Fuzz programs that hold funds with Trident (`trident init`, then `trident fuzz run <target>`) and triage crashes. Hand missing tests (each error path and constraint failure) to solana-qa-engineer.
-5. Deploy readiness: `anchor build --verifiable` succeeds; the upgrade-authority holder and plan, admin keys, emergency pause and security assumptions are documented; if CI has no security checks, suggest `/setup-ci-cd`.
+5. Deploy readiness: `solana-verify build` succeeds (its `.so` is the deploy artifact, see [deployment.md](../skills/deployment.md)); the upgrade-authority holder and plan, admin keys, emergency pause and security assumptions are documented; if CI has no security checks, suggest `/setup-ci-cd`.
 
 ## Output
 

@@ -17,7 +17,7 @@ The runbook behind `/deploy`; `/setup-ci-cd` owns the CI workflow. Kit policy: d
 ## Build once, deploy that artifact
 
 1. `/test-rust` green, `/audit-solana` for code that holds funds, `/profile-cu` baseline recorded.
-2. `anchor build` for the IDL and types, then `solana-verify build --library-name <lib>` last. It rebuilds `target/deploy/<lib>.so` in Docker, and it is the build that `solana-verify verify-from-repo` and `anchor verify` reproduce. Any later `anchor build` or `cargo build-sbf` overwrites that file with a non-deterministic binary.
+2. `anchor build` for the IDL and types, then `solana-verify build --library-name <lib>` last. It rebuilds `target/deploy/<lib>.so` in Docker, and it is the build that `solana-verify verify-from-repo` and `anchor verify` reproduce. Any later `anchor build` or `cargo build-sbf` overwrites that file with a non-deterministic binary. Don't deploy `anchor build --verifiable` output (`target/verifiable/`): it is built in Anchor's own image, not the one the verifier uses.
 3. Record `solana-verify get-executable-hash target/deploy/<lib>.so` next to the release commit.
 4. Back up `target/deploy/<name>-keypair.json` (it is the program address) outside the repo before the first deploy.
 
