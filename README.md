@@ -84,7 +84,7 @@ Already installed? `bash .claude/bin/update.sh`, or `/update` inside Claude Code
 
 ### Config is gitignored by default
 
-To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.json`, and `.gitmodules` to `.gitignore` — the kit reads as ignorable infrastructure, not your app code (the `ext/` skill packs are ignored too; `bash .claude/bin/update.sh` re-fetches the core packs and the project's extensions).
+To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules` and `.safe-ai-skill/` to `.gitignore` — the kit reads as ignorable infrastructure, not your app code (the `ext/` skill packs are ignored too; `bash .claude/bin/update.sh` re-fetches the core packs and the project's extensions).
 
 Want the config tracked in git (team setup, reproducible config)? Run `/commit-claude-config` — it un-ignores those files and commits them (or edit `.gitignore` by hand). If your project already commits `.claude/` or its own `.gitmodules`, the new ignore lines are a no-op — git keeps tracking files it already tracks.
 
@@ -107,6 +107,10 @@ This guides you through the Helius API key and offers the [optional MCP servers]
 - **`--agents` install (Codex, opencode):** the hooks are Claude Code only. Vet add-ons with the CLI instead: `npx @stbr/safe-ai-skill add skill|mcp <source>`.
 
 Its engine ships prebuilt for macOS and Linux (x64, arm64) and fails closed elsewhere, such as native Windows. To turn it off for yourself in a full install, set `"safe-ai-skill@stbr": false` under `enabledPlugins` in `.claude/settings.local.json`.
+
+**Project policy.** The full install writes `.safe-ai-skill/policy.yaml`, which safe-ai-skill deep-merges over its default policy. It sets one key, `supply_chain.verify_skills_dirs: [".claude/skills"]`, so the session-start check covers this project's skills and no longer sweeps your personal `~/.claude/skills`. `install.sh` writes it only when it is missing, and `/update` adds it to older installs, so your edits stay. It is gitignored with the rest of the kit config; run `/commit-claude-config` so teammates who clone the repo get it too.
+
+The policy leaves `verify_ext_submodules` at its default, `true`, so each `ext/` pack is checked on its own. Setting it to `false` would scan all of `ext/` as one skill, and one finding would quarantine every pack. The check's heuristics are plain substring matches, so a pack whose docs mention a keypair path (the core `solana-dev` pack does) can still be quarantined at session start. That needs an upstream fix ([solanabr/safe-ai-skill#5](https://github.com/solanabr/safe-ai-skill/issues/5)).
 
 ## Firewall tiers
 

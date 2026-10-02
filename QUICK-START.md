@@ -36,7 +36,7 @@ claude
 
 That's it. Claude now has Solana superpowers.
 
-> The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
+> The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`, `.safe-ai-skill/`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
 
 > A full install starts on the **Relaxed** firewall tier, meant for local development: it blocks SSH and GPG keys, keychains, browser profiles, shell startup files and history, and it deliberately leaves your Solana config dir and the project's `.env` readable so the toolchain works. `/firewall` switches tier; [README → Firewall tiers](README.md#firewall-tiers) has the full matrix and [docs/firewall.md](docs/firewall.md) the limits.
 
@@ -233,6 +233,7 @@ your-project/
 │   ├── security.json      # Firewall tier in force (Relaxed by default)
 │   └── settings.json      # Permissions, sandbox and hooks, generated from the tier
 ├── .mcp.json              # MCP server configs (project root)
+├── .safe-ai-skill/        # safe-ai-skill project policy
 ├── programs/              # Your Solana programs
 ├── app/                   # Your frontend
 └── ...
