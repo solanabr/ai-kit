@@ -165,7 +165,11 @@ Long-option abbreviation works in **git** but not in the **solana** CLI (clap v2
 
 ## 4. Egress — the kit cannot enforce it, and must say so
 
-**Two reviews conflict and this needs resolution (test T1).** One verified `sandbox.network.strictAllowlist` in the 2.1.267 binary and proposed it as the primary control. The other found the docs state it **has no effect** when set in `.claude/settings.json` or `.claude/settings.local.json` — the only scopes the kit writes — and that at `bypassPermissions` the allowlist is inert entirely unless `strictAllowlist` or `allowManagedDomainsOnly` is on.
+**Settled (T1). Both reviews were right about different things.** `sandbox.network.strictAllowlist` does exist in the 2.1.267 binary, *and* it is scope-gated out of the only files the kit writes: it is honored from user, managed/policy and `--settings` scope, and ignored in `.claude/settings.json` and `.claude/settings.local.json`. `allowedDomains` itself *is* read from project scope, but it only ever **prompts**, and under `bypassPermissions` it is inert entirely.
+
+So the kit cannot ship egress enforcement from project scope. `deniedDomains` is the ceiling, and it is genuinely honored — verified by a live refusal, where a denied host returns a 403 on CONNECT *with* a `sandbox_violations` block naming the reason. That block is also the discriminator between a sandbox refusal and an ordinary proxy refusal, which look identical otherwise.
+
+Do **not** add `allowedDomains` to the shipped project `settings.json`: under `--dangerously-skip-permissions` it would read as an allowlist while permitting everything.
 
 If the docs are right, **High has no egress control the kit can ship.** What remains:
 
@@ -207,10 +211,10 @@ Items 1-5 each break `anchor test` or `/doctor` on a default install.
 
 | | Question | Why it gates |
 |---|---|---|
-| **T1** | Does `sandbox.network.strictAllowlist` work from project settings? | Decides whether the kit can ship egress enforcement at all (§4) |
-| **T2** | Does `permissions.ask` prompt in **default** (non-bypass) mode with the sandbox on? | Decides whether rule-ask works for anyone, or is dead everywhere (§1.1) |
-| **T3** | Does `sandbox.filesystem.allowRead` outrank a `Read`-deny projected into `denyRead`? | Decides the High keypair design; if it loses, `anchor test` breaks (§3.2) |
-| **T4** | Does `blockReadsOutsideWorkingDirectories` also block `cat` in Bash? | Two reviews disagree; the README claim depends on it |
+| ~~T1~~ | **Settled, negative.** `strictAllowlist` is ignored in project settings; `allowedDomains` only prompts there and is inert under bypass. `deniedDomains` is honored and is the ceiling. | §4 rewritten; README hedge resolved |
+| ~~T2~~ | **Settled.** A *content-scoped* ask fires in default **and** bypass mode; only a bare `Bash`/`Bash(*)` ask is voided for sandboxed commands. The axis is bare-vs-scoped, not permission mode and not `autoAllowBashIfSandboxed`. | §1.1 corrected; `validate.sh` rejects the bare form |
+| ~~T3~~ | **Settled, negative.** Narrower path wins, so the wildcard deny beats the directory allow and reaches the build subprocess. `allowRead: ["./target"]` was a no-op for widening anyway. | §3.2 struck; plain `allow` is correct |
+| ~~T4~~ | **Settled — three layers, and both earlier probes were right.** File tools refuse in every mode (`true` in any source wins). Bash refuses a statically resolvable outside read and **escalates to a prompt** when it cannot resolve the path, per an explicit interpreter table (`python -c`, `node -e`, `bash -c`, …). The sandbox's `denyRead` over `/Users/`, `/home/`, `/Volumes/` is the third layer, and the only one sandbox state affects. | README fence sentence names all three |
 
 ---
 
