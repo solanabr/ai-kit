@@ -40,5 +40,26 @@ OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "1" "$RC" "validate.sh fails on a broken ext/ link"
 assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/solana-dev/moved.md" "link into a checked-out pack is still checked"
 assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/no-such-pack/SKILL.md" "link into a pack that does not exist still fails"
+rm "$TEMP_DIR/.claude/skills/zz-links.md" "$TEMP_DIR/.claude/skills/ext/solana-dev/README.md"
+
+# The shipped VERSION must sit outside update.sh's retired-defaults migration case
+echo "[migration gate]"
+UPDATE_SH="$TEMP_DIR/.claude/bin/update.sh"
+cp "$UPDATE_SH" "$TEMP_DIR/update.sh.orig"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "0" "$RC" "validate.sh passes with the shipped VERSION and update.sh's case"
+
+printf 'solana-ai-kit 2.1.0\n' > "$TEMP_DIR/.claude/VERSION"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when VERSION is left at a migrated version (2.1.0)"
+assert_contains "$OUT" "FAIL: Shipped VERSION 2.1.0 is outside" "the failure names the shipped version"
+cp "$REPO_ROOT/.claude/VERSION" "$TEMP_DIR/.claude/VERSION"
+
+SHIPPED="$(awk '{print $NF}' "$REPO_ROOT/.claude/VERSION")"
+sed "s/^  unknown|1\.\*|/  unknown|$SHIPPED|1.*|/" "$TEMP_DIR/update.sh.orig" > "$UPDATE_SH"
+assert_cmd_success "grep -q '  unknown|$SHIPPED|' '$UPDATE_SH'" "fixture adds the shipped version to the case"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when the shipped version is added to the migration case"
+cp "$TEMP_DIR/update.sh.orig" "$UPDATE_SH"
 
 print_summary

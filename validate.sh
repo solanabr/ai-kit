@@ -194,6 +194,24 @@ else
   check "update.sh exists and is executable" 1
 fi
 
+# update.sh strips retired kit defaults from installs whose version matches its migration
+# case. If the shipped version matched, /update would strip values the user of a current
+# install set themselves: bump VERSION on release, and don't add it to that case.
+if [ -f .claude/VERSION ] && [ -f .claude/bin/update.sh ]; then
+  shipped="$(awk '{print $NF}' .claude/VERSION)"
+  gate="$(awk '/case "\$CURRENT_VERSION" in/ { getline; sub(/^[[:space:]]+/, ""); sub(/\).*/, ""); print; exit }' .claude/bin/update.sh)"
+  gate_ok=1
+  if [ -n "$gate" ]; then
+    gate_ok=0
+    IFS='|' read -r -a gate_pats <<< "$gate"
+    for pat in "${gate_pats[@]}"; do
+      # shellcheck disable=SC2053  # $pat is a glob on purpose, as in update.sh's case
+      [[ "$shipped" == $pat ]] && gate_ok=1
+    done
+  fi
+  check "Shipped VERSION $shipped is outside update.sh's retired-defaults migration case ($gate)" "$gate_ok"
+fi
+
 if [ -f .claude/bin/resync.sh ] && [ -x .claude/bin/resync.sh ]; then
   check "resync.sh exists and is executable" 0
 else
