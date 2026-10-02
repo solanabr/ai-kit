@@ -21,7 +21,7 @@
 	url = https://github.com/ColosseumOrg/colosseum-copilot.git
 [submodule ".claude/skills/ext/solana-mobile"]
 	path = .claude/skills/ext/solana-mobile
-	url = https://github.com/solana-mobile/solana-mobile-dev-skill.git
+	url = https://github.com/solana-mobile/solana-mobile-skills.git
 [submodule ".claude/skills/ext/safe-solana-builder"]
 	path = .claude/skills/ext/safe-solana-builder
 	url = https://github.com/frankcastleauditor/safe-solana-builder.git
@@ -48,7 +48,7 @@
 	url = https://github.com/helius-labs/core-ai
 [submodule ".claude/skills/ext/quicknode-anchor"]
 	path = .claude/skills/ext/quicknode-anchor
-	url = https://github.com/quiknode-labs/solana-anchor-claude-skill
+	url = https://github.com/quicknode/solana-finance-claude-plugin
 [submodule ".claude/skills/ext/eth-to-sol"]
 	path = .claude/skills/ext/eth-to-sol
 	url = https://github.com/solana-foundation/eth-to-sol-skill

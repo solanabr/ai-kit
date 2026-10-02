@@ -48,7 +48,7 @@ done
 
 # --- After install: resync.sh exists in target ---
 echo "[installed]"
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 (cd "$TEMP_DIR" && git init -q)
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
@@ -63,8 +63,8 @@ assert_file_exists "$TEMP_DIR/.claude/bin/resync.sh" "resync.sh exists after ins
 # submodules so `git submodule update --remote --merge` is a network-free
 # no-op, then invoke resync.sh from an unrelated, non-git cwd.
 echo "[cwd-independence]"
-FAKE_ROOT="$(mktemp -d)"
-OTHER_DIR="$(mktemp -d)"
+FAKE_ROOT="$(new_tmp)" || exit 1
+OTHER_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR" "$FAKE_ROOT" "$OTHER_DIR"' EXIT
 
 (cd "$FAKE_ROOT" && git init -q)
@@ -103,7 +103,7 @@ assert_contains "$RESYNC_CONTENT" 'cd "$TARGET_DIR"' "resync.sh cds into TARGET_
 # or into an installed extension. Output goes to files: a grep -q that exits early can
 # SIGPIPE an echo under pipefail.
 echo "[extensions]"
-AGENTS_DIR="$(mktemp -d)"
+AGENTS_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR" "$FAKE_ROOT" "$OTHER_DIR" "$AGENTS_DIR"' EXIT
 (cd "$AGENTS_DIR" && git init -q)
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
