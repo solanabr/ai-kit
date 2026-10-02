@@ -36,3 +36,9 @@ Helius, solana-dev and Context7 are configured in `.mcp.json`; Playwright, Surfp
      user confirmed or mistakes that repeated; put scratch notes in CLAUDE.local.md (gitignored).
      Cross-project preferences belong in ~/.claude/CLAUDE.md. In a monorepo, add a CLAUDE.md per
      package; it loads when Claude works in that directory. -->
+
+### Recurring Issues
+
+### Fix Patterns
+
+### Config Conventions

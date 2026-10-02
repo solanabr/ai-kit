@@ -194,6 +194,10 @@ assert_cmd_success "cmp -s '$WORK/agents-md.norm' '$WORK/claude-solana-md.norm'"
   "AGENTS.md is CLAUDE-solana.md with only path rewrites and comments stripped"
 assert_eq "" "$(grep -n '<!--\|-->' "$TEMP_DIR/AGENTS.md" || true)" \
   "AGENTS.md carries no HTML comments (Codex reads them as instructions)"
+# /dream and /diff-review write into these; the stripped comment must not have been the only structure.
+assert_eq "### Recurring Issues|### Fix Patterns|### Config Conventions" \
+  "$(sed -n '/^## Project Learnings/,/^## [^#]/p' "$TEMP_DIR/AGENTS.md" 2>/dev/null | grep '^### ' | paste -sd'|' - || true)" \
+  "AGENTS.md keeps the Project Learnings subsections after comment stripping"
 assert_eq "" "$(grep -nE "$CLAUDE_REF" "$TEMP_DIR/AGENTS.md" | grep -v '\.agents/' || true)" \
   "AGENTS.md has no dangling .claude/ path"
 assert_eq "AGENTS.md" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$TEMP_DIR/.gitignore" | grep -x 'AGENTS.md' || true)" \
