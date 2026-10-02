@@ -572,6 +572,8 @@ Edits and commits run without hooks, formatters or extra prompts. The gates sit 
 | Bash sandbox | `sandbox` | On; local ports can bind (validators, dev servers); `git push/pull/fetch` and `gh pr/run/issue` run outside it because SSH and `gh` can't work inside |
 | [safe-ai-skill](#security-firewall-safe-ai-skill) | Its own Claude Code hooks | Gates secrets and mainnet actions too, so some commands pass two checks. It also blocks `.env` reads, which `/setup-mcp` relies on |
 
+The PreToolUse hook splits each Bash command the way `sh` does, so a wrapper (`env`, `xargs`, `sudo`, `nohup`, `time`, `command`, `sh -c`, an absolute path) gets the same decision as the bare command. Text that only mentions a gated command or a credential path is not a command: heredoc bodies written to a file, `echo`/`printf` arguments, `grep`/`rg` patterns and `git`/`gh` messages pass. A command too nested to parse gets an approval prompt rather than passing silently. For the same reason the allow list has no `env *`, `xargs *` or `command *` glob: only bare `env`, `command -v` and `xargs` feeding `grep`/`rg`/`wc`/`ls` run without a prompt.
+
 Plugin installs get the hooks only; the permission rules and sandbox come with `install.sh`. `/update` keeps an existing `.claude/settings.json`, so existing installs don't pick these up automatically.
 
 ## Code Quality

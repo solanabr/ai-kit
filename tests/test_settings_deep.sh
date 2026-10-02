@@ -171,6 +171,28 @@ cmd = 'solana program deploy target/verifiable/p.so --url mainnet-beta --use-rpc
 print(' '.join(r for r in deny if 'mainnet' in r or (r.startswith('Bash(') and fnmatch.fnmatchcase(cmd, r[5:-1]))) or 'none')
 " 2>/dev/null)"
 assert_eq "none" "$MAINNET_DENY" "no permissions.deny rule targets mainnet or blocks /deploy's --url mainnet-beta step"
+# A wrapper in front of a gated command (env, xargs, sh -c, an absolute path...) must not turn
+# an ask or deny into a silent allow (issue #110). Run each ask/deny Bash rule's command through
+# the wrappers: whenever an allow rule matches the wrapped form, an ask or deny rule must match too.
+SHADOWED="$(python3 -c "
+import fnmatch, json
+p = json.load(open('$SETTINGS'))['permissions']
+globs = lambda k: [r[5:-1] for r in p.get(k, []) if r.startswith('Bash(') and r.endswith(')')]
+allow, gated = globs('allow'), globs('ask') + globs('deny')
+cmds = [g.replace('*', 'X').strip() for g in gated if g.split()[0] in ('solana', 'anchor', 'spl-token')]
+wraps = ['env {}', 'env FOO=1 {}', 'env -u HOME {}', 'xargs {}', 'xargs -I{{}} {}', 'sh -c \'{}\'', 'bash -c \'{}\'',
+         '/usr/local/bin/{}', 'nohup {}', 'command {}', 'time {}', 'nice {}', 'timeout 60 {}']
+hit = lambda c, rules: any(fnmatch.fnmatchcase(c, r) for r in rules)
+bad = sorted({w.format(c) for c in cmds for w in wraps if hit(w.format(c), allow) and not hit(w.format(c), gated)})
+print(' | '.join(bad) or 'none')
+" 2>/dev/null)"
+assert_eq "none" "$SHADOWED" "no allow rule turns a wrapped ask/deny command (env, xargs, sh -c, absolute path) into a silent allow"
+for r in "Bash(env *)" "Bash(xargs *)" "Bash(command *)"; do
+  assert_rule allow "$r" no "permissions.allow drops the wrapper glob $r"
+done
+for r in "Bash(env)" "Bash(command -v *)" "Bash(xargs grep *)"; do
+  assert_rule allow "$r" yes "permissions.allow keeps the read-only form $r"
+done
 # solana-keygen new/recover default to ~/.config/solana/id.json. The sandbox blocks that write,
 # but a retry outside it (or a machine without the sandbox) runs under the Bash(solana-keygen *)
 # allow rule, so --force/-f must ask. A different -o path without --force stays prompt-free.

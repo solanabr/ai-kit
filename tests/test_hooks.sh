@@ -22,6 +22,12 @@ case "$1" in
 esac
 EOF
 chmod +x "$WORK/bin/solana"
+# A PATH without jq, so the hooks' sed fallback for reading the payload gets exercised too.
+mkdir -p "$WORK/nojq"
+for b in sh awk sed cat tr head grep; do ln -s "$(command -v "$b")" "$WORK/nojq/$b"; done
+ln -s "$WORK/bin/solana" "$WORK/nojq/solana"
+NL='
+'
 
 # hook <file> <event> <marker>: the command of the <event> hook whose text contains <marker>
 hook() {
@@ -38,7 +44,7 @@ run() {
   local payload
   payload="$(python3 -c 'import json, sys; print(json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": sys.argv[1]}}))' "$3")"
   set +e
-  OUT="$(cd "$2" && printf '%s' "$payload" | PATH="$WORK/bin:$PATH" FAKE_RPC="${4:-}" sh -c "$1" 2>"$WORK/err")"
+  OUT="$(cd "$2" && printf '%s' "$payload" | PATH="${HOOK_PATH:-$WORK/bin:$PATH}" FAKE_RPC="${4:-}" sh -c "$1" 2>"$WORK/err")"
   RC=$?
   set -e
   ERR="$(cat "$WORK/err")"
@@ -107,6 +113,68 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
     run "$CHAIN" "$WORK" "$c"
     assert_eq "2" "$RC" "on-chain gate blocks: $c"
   done
+
+  # Wrapper forms get the bare command's decision (#110): the gate splits the command like sh,
+  # strips VAR= assignments and wrappers, re-parses sh -c payloads and resolves argv[0].
+  DEPLOY="solana program deploy p.so --url mainnet-beta"
+  FINAL="solana program set-upgrade-authority PID --final"
+  for w in "env %s" "env -u HOME FOO=1 %s" "echo p.so | xargs -I{} %s" "sh -c '%s'" "bash -lc \"%s\"" \
+           "/usr/local/bin/%s" "nohup %s &" "time %s" "command %s" "sudo -E %s" "timeout 60 %s" \
+           "sudo env X=1 nohup %s" "cd x && %s" "x=\$(%s)" "echo \"\$(%s)\"" "bash <<'EOF'${NL}%s${NL}EOF"; do
+    # shellcheck disable=SC2059
+    run "$CHAIN" "$WORK" "$(printf "$w" "$DEPLOY")"
+    assert_contains "$OUT" "MAINNET (from command flag)" "asks like the bare deploy: $w"
+    # shellcheck disable=SC2059
+    run "$CHAIN" "$WORK" "$(printf "$w" "$FINAL")"
+    assert_eq "2" "$RC" "blocks like the bare --final: $w"
+  done
+  for c in "solana program  deploy p.so --url mainnet-beta" "solana  program"$'\t'"deploy p.so -um" \
+           "solana -um program deploy p.so" "solana \"program\" deploy p.so -um"; do
+    run "$CHAIN" "$WORK" "$c"
+    assert_contains "$OUT" "MAINNET (from command flag)" "extra whitespace, quoting or a leading global flag still asks: ${c//$NL/\\n}"
+  done
+
+  # Text that only mentions a gated command is not a command (#111).
+  for c in "cat > notes.md <<'EOF'${NL}${FINAL}${NL}env ${DEPLOY}${NL}EOF" \
+           "gh issue create --title 'Gate: --final bypass' --body \"env ${FINAL}\"" \
+           "git commit -m \"fix: gate ${FINAL}\"" "echo \"${FINAL}\"" "grep -rn -e '--final' docs/" \
+           "rg -- '--bypass-warning' ." "cat <<'EOF'${NL}\$(${DEPLOY})${NL}EOF" "echo \$((1+2)) # ${FINAL}"; do
+    run "$CHAIN" "$WORK/mainnet" "$c"
+    assert_eq "0|" "$RC|$OUT$ERR" "a mention is not blocked: ${c//$NL/\\n}"
+  done
+  run "$CHAIN" "$WORK" "cat <<EOF${NL}\$(${DEPLOY})${NL}EOF"
+  assert_contains "$OUT" '"permissionDecision":"ask"' "an unquoted heredoc still runs its \$(...), so that asks"
+
+  # Credential reads stay blocked however they are wrapped; mentions in data do not block.
+  for c in "env FOO=1 cat ~/.ssh/id_rsa" "sh -c 'cat ~/.config/solana/id.json'" "cat \"\$HOME/.ssh/id_ed25519\"" \
+           "tar czf k.tgz ~/.config/solana/id.json" "xargs cat < ~/.ssh/id_rsa" "echo x > ~/.ssh/authorized_keys" \
+           "echo \"\$(cat ~/.config/solana/id.json)\"" "grep -f ~/.ssh/id_rsa x" "gh auth status --show-token" \
+           "python3 - <<'EOF'${NL}print(open('/home/u/.ssh/id_rsa').read())${NL}EOF" "cat <<EOF | sh${NL}cat ~/.ssh/id_rsa${NL}EOF" \
+           "gh issue create --title t --body-file ~/.ssh/id_rsa"; do
+    run "$SECRETS" "$WORK" "$c"
+    assert_eq "2" "$RC" "secrets gate blocks: ${c//$NL/\\n}"
+  done
+  for c in "grep -rn '.config/solana/id.json' README.md .claude/" "rg -n '\\.ssh/' tests/" "git grep -n '.ssh/' -- tests" \
+           "git commit -m 'docs: never cat ~/.ssh/id_rsa'" "gh issue create --title x --body 'gh auth token leaks'" \
+           "cat > doc.md <<'EOF'${NL}Do not cat ~/.config/solana/id.json${NL}EOF" "echo 'keys live in ~/.config/solana/id.json'"; do
+    run "$SECRETS" "$WORK" "$c"
+    assert_eq "0|" "$RC|$OUT$ERR" "secrets gate is silent for a mention: ${c//$NL/\\n}"
+  done
+
+  # Without jq the gate reads the payload with sed and decodes the JSON escapes itself.
+  HOOK_PATH="$WORK/nojq"
+  run "$CHAIN" "$WORK" "env $DEPLOY"
+  assert_contains "$OUT" "MAINNET (from command flag)" "without jq: a wrapped deploy still asks"
+  run "$CHAIN" "$WORK" "cat > notes.md <<'EOF'${NL}${FINAL}${NL}EOF"
+  assert_eq "0|" "$RC|$OUT$ERR" "without jq: a heredoc mention is not blocked"
+  run "$SECRETS" "$WORK" "cat \"\$HOME/.ssh/id_rsa\""
+  assert_eq "2" "$RC" "without jq: a credential read is blocked"
+  unset HOOK_PATH
+
+  # A command too deeply nested to parse asks instead of passing silently.
+  DEEP="true"; for _ in $(seq 20); do DEEP="echo \$($DEEP)"; done
+  run "$CHAIN" "$WORK" "$DEEP"
+  assert_contains "$OUT" "could not parse" "an unparseable command asks rather than failing open"
 done
 
 echo "[SessionStart]"
