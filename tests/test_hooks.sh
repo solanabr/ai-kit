@@ -114,12 +114,31 @@ SESSION="$(hook "$REPO_ROOT/.claude/settings.json" SessionStart 'SessionStart')"
 OUT="$(printf '{"hook_event_name":"SessionStart","source":"startup"}' | PATH="$WORK/bin:$PATH" FAKE_RPC='https://mainnet.helius-rpc.com/?api-key=k123' CLAUDE_PROJECT_DIR="$REPO_ROOT" sh -c "$SESSION")"
 assert_contains "$OUT" "Solana CLI: RPC https://mainnet.helius-rpc.com, wallet 11111111111111111111111111111111." "Claude gets one line with the RPC host and wallet"
 assert_eq "no" "$(printf '%s' "$OUT" | grep -q k123 && echo yes || echo no)" "the RPC API key stays out of the session context"
+PLUGIN_SESSION="$(hook "$REPO_ROOT/plugin/hooks/hooks.json" SessionStart 'SessionStart')"
 if command -v jq >/dev/null 2>&1; then
   assert_contains "$OUT" '"systemMessage"' "the banner goes to the user as a systemMessage, not into context"
+  # The user sees the cluster and wallet under the banner (#115), and Claude keeps the same
+  # values in additionalContext, so a session pointed at mainnet is visible to both.
+  # Same check for the plugin variant, run where there is no full install.
+  mkdir -p "$WORK/plugin-project"
+  for V in settings plugin; do
+    if [ "$V" = settings ]; then CMDV="$SESSION" DIR="$REPO_ROOT"; else CMDV="$PLUGIN_SESSION" DIR="$WORK/plugin-project"; fi
+    OUT="$(printf '{"hook_event_name":"SessionStart","source":"startup"}' | PATH="$WORK/bin:$PATH" FAKE_RPC='https://mainnet.helius-rpc.com/?api-key=k123' CLAUDE_PROJECT_DIR="$DIR" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" sh -c "$CMDV")"
+    SM="$(printf '%s' "$OUT" | jq -r '.systemMessage')"
+    AC="$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext')"
+    assert_contains "$SM" "SuperteamBR" "$V: the systemMessage still carries the banner"
+    assert_contains "$SM" "🔗 https://mainnet.helius-rpc.com  👛 11111111111111111111111111111111" "$V: the user sees the cluster and wallet under the banner"
+    assert_eq "Solana CLI: RPC https://mainnet.helius-rpc.com, wallet 11111111111111111111111111111111." "$AC" "$V: Claude gets the same RPC and wallet in additionalContext"
+    assert_eq "no" "$(printf '%s' "$SM" | grep -q k123 && echo yes || echo no)" "$V: the RPC API key stays out of the banner"
+  done
+  # Without the Solana CLI the user is told so instead of seeing an empty line.
+  mkdir -p "$WORK/nosolana"
+  for b in sh awk sed jq cat; do ln -sf "$(command -v "$b")" "$WORK/nosolana/$b"; done
+  OUT="$(printf '{"source":"startup"}' | PATH="$WORK/nosolana" CLAUDE_PROJECT_DIR="$REPO_ROOT" sh -c "$SESSION")"
+  assert_contains "$(printf '%s' "$OUT" | jq -r '.systemMessage')" "Solana CLI not found on PATH." "without the Solana CLI the banner says so"
 fi
 OUT="$(printf '{"hook_event_name":"SessionStart","source":"compact"}' | PATH="$WORK/bin:$PATH" CLAUDE_PROJECT_DIR="$REPO_ROOT" sh -c "$SESSION")"
 assert_eq "Solana CLI: RPC https://api.devnet.solana.com, wallet 11111111111111111111111111111111." "$OUT" "after /compact or /clear only the context line is re-added"
-PLUGIN_SESSION="$(hook "$REPO_ROOT/plugin/hooks/hooks.json" SessionStart 'SessionStart')"
 OUT="$(printf '{"source":"startup"}' | PATH="$WORK/bin:$PATH" CLAUDE_PROJECT_DIR="$REPO_ROOT" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" sh -c "$PLUGIN_SESSION")"
 assert_eq "" "$OUT" "the plugin SessionStart stays quiet next to a full install"
 
