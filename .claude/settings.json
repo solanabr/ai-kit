@@ -39,6 +39,7 @@
         "*.dnslog.cn",
         "canarytokens.com",
         "*.canarytokens.com",
+
         "ngrok.io",
         "*.ngrok.io",
         "ngrok.app",
@@ -57,6 +58,7 @@
         "*.tunnelmole.net",
         "pagekite.me",
         "*.pagekite.me",
+
         "pastebin.com",
         "*.pastebin.com",
         "paste.ee",
@@ -101,6 +103,7 @@
         "~/.config/1Password",
         "~/.config/Bitwarden",
         "~/.config/keepassxc",
+
         "~/Library/Application Support/Google/Chrome",
         "~/Library/Application Support/BraveSoftware/Brave-Browser",
         "~/Library/Application Support/Microsoft Edge",
@@ -123,6 +126,7 @@
         "~/AppData/Local/Chromium/User Data",
         "~/AppData/Local/Vivaldi/User Data",
         "~/AppData/Roaming/Opera Software",
+
         "~/.zsh_history",
         "~/.zhistory",
         "~/.bash_history",
@@ -148,6 +152,7 @@
         "~/.config/1Password",
         "~/.config/Bitwarden",
         "~/.config/keepassxc",
+
         "~/.netrc",
         "~/.git-credentials",
         "~/.npmrc",
@@ -158,6 +163,7 @@
         "~/.kube/config",
         "~/.pypirc",
         "~/.gem/credentials",
+
         "~/Library/Application Support/Google/Chrome",
         "~/Library/Application Support/BraveSoftware/Brave-Browser",
         "~/Library/Application Support/Microsoft Edge",
@@ -180,6 +186,7 @@
         "~/AppData/Local/Chromium/User Data",
         "~/AppData/Local/Vivaldi/User Data",
         "~/AppData/Roaming/Opera Software",
+
         "~/.cargo/config.toml",
         "~/.cargo/config",
         "~/.gitconfig",
@@ -197,6 +204,7 @@
         "/Library/LaunchAgents",
         "/Library/LaunchDaemons",
         "~/.config/autostart",
+
         "~/.zsh_history",
         "~/.zhistory",
         "~/.bash_history",
@@ -207,6 +215,7 @@
         "~/.psql_history",
         "~/.sqlite_history",
         "~/.lesshst",
+
         "~/.claude/settings.json",
         "~/.claude/settings.local.json",
         "/Library/Application Support/ClaudeCode/managed-settings.json"
@@ -216,6 +225,7 @@
         "/tmp",
         "/private/tmp",
         "/var/folders",
+
         "~/.cargo",
         "~/.rustup",
         "~/.cache",
@@ -226,10 +236,12 @@
         "~/.anchor",
         "~/.config/solana",
         "~/Library/Caches",
+
         ".git"
       ]
     }
   },
+
   "extraKnownMarketplaces": {
     "stbr": {
       "source": {
@@ -238,13 +250,16 @@
       }
     }
   },
+
   "enabledPlugins": {
     "safe-ai-skill@stbr": true
   },
+
   "attribution": {
     "commit": "",
     "pr": ""
   },
+
   "permissions": {
     "allow": [
       "Bash(anchor *)",
@@ -269,6 +284,7 @@
       "Bash(rustup *)",
       "Bash(rustfmt *)",
       "Bash(trident *)",
+
       "Bash(solana config *)",
       "Bash(solana address *)",
       "Bash(solana balance *)",
@@ -287,6 +303,7 @@
       "Bash(solana-keygen *)",
       "Bash(solana-test-validator *)",
       "Bash(surfpool *)",
+
       "Bash(npm *)",
       "Bash(yarn *)",
       "Bash(pnpm *)",
@@ -301,6 +318,7 @@
       "Bash(prettier *)",
       "Bash(eslint *)",
       "Bash(create-solana-dapp *)",
+
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
@@ -322,6 +340,7 @@
       "Bash(git blame *)",
       "Bash(git cherry-pick *)",
       "Bash(gh *)",
+
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(head *)",
@@ -371,6 +390,7 @@
       "Bash(md5sum *)",
       "Bash(base64 *)",
       "Bash(openssl *)",
+
       "Bash(docker build *)",
       "Bash(docker run *)",
       "Bash(docker compose *)",
@@ -379,13 +399,16 @@
       "Bash(docker images *)",
       "Bash(docker stop *)",
       "Bash(docker inspect *)",
+
       "Bash(unity-editor *)",
       "Bash(dotnet *)",
       "Bash(nuget *)",
+
       "Bash(python *)",
       "Bash(python3 *)",
       "Bash(pip *)",
       "Bash(pip3 *)",
+
       "Bash(avm *)",
       "Bash(solana-verify *)",
       "Bash(mollusk *)",
@@ -398,6 +421,7 @@
       "Bash(cross *)",
       "Bash(cargo-generate *)",
       "Bash(solana-install *)",
+
       "Read(*)",
       "Edit(*)",
       "Write(*)",
@@ -419,6 +443,7 @@
       "Edit(//**/managed-settings.json)",
       "Bash(claude *)",
       "Bash(claude)",
+
       "Read(~/.ssh)",
       "Read(~/.ssh/**)",
       "Read(~/.gnupg)",
@@ -457,6 +482,7 @@
       "Read(~/Library/Application Support/Bitwarden/**)",
       "Read(~/.config/keepassxc)",
       "Read(~/.config/keepassxc/**)",
+
       "Read(~/Library/Application Support/Google/Chrome)",
       "Read(~/Library/Application Support/Google/Chrome/**)",
       "Read(~/Library/Application Support/BraveSoftware/Brave-Browser)",
@@ -503,6 +529,7 @@
       "Read(~/AppData/Roaming/Opera Software/**)",
       "Read(~/**/Local Extension Settings)",
       "Read(~/**/Local Extension Settings/**)",
+
       "Edit(~/.cargo/config.toml)",
       "Edit(~/.cargo/config)",
       "Edit(**/.cargo/config.toml)",
@@ -525,6 +552,7 @@
       "Edit(//Library/LaunchDaemons/**)",
       "Edit(~/.config/autostart)",
       "Edit(~/.config/autostart/**)",
+
       "Read(~/.zsh_history)",
       "Read(~/.zhistory)",
       "Read(~/.bash_history)",
@@ -535,6 +563,7 @@
       "Read(~/.psql_history)",
       "Read(~/.sqlite_history)",
       "Read(~/.lesshst)",
+
       "Bash(cat *id.json)",
       "Bash(cat *keypair*.json)",
       "Bash(cat keypair*.json)",
@@ -553,6 +582,7 @@
       "Bash(less *id.json)",
       "Bash(xxd *id.json)",
       "Bash(gh auth token *)",
+
       "Bash(env *)",
       "Bash(sh -c *)",
       "Bash(bash -c *)",
@@ -568,11 +598,13 @@
       "Bash(direnv exec *)",
       "Bash(mise exec *)",
       "Bash(docker exec *)",
+
       "Bash(security *)",
       "Bash(crontab*)",
       "Bash(launchctl *)",
       "Bash(defaults *)",
       "Bash(gh alias *)",
+
       "Bash(sudo *)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~)",
@@ -594,6 +626,7 @@
       "Bash(docker rm *)",
       "Bash(docker rmi *)",
       "Bash(docker system prune *)",
+
       "Bash(git clean *)",
       "Bash(git restore *)",
       "Bash(git checkout -- *)",
@@ -611,6 +644,7 @@
       "Bash(git reflog expire *)",
       "Bash(git push *--mirror*)",
       "Bash(git push --mirror*)",
+
       "Bash(solana program deploy *--final*)",
       "Bash(solana program deploy --final*)",
       "Bash(solana program set-upgrade-authority *--final*)",
@@ -630,32 +664,19 @@
       "Bash(spl-token close *)",
       "Bash(solana config set *-k*)",
       "Bash(solana config set -k*)",
-      "Bash(npm publish*)",
-      "Bash(npm run *publish*)",
-      "Bash(npm run publish*)",
-      "Bash(npm run *release*)",
-      "Bash(npm run release*)",
-      "Bash(npm run *deploy*)",
-      "Bash(npm run deploy*)",
-      "Bash(npm exec *)",
-      "Bash(yarn publish*)",
-      "Bash(yarn npm publish*)",
-      "Bash(pnpm publish*)",
-      "Bash(bun publish*)",
-      "Bash(cargo publish*)",
-      "Bash(cargo owner *)",
-      "Bash(cargo yank *)",
+
       "Bash(gh secret set *)",
       "Bash(gh variable set *)"
     ]
   },
+
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat)\nV=$(awk 'NF{print $NF; exit}' \"${CLAUDE_PROJECT_DIR:-.}/.claude/VERSION\" 2>/dev/null)\n[ -n \"$V\" ] || V=dev\nif command -v solana >/dev/null 2>&1; then\n  RPC=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}' | sed -E 's#^([a-z]+://[^/?]+).*#\\1#')\n  WALLET=$(solana address 2>/dev/null) || WALLET='none configured'\n  CTX=\"Solana CLI: RPC ${RPC:-unknown}, wallet ${WALLET:-none configured}.\"\nelse\n  CTX='Solana CLI not found on PATH.'\nfi\nSEC=\"${CLAUDE_PROJECT_DIR:-.}/.claude/security.json\"\nif [ -r \"$SEC\" ]; then\n  TIERS=$(awk '\n    /\"enforced\"/ { inenf = 1 }\n    /\"tier\"[[:space:]]*:/ {\n      t = $0; sub(/.*\"tier\"[^\"]*\"/, \"\", t); sub(/\".*/, \"\", t)\n      if (inenf) { if (e == \"\") e = t } else if (d == \"\") d = t\n    }\n    END { print d \"|\" e }' \"$SEC\" 2>/dev/null)\n  DT=${TIERS%%|*}; ET=${TIERS#*|}\n  if [ -n \"$DT\" ] && [ \"$DT\" = \"$ET\" ]; then\n    CTX=\"$CTX Firewall tier: $DT.\"\n  elif [ -n \"$DT\" ]; then\n    CTX=\"$CTX Firewall tier: $DT declared but ${ET:-none} enforced \u2014 the rules are stale; the user should run /firewall $DT and restart.\"\n  fi\nfi\ncase $INPUT in *'\"startup\"'*) ;; *) printf '%s\\n' \"$CTX\"; exit 0 ;; esac\ncommand -v jq >/dev/null 2>&1 || { printf '%s\\n' \"$CTX\"; exit 0; }\nBANNER=$(printf '%s\\n' \\\n  '   _____ ____  __    ___    _   _____' \\\n  '  / ___// __ \\/ /   /   |  / | / /   |' \\\n  '  \\__ \\/ / / / /   / /| | /  |/ / /| |' \\\n  ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' \\\n  '/____/\\____/_____/_/  |_/_/ |_/_/  |_|' \\\n  '           \u2584\u2580\u2588 \u2588   \u2588\u2584\u2580 \u2588 \u2580\u2588\u2580' \\\n  '           \u2588\u2580\u2588 \u2588   \u2588 \u2588 \u2588  \u2588' \\\n  \"     v$V \u2014 by @SuperteamBR \ud83c\udde7\ud83c\uddf7\")\njq -n --arg b \"$BANNER\" --arg c \"$CTX\" '{systemMessage: $b, hookSpecificOutput: {hookEventName: \"SessionStart\", additionalContext: $c}}'",
+            "command": "INPUT=$(cat)\nV=$(awk 'NF{print $NF; exit}' \"${CLAUDE_PROJECT_DIR:-.}/.claude/VERSION\" 2>/dev/null)\n[ -n \"$V\" ] || V=dev\nif command -v solana >/dev/null 2>&1; then\n  RPC=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}' | sed -E 's#^([a-z]+://[^/?]+).*#\\1#')\n  WALLET=$(solana address 2>/dev/null) || WALLET='none configured'\n  CTX=\"Solana CLI: RPC ${RPC:-unknown}, wallet ${WALLET:-none configured}.\"\nelse\n  CTX='Solana CLI not found on PATH.'\nfi\nSEC=\"${CLAUDE_PROJECT_DIR:-.}/.claude/security.json\"\nif [ -r \"$SEC\" ]; then\n  TIERS=$(awk '\n    /\"enforced\"/ { inenf = 1 }\n    /\"tier\"[[:space:]]*:/ {\n      t = $0; sub(/.*\"tier\"[^\"]*\"/, \"\", t); sub(/\".*/, \"\", t)\n      if (inenf) { if (e == \"\") e = t } else if (d == \"\") d = t\n    }\n    END { print d \"|\" e }' \"$SEC\" 2>/dev/null)\n  DT=${TIERS%%|*}; ET=${TIERS#*|}\n  if [ -n \"$DT\" ] && [ \"$DT\" = \"$ET\" ]; then\n    CTX=\"$CTX Firewall tier: $DT.\"\n  elif [ -n \"$DT\" ]; then\n    CTX=\"$CTX Firewall tier: $DT declared but ${ET:-none} enforced — the rules are stale; the user should run /firewall $DT and restart.\"\n  fi\nfi\ncase $INPUT in *'\"startup\"'*) ;; *) printf '%s\\n' \"$CTX\"; exit 0 ;; esac\ncommand -v jq >/dev/null 2>&1 || { printf '%s\\n' \"$CTX\"; exit 0; }\nBANNER=$(printf '%s\\n' \\\n  '   _____ ____  __    ___    _   _____' \\\n  '  / ___// __ \\/ /   /   |  / | / /   |' \\\n  '  \\__ \\/ / / / /   / /| | /  |/ / /| |' \\\n  ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' \\\n  '/____/\\____/_____/_/  |_/_/ |_/_/  |_|' \\\n  '           ▄▀█ █   █▄▀ █ ▀█▀' \\\n  '           █▀█ █   █ █ █  █' \\\n  \"     v$V — by @SuperteamBR 🇧🇷\")\njq -n --arg b \"$BANNER\" --arg c \"$CTX\" '{systemMessage: $b, hookSpecificOutput: {hookEventName: \"SessionStart\", additionalContext: $c}}'",
             "timeout": 15
           }
         ]

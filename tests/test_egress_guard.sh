@@ -248,15 +248,28 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# The exception: publishing is irreversible, so it must still refuse without a TTY
-# rather than sail through a pipeline unprompted.
-PUB_HEADLESS="$(KIT_TEST_HEADLESS=1 ask relaxed 'npm publish --access public')"
+# The exception: where a tier gates an irreversible action, the refusal must hold without
+# a TTY too, or a pipeline publishes unprompted. Relaxed allows publishing outright -- it
+# excludes obvious footguns, not a deliberate release step a human triggers -- so the
+# property is asserted at medium, which is the first tier that gates it.
+PUB_HEADLESS="$(KIT_TEST_HEADLESS=1 ask medium 'npm publish --access public')"
 TOTAL=$((TOTAL + 1))
 if [ "$PUB_HEADLESS" = "DENY" ]; then
-  echo "  PASS: an irreversible publish still refuses when headless"
+  echo "  PASS: an irreversible publish still refuses when headless at medium"
   PASS=$((PASS + 1))
 else
-  echo "  FAIL: headless publish got $PUB_HEADLESS, expected DENY"
+  echo "  FAIL: headless publish at medium got $PUB_HEADLESS, expected DENY"
+  FAIL=$((FAIL + 1))
+fi
+
+# And the tier split itself: relaxed publishes freely, in a headless run too.
+PUB_RELAXED="$(KIT_TEST_HEADLESS=1 ask relaxed 'npm publish --access public')"
+TOTAL=$((TOTAL + 1))
+if [ "$PUB_RELAXED" = "PASS" ]; then
+  echo "  PASS: relaxed does not gate a publish"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: relaxed publish got $PUB_RELAXED, expected PASS"
   FAIL=$((FAIL + 1))
 fi
 

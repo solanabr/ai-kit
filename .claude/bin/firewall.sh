@@ -606,25 +606,14 @@ DENY_IRREVERSIBLE_ONCHAIN = [
 ]
 
 DENY_SUPPLY_CHAIN = [
-    # Publishing is irreversible (npm unpublish closes after 72h, crates.io never) and
-    # it is the one egress primitive whose destination is legitimately allowlisted, so
-    # a destination layer cannot stop it. `npm run release` whose script is
-    # `npm publish` is the live evasion.
-    "Bash(npm publish*)",
-    "Bash(npm run *publish*)",
-    "Bash(npm run publish*)",
-    "Bash(npm run *release*)",
-    "Bash(npm run release*)",
-    "Bash(npm run *deploy*)",
-    "Bash(npm run deploy*)",
-    "Bash(npm exec *)",
-    "Bash(yarn publish*)",
-    "Bash(yarn npm publish*)",
-    "Bash(pnpm publish*)",
-    "Bash(bun publish*)",
-    "Bash(cargo publish*)",
-    "Bash(cargo owner *)",
-    "Bash(cargo yank *)",
+    # Publishing is NOT here. It is irreversible (npm unpublish closes after 72h,
+    # crates.io never) but it has to vary by tier, and permissions.deny cannot: the lists
+    # merge and a deny from any scope wins, so a deny here would apply at relaxed too.
+    # egress-guard.sh gates it instead -- allowed at off/relaxed, denied at medium/high --
+    # because the hook can read the tier. See FIREWALL-SPEC.md section 3.
+    #
+    # `npm run *deploy*` and `npm run *release*` are deliberately absent as well: they
+    # matched an ordinary frontend deploy script, which is normal work at every tier.
     # gh secret set evades as gh variable set. `gh api --method PUT .../secrets/NAME`
     # stays reachable: see the open call in FIREWALL-SPEC.md section 7 item 2.
     "Bash(gh secret set *)",

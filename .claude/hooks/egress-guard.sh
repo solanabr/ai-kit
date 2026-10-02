@@ -44,10 +44,12 @@ PUB='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]
 PSEG=$(printf '%s\n' "$KIT_CMD" | grep -oE "$PUB") || PSEG=
 if [ -n "$PSEG" ] && ! printf '%s\n' "$PSEG" | grep -q -- '--dry-run'; then
   REASON='publishes this package to a public registry. A published version cannot be unpublished or replaced.'
+  # Relaxed excludes the obvious footguns, not a deliberate release step a human
+  # triggers, so publishing is simply allowed there. Medium and High refuse it, and
+  # the refusal holds in a headless run: a pipeline must not publish unprompted.
   if [ "$TIERN" -ge 2 ]; then
     kit_deny "$REASON At the $TIER firewall tier publishing is denied; the user publishes releases themselves."
   fi
-  kit_gate publish "$REASON"
 fi
 
 [ -f "$HOOK_DIR/egress-guard.awk" ] || exit 0
