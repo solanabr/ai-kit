@@ -19,7 +19,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 ## Solana CI facts
 
 - Pin the toolchain. Anchor 1.1.x pairs with Solana CLI 3.1.10 (`sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"`), host Rust 1.89+, and GLIBC 2.39+ for prebuilt binaries (Ubuntu 24.04 runners). Install AVM from git (`cargo install --git https://github.com/solana-foundation/anchor avm`); the crates.io `avm` is unrelated. Keep all `anchor-*` crates on one exact version.
-- Gate merges on `anchor build` (`cargo build-sbf` for native and Pinocchio programs) plus tests. Build deploy artifacts with `anchor build --verifiable` (needs Docker) so `anchor verify` can match the on-chain program.
+- Gate merges on `anchor build` (`cargo build-sbf` for native and Pinocchio programs) plus tests. Build deploy artifacts with `solana-verify build` (needs Docker) after `anchor build`, so `anchor verify` can match the on-chain program; `anchor build --verifiable` uses a different image.
 - `anchor test` runs Surfpool, so CI must install it (`curl -sL https://run.surfpool.run/ | bash`); TS suites can use the embedded `@solana/surfpool` SDK instead. Start the CLI as `NO_DNA=1 surfpool start --ci --daemon` (daemon mode is Linux-only) and run integration suites serially.
 - Anchor 1.x no longer shells out to the `solana` CLI (`anchor deploy`, `anchor address`, `anchor logs`); install `solana` in CI only for steps that call it.
 - Anza stopped publishing `agave-validator` binaries with v3, so a validator image builds from source; use Surfpool for CI and local networks.
