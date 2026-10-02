@@ -13,7 +13,7 @@ Loop test, diagnose, fix, retest until the suite passes or a stop condition hits
 3. Take the remaining failures one root cause at a time. Classify before editing:
    - Environment or toolchain (platform-tools, GLIBC, port 8899 in use, missing keypair): see [common-errors.md](../skills/ext/solana-dev/skills/solana-dev/references/common-errors.md).
    - Stale artifacts: `InstructionFallbackNotFound` (101) or `AccountDiscriminatorMismatch` (3002) right after a program change usually means an old `.so`, IDL or generated client. Rebuild and rerun `/generate-idl-client`.
-   - Program errors: decode `custom program error: 0x...` from hex. Anchor 2000-2999 are constraints (2006 seeds differ between client and program), 3000-3999 account errors (3012 not initialized), 6000+ your `#[error_code]` variants in order. Anchor 1.x also rejects duplicate mutable accounts unless the field is marked `dup`.
+   - Program errors: decode `custom program error: 0x...` from hex. Anchor 2000-2999 are constraints (2006 seeds differ between client and program), 3000-3999 account errors (3012 not initialized), your `#[error_code]` variants at `offset` (default 6000) + discriminant: the variant's explicit `= N` if it sets one, else the previous variant's + 1. Anchor 1.x also rejects duplicate mutable accounts unless the field is marked `dup`.
    - Test or program: decide which side encodes the intended behavior before editing either.
 4. Rerun after each fix. Stop and report when everything passes, when the same failure survives two different fixes, after five rounds, or when the next fix would change program behavior, an instruction's interface, or a security check.
 

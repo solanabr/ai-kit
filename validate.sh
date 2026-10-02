@@ -236,6 +236,21 @@ echo ""
 # for every user (effort, experimental modes, LSP plugins, MCP auto-approval) or were
 # dead; update.sh strips them from older installs.
 echo "[Settings]"
+# A bare `Bash` or `Bash(*)` entry in permissions.ask is silently voided for any command
+# that runs sandboxed, and the kit ships the sandbox on — so such a rule reads as a gate
+# and is not one. A content-scoped ask like Bash(git push *) does fire, in default and in
+# bypass mode, so the problem is the bare form specifically, not `ask` itself.
+bare_ask="$(python3 -c 'import json
+d = json.load(open(".claude/settings.json"))
+ask = (d.get("permissions") or {}).get("ask") or []
+print(" ".join(r for r in ask if r.strip() in ("Bash", "Bash(*)")))' 2>/dev/null || true)"
+if [ -z "$bare_ask" ]; then
+  check "no bare Bash entry in permissions.ask (the sandbox voids it for sandboxed commands)" 0
+else
+  echo "  FAIL: permissions.ask contains $bare_ask; scope it to a command or use a hook"
+  FAIL=$((FAIL + 1))
+fi
+
 retired_keys="$(python3 -c 'import json
 d = json.load(open(".claude/settings.json"))
 env = d.get("env") or {}
@@ -249,6 +264,166 @@ if [ -z "$retired_keys" ]; then
   check "settings.json pins no session behavior (effort, env toggles, LSP plugins, MCP auto-approval)" 0
 else
   echo "  FAIL: settings.json sets $retired_keys; leave these to the user (.claude/settings.local.json)"
+  FAIL=$((FAIL + 1))
+fi
+echo ""
+
+# --- Agentic firewall ---
+# The tier in security.json is the only record of which rules the kit wrote, and permission
+# lists merge across sources with no un-deny primitive: the generated block has to be
+# replaced wholesale, every time, or a project pins itself at the strictest tier it ever saw.
+echo "[Firewall]"
+if [ ! -f .claude/security.json ]; then
+  check ".claude/security.json exists (records the firewall tier)" 1
+elif ! python3 -c "import json; json.load(open('.claude/security.json'))" 2>/dev/null; then
+  check ".claude/security.json is valid JSON" 1
+else
+  check ".claude/security.json is valid JSON" 0
+  fw_tier="$(python3 -c "import json; print(json.load(open('.claude/security.json')).get('tier', ''))" 2>/dev/null)"
+  case "$fw_tier" in
+    off|relaxed|medium|high) check "security.json tier is one of off|relaxed|medium|high ($fw_tier)" 0 ;;
+    *) echo "  FAIL: security.json tier must be off|relaxed|medium|high (got '$fw_tier')"
+       FAIL=$((FAIL + 1)) ;;
+  esac
+
+  # enforced.ruleIds is what a tier switch subtracts. An id the live settings.json no longer
+  # holds means the record has drifted, and the next switch would leave a rule behind.
+  stale_ids="$(python3 -c 'import json
+sec = json.load(open(".claude/security.json"))
+live = json.load(open(".claude/settings.json"))
+pool = set()
+perms = live.get("permissions") or {}
+for key in ("allow", "ask", "deny"):
+    pool |= {e for e in perms.get(key) or [] if isinstance(e, str)}
+sb = live.get("sandbox") or {}
+pool |= {e for e in sb.get("excludedCommands") or [] if isinstance(e, str)}
+for group in ("filesystem", "network"):
+    for val in (sb.get(group) or {}).values():
+        if isinstance(val, list):
+            pool |= {e for e in val if isinstance(e, str)}
+ids = (sec.get("enforced") or {}).get("ruleIds") or []
+print(" ".join(r for r in ids if r not in pool))' 2>/dev/null || echo "__ERROR__")"
+  if [ -z "$stale_ids" ]; then
+    check "every enforced.ruleIds entry is present in settings.json" 0
+  else
+    echo "  FAIL: security.json enforced.ruleIds names rules settings.json does not hold: $stale_ids"
+    FAIL=$((FAIL + 1))
+  fi
+fi
+
+# A mid-pattern * does not match an empty string, so Bash(anchor * --final*) sat in the deny
+# list without stopping `anchor --final`. Every two-wildcard rule needs its zero-gap twin,
+# or another rule that covers the collapsed command.
+if [ -f .claude/settings.json ]; then
+  gap_rules="$(python3 -c '
+import fnmatch, json, re
+
+def zero_gap(pat):
+    for i, ch in enumerate(pat):
+        if ch == "*" and 0 < i < len(pat) - 1:
+            cand = re.sub(r" +", " ", pat[:i] + pat[i + 1:]).strip()
+            if cand and cand != pat:
+                yield cand
+
+def probe(pat):
+    p = pat[:-1] if pat.endswith("*") else pat
+    return re.sub(r" +", " ", p.replace("*", "ZZZ")).strip()
+
+perms = json.load(open(".claude/settings.json")).get("permissions") or {}
+bad = []
+for key in ("deny", "ask"):
+    pats = [r[5:-1] for r in perms.get(key) or []
+            if isinstance(r, str) and r.startswith("Bash(") and r.endswith(")")]
+    have = set(pats)
+    for pat in pats:
+        if pat.count("*") < 2:
+            continue
+        for twin in zero_gap(pat):
+            if twin in have:
+                continue
+            cmd = probe(twin)
+            if any(fnmatch.fnmatchcase(cmd, o) for o in pats if o != pat):
+                continue
+            bad.append("%s: Bash(%s) needs Bash(%s)" % (key, pat, twin))
+print("\n".join(sorted(set(bad))))' 2>/dev/null || echo "__ERROR__")"
+  if [ -z "$gap_rules" ]; then
+    check "Every two-wildcard Bash rule has a zero-gap twin" 0
+  else
+    echo "  FAIL: two-wildcard rules with no zero-gap twin (a mid-pattern * never matches empty):"
+    printf '%s\n' "$gap_rules" | head -8 | sed 's/^/         /'
+    FAIL=$((FAIL + 1))
+  fi
+fi
+
+# Generator properties, checked in a throwaway copy so validate.sh never mutates the repo:
+# applying a tier twice must be byte-identical, and relaxed -> high -> relaxed must come
+# back to the original bytes. Either failing means a tier can be raised but never lowered.
+if [ -f .claude/bin/firewall.sh ] && [ -f .claude/security.json ]; then
+  fw_tmp="$(mktemp -d 2>/dev/null || true)"
+  if [ -z "$fw_tmp" ] || [ ! -d "$fw_tmp" ]; then
+    fw_tmp="${TMPDIR:-/tmp}/sak-validate-firewall.$$"
+    mkdir -p "$fw_tmp" 2>/dev/null || fw_tmp=""
+  fi
+  if [ -z "$fw_tmp" ] || [ ! -d "$fw_tmp" ]; then
+    echo "  SKIP: no writable temp dir for the firewall round-trip check"
+    SKIP=$((SKIP + 1))
+  else
+    mkdir -p "$fw_tmp/.claude/bin"
+    cp .claude/settings.json .claude/security.json "$fw_tmp/.claude/"
+    cp .claude/bin/firewall.sh "$fw_tmp/.claude/bin/firewall.sh"
+    fw_run() { (cd "$fw_tmp" && CLAUDE_PROJECT_DIR="$fw_tmp" bash .claude/bin/firewall.sh apply "$1" >/dev/null 2>&1); }
+    if fw_run relaxed; then
+      cp "$fw_tmp/.claude/settings.json" "$fw_tmp/once.json"
+      fw_run relaxed
+      if cmp -s "$fw_tmp/once.json" "$fw_tmp/.claude/settings.json"; then
+        check "firewall.sh apply is idempotent (two applies are byte-identical)" 0
+      else
+        check "firewall.sh apply is idempotent (two applies are byte-identical)" 1
+      fi
+      fw_run high && fw_run relaxed
+      if cmp -s "$fw_tmp/once.json" "$fw_tmp/.claude/settings.json"; then
+        check "firewall.sh relaxed -> high -> relaxed restores the original bytes" 0
+      else
+        check "firewall.sh relaxed -> high -> relaxed restores the original bytes" 1
+      fi
+    else
+      check "firewall.sh apply <tier> runs in a clean copy" 1
+    fi
+    rm -rf "$fw_tmp"
+  fi
+fi
+
+# In user settings a `/`-anchored rule is resolved against the settings file's own
+# directory, so `Read(/secrets/**)` documented for ~/.claude/settings.json means
+# ~/.claude/secrets/**, not the project's. Anything the kit tells a user to paste there
+# must use `~/` or `//`. (Project settings legitimately use `/` — that is the project root.)
+echo "[User-scope snippets]"
+user_anchored="$(python3 -c '
+import glob, re
+RULE = re.compile(r"\b(Read|Edit|Write|Bash)\((/(?!/)[^)]*)\)")
+hits = []
+files = ["README.md", "QUICK-START.md", "CLAUDE-solana.md"]
+files += sorted(glob.glob(".claude/commands/*.md")) + sorted(glob.glob(".claude/skills/*.md"))
+for path in files:
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError:
+        continue
+    user_scope = False
+    for i, line in enumerate(lines):
+        if re.search(r"~/\.claude/settings(\.local)?\.json|\$HOME/\.claude/settings", line):
+            user_scope = True
+        elif re.search(r"(?<!~)(?<!\$HOME)\B\.claude/settings\.json|^#{1,6} ", line) and "~/" not in line:
+            user_scope = False
+        if user_scope:
+            for m in RULE.finditer(line):
+                hits.append("%s:%d: %s(%s)" % (path, i + 1, m.group(1), m.group(2)))
+print("\n".join(hits))' 2>/dev/null || echo "__ERROR__")"
+if [ -z "$user_anchored" ]; then
+  check "No /-anchored permission rule in a ~/.claude/settings.json snippet" 0
+else
+  echo "  FAIL: a /-anchored rule documented for user settings resolves under ~/.claude/, not the project:"
+  printf '%s\n' "$user_anchored" | head -8 | sed 's/^/         /'
   FAIL=$((FAIL + 1))
 fi
 echo ""

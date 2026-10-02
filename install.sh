@@ -8,6 +8,7 @@ set -euo pipefail
 #   bash install.sh /path/to/project
 #   bash install.sh --agents /path/to/project   # installs into .agents/ instead of .claude/
 #   bash install.sh --with sendai,jupiter /path/to/project   # core skill packs plus these extensions (--with all: every one)
+#   bash install.sh --tier=medium /path/to/project   # firewall tier: off, relaxed (default), medium, high
 
 REPO_URL="https://github.com/solanabr/ai-kit.git"
 SCRIPT_VERSION="dev"
@@ -17,15 +18,28 @@ AGENTS_ONLY=false
 TARGET_ARG=""
 WITH_SKILLS=""
 WITH_NEXT=false
+# Firewall tier. TIER_EXPLICIT separates "the user asked for this one" from the
+# default: security.json is a protected file, so only an explicit ask re-stamps
+# an existing one.
+TIER="relaxed"
+TIER_EXPLICIT=false
+TIER_NEXT=false
 for arg in "$@"; do
   if [ "$WITH_NEXT" = true ]; then WITH_SKILLS="$WITH_SKILLS,$arg"; WITH_NEXT=false; continue; fi
+  if [ "$TIER_NEXT" = true ]; then TIER="$arg"; TIER_EXPLICIT=true; TIER_NEXT=false; continue; fi
   case "$arg" in
     --agents) AGENTS_ONLY=true ;;
     --with) WITH_NEXT=true ;;
     --with=*) WITH_SKILLS="$WITH_SKILLS,${arg#--with=}" ;;
+    --tier) TIER_NEXT=true ;;
+    --tier=*) TIER="${arg#--tier=}"; TIER_EXPLICIT=true ;;
     *) TARGET_ARG="$arg" ;;
   esac
 done
+case "$TIER" in
+  off|relaxed|medium|high) ;;
+  *) printf 'install.sh: unknown --tier "%s" (expected off, relaxed, medium or high)\n' "$TIER" >&2; exit 1 ;;
+esac
 
 TARGET_DIR="${TARGET_ARG:-.}"
 mkdir -p "$TARGET_DIR"
@@ -122,7 +136,12 @@ fi
 # kit repo into a project (README "Using as a GitHub Template"); its paths
 # describe the kit's own repo, so in an .agents/ project every step of it is false.
 # Not shipping it beats rewriting it into something plausible but wrong.
-AGENTS_SKIP_FILES='commands/cleanup.md'
+# The firewall is the same case, for a sharper reason: nothing reads a permission
+# block under .agents/. Codex reads AGENTS.md plus .agents/skills/ and takes its
+# hooks from .codex/hooks.json; Cursor, Copilot, Gemini CLI and opencode read
+# instructions only. A tier record and a generated rule block there would be dead
+# weight that looks like protection, so --agents installs no firewall at all.
+AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json'
 agents_paths() {
   local f
   for f in "$@"; do
@@ -163,7 +182,7 @@ if [ "$AGENTS_ONLY" = true ]; then
   agents_paths "$R/CLAUDE-solana.md" "$R/.gitmodules" "$R/.claude/settings.json"
   while IFS= read -r f; do agents_paths "$f"; done < <(
     find "$R/.claude/agents" "$R/.claude/commands" "$R/.claude/rules" "$R/.claude/skills" \
-      -path "$R/.claude/skills/ext" -prune -o -type f -print 2>/dev/null
+      "$R/.claude/hooks" -path "$R/.claude/skills/ext" -prune -o -type f -print 2>/dev/null
   )
 fi
 
@@ -187,7 +206,7 @@ fi
 # Copy contents (src/.) into a pre-created destination so an existing symlink
 # (e.g. .agents/skills -> ../.claude/skills) is followed and merged into,
 # instead of cp failing with "cannot overwrite non-directory".
-for dir in agents skills rules commands bin; do
+for dir in agents skills rules commands bin hooks; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
     mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
     cp -r "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
@@ -231,9 +250,101 @@ fi
 [ -f "$TEMP_DIR/repo/.claude/VERSION" ] && cp "$TEMP_DIR/repo/.claude/VERSION" "$TARGET_DIR/$CONFIG_DIR/VERSION"
 
 # Protected files: only copy if target doesn't exist yet
+SETTINGS_FRESH=false
 if [ -f "$TEMP_DIR/repo/.claude/settings.json" ] && [ ! -f "$TARGET_DIR/$CONFIG_DIR/settings.json" ]; then
   cp "$TEMP_DIR/repo/.claude/settings.json" "$TARGET_DIR/$CONFIG_DIR/settings.json"
+  SETTINGS_FRESH=true
 fi
+
+# ── Agentic firewall (Claude Code only — see AGENTS_SKIP_FILES above) ───────
+# security.json records the tier; bin/firewall.sh turns it into the permissions
+# and sandbox block in settings.json. Protected like settings.json, and a
+# root-level file: the directory loop above copies only directories, so without
+# this branch it would never be installed. ($CONFIG_DIR/ in the gitignore config
+# block below already covers it — no entry of its own needed.)
+if [ "$AGENTS_ONLY" = true ]; then
+  [ "$TIER_EXPLICIT" = false ] || warn "--tier is ignored with --agents: no firewall is installed there"
+else
+SECURITY_JSON="$TARGET_DIR/$CONFIG_DIR/security.json"
+FIREWALL_SH="$TARGET_DIR/$CONFIG_DIR/bin/firewall.sh"
+
+read_tier() {  # read_tier <file> — empty when there is no tier to read
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    d = None
+print((d.get("tier") or "") if isinstance(d, dict) else "")' "$1" 2>/dev/null
+  else
+    sed -n 's/.*"tier"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' "$1" 2>/dev/null | head -1
+  fi
+}
+
+# Stamp the tier without disturbing the rest of the file. A file that does not
+# parse as JSON is left alone rather than replaced: it may be the shipped policy
+# with comments, and overwriting it would drop the whole firewall config.
+write_tier() {  # write_tier <file> <tier>
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+if not isinstance(d, dict):
+    raise SystemExit(1)
+d["tier"] = sys.argv[2]
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    f.write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")' "$1" "$2" 2>/dev/null; then
+    return 0
+  fi
+  if grep -q '"tier"' "$1" 2>/dev/null; then
+    sed "s/\"tier\"[[:space:]]*:[[:space:]]*\"[a-z]*\"/\"tier\": \"$2\"/" "$1" > "$1.tmp" \
+      && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
+    return 0
+  fi
+  return 1
+}
+
+# Contract: `firewall.sh apply [<tier>]` regenerates the block in settings.json.
+# The tier is already recorded, so the bare form is equivalent; both spellings are
+# tried rather than letting a naming difference leave a fresh install unprotected.
+run_firewall_apply() {
+  (cd "$TARGET_DIR" && CLAUDE_PROJECT_DIR="$TARGET_DIR" bash "$FIREWALL_SH" apply "$TIER" >/dev/null 2>&1) \
+    || (cd "$TARGET_DIR" && CLAUDE_PROJECT_DIR="$TARGET_DIR" bash "$FIREWALL_SH" apply >/dev/null 2>&1) \
+    || (cd "$TARGET_DIR" && CLAUDE_PROJECT_DIR="$TARGET_DIR" bash "$FIREWALL_SH" set "$TIER" >/dev/null 2>&1)
+}
+
+APPLY_FIREWALL=false
+if [ ! -f "$SECURITY_JSON" ]; then
+  if [ -f "$TEMP_DIR/repo/.claude/security.json" ]; then
+    cp "$TEMP_DIR/repo/.claude/security.json" "$SECURITY_JSON"
+  else
+    printf '{\n  "tier": "%s"\n}\n' "$TIER" > "$SECURITY_JSON"
+  fi
+  write_tier "$SECURITY_JSON" "$TIER" || warn "Could not record the tier in $CONFIG_DIR/security.json"
+  APPLY_FIREWALL=true
+elif [ "$TIER_EXPLICIT" = true ] && [ "$(read_tier "$SECURITY_JSON")" != "$TIER" ]; then
+  write_tier "$SECURITY_JSON" "$TIER" || warn "Could not record the tier in $CONFIG_DIR/security.json"
+  APPLY_FIREWALL=true
+else
+  # Report the tier that is actually in force, not the default this run assumed.
+  EXISTING_TIER="$(read_tier "$SECURITY_JSON")"
+  [ -z "$EXISTING_TIER" ] || TIER="$EXISTING_TIER"
+fi
+
+# Generate the rule block — but only over a settings.json this run wrote, or when
+# the user asked for a different tier. Rewriting a settings.json someone else
+# tuned is update.sh's migration, which first checks whether it is still the
+# kit's own.
+if [ "$APPLY_FIREWALL" = false ]; then
+  :
+elif [ ! -f "$FIREWALL_SH" ]; then
+  warn "Firewall tier recorded as $TIER, but $CONFIG_DIR/bin/firewall.sh is missing"
+elif [ "$SETTINGS_FRESH" = false ] && [ "$TIER_EXPLICIT" = false ]; then
+  ok "Firewall tier recorded as $TIER — run /firewall $TIER to apply it to your settings.json"
+elif run_firewall_apply; then
+  ok "Firewall tier: $TIER (rules written to $CONFIG_DIR/settings.json)"
+else
+  warn "Firewall tier recorded as $TIER, but firewall.sh apply failed — run /firewall $TIER"
+fi
+fi  # AGENTS_ONLY
 
 # MCP config: lives at project root as .mcp.json (Claude Code only reads this path)
 if [ -f "$TEMP_DIR/repo/.mcp.json" ] && [ ! -f "$TARGET_DIR/.mcp.json" ]; then
@@ -376,6 +487,14 @@ else
     "plugin, prefer one path — both double-load commands/hooks/MCP"
     "(run /doctor to check)."
   )
+fi
+BOX_LINES+=("")
+if [ "$AGENTS_ONLY" = true ]; then
+  BOX_LINES+=("No firewall is installed here: nothing reads a permission")
+  BOX_LINES+=("block under $CONFIG_DIR/. Use a full install for the tiers.")
+else
+  BOX_LINES+=("Firewall tier: $TIER. Switch any time with /firewall <tier>")
+  BOX_LINES+=("(off, relaxed, medium, high).")
 fi
 BOX_LINES+=(
   ""

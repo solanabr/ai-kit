@@ -95,6 +95,25 @@ done
 # script by byte offset, so an older update.sh carries on with the new code from
 # here. Keep every byte above this comment unchanged; add new logic below it.
 
+# hooks/ arrived after that frozen UPDATE_DIRS list, which cannot grow. Same
+# semantics as the loop: overwrite with upstream, but into a pre-created
+# directory so a symlinked hooks/ is followed and merged into, not replaced.
+HOOKS_SRC="$TEMP_DIR/repo/.claude/hooks"
+HOOKS_DST="$TARGET_DIR/$CONFIG_NAME/hooks"
+if [ -d "$HOOKS_SRC" ]; then
+  if ! diff -rq "$HOOKS_SRC" "$HOOKS_DST" >/dev/null 2>&1; then
+    if [ "$DRY_RUN" = true ]; then
+      CHANGES="$CHANGES  [would update] $CONFIG_NAME/hooks/\n"
+    else
+      CHANGES="$CHANGES  [updated] $CONFIG_NAME/hooks/\n"
+    fi
+  fi
+  if [ "$DRY_RUN" = false ]; then
+    mkdir -p "$HOOKS_DST"
+    cp -r "$HOOKS_SRC/." "$HOOKS_DST/"
+  fi
+fi
+
 # The kit no longer ships rules/. Its old rule files used `globs:`, which Claude Code
 # ignores, so they loaded into every session. Remove those copies; rules the user
 # wrote are left alone.
@@ -118,7 +137,12 @@ done
 # kit repo into a project (README "Using as a GitHub Template"); its paths
 # describe the kit's own repo, so in an .agents/ project every step of it is false.
 # Not shipping it beats rewriting it into something plausible but wrong.
-AGENTS_SKIP_FILES='commands/cleanup.md'
+# The firewall is the same case, for a sharper reason: nothing reads a permission
+# block under .agents/. Codex reads AGENTS.md plus .agents/skills/ and takes its
+# hooks from .codex/hooks.json; Cursor, Copilot, Gemini CLI and opencode read
+# instructions only. A tier record and a generated rule block there would be dead
+# weight that looks like protection, so --agents installs no firewall at all.
+AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json'
 agents_paths() {
   local f
   for f in "$@"; do
@@ -168,7 +192,7 @@ if [ "$CONFIG_NAME" = ".agents" ]; then
   agents_paths "$TEMP_DIR/repo/CLAUDE-solana.md" "$TEMP_DIR/repo/.gitmodules"
   if [ "$DRY_RUN" = false ]; then
     while IFS= read -r rel; do agents_paths "$TARGET_DIR/$CONFIG_NAME/$rel"; done < <(
-      cd "$TEMP_DIR/repo/.claude" && find agents commands rules skills -path skills/ext -prune -o -type f -print 2>/dev/null
+      cd "$TEMP_DIR/repo/.claude" && find agents commands rules skills hooks -path skills/ext -prune -o -type f -print 2>/dev/null
     )
     # Older --agents installs registered ext/ under .claude/ paths; drop those
     # stale entries unless a regular .claude/ install still uses them.
@@ -356,6 +380,158 @@ PY
     fi
     ;;
 esac
+
+# ── Agentic firewall: adopt a tier on installs made before it existed ───────
+# Gated on the file, not a version: security.json is what records the tier, and
+# install.sh writes one for every new install, so its absence means a pre-firewall
+# install. Like retire_kit_defaults.py above, this mutates a protected file in place
+# — the whole-file copy is the thing update.sh never does. Two rules keep it safe:
+#
+#   * The tier block only ever replaces permissions the kit itself wrote. If
+#     permissions or sandbox differ from every settings.json the kit shipped in
+#     2.x, that is a policy someone tuned: adopt `off`, keep their version, say so.
+#     Whole-block comparison is why no per-rule conflict list is needed — a user
+#     who deleted one kit rule lands in that branch and nothing is rewritten.
+#   * bin/firewall.sh is the only writer of the rule block, and the copy loop above
+#     just updated it. So this writes security.json and nothing else: it resolves
+#     the tier, deliberately records no `enforced` block, and hands the generation
+#     to `firewall.sh apply`. With no enforced.ruleSetVersion to go on, that apply
+#     takes its bootstrap path and removes every rule the kit could have written
+#     before the record existed — the subtraction, from the one component that
+#     knows the legacy set. Duplicating it here would be a second writer and a
+#     second copy of the rule corpus to keep in step.
+#
+# --agents installs get no firewall at all (see AGENTS_SKIP_FILES above): nothing
+# reads a permission block under .agents/, so there is no tier to migrate there.
+if [ "$CONFIG_NAME" != ".claude" ]; then
+  :
+elif command -v python3 >/dev/null 2>&1 && [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+  cat > "$TEMP_DIR/firewall_migrate.py" <<'PY'
+import hashlib, json, os, sys
+
+dry_run = sys.argv[1] == "true"
+target, config, upstream, temp = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+can_apply = sys.argv[6] == "true"
+
+CONFIG_PATH = os.path.join(target, config)
+SETTINGS = os.path.join(CONFIG_PATH, "settings.json")
+SECURITY = os.path.join(CONFIG_PATH, "security.json")
+
+# Hash of the permissions + sandbox block of every settings.json the kit shipped in
+# 2.x before the firewall. A match means the policy is still the kit's own.
+# Regenerate one with:
+#   git show <ref>:.claude/settings.json | python3 -c 'import hashlib,json,sys;d=json.load(sys.stdin);print(hashlib.sha256(json.dumps({"permissions":d.get("permissions"),"sandbox":d.get("sandbox")},sort_keys=True,separators=(",",":"),ensure_ascii=False).replace(".agents/",".claude/").encode()).hexdigest()[:16])'
+BASELINES = {
+    "7788a4944b97d723": "2.0.0",
+    "86b53470f39214d1": "2.0.1",
+    "841633698e42d1db": "2.0.2 and 2.1.0",
+    "036fd95c5bd945a8": "2.1.0 main",
+}
+
+
+def report(tag, msg):
+    print("  [%s] %s" % (tag, msg))
+
+
+def give_up(msg):
+    report("skipped", "firewall tier: " + msg)
+    sys.exit(0)
+
+
+def block_hash(d):
+    s = json.dumps({"permissions": d.get("permissions"), "sandbox": d.get("sandbox")},
+                   sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    # --agents installs have .claude/ rewritten in their rules; compare the shipped form.
+    return hashlib.sha256(s.replace(".agents/", ".claude/").encode("utf-8")).hexdigest()[:16]
+
+
+if os.path.exists(SECURITY):
+    sys.exit(0)  # tier already recorded; /firewall owns it from here
+if os.path.islink(CONFIG_PATH) or os.path.islink(SETTINGS):
+    give_up("%s/ or its settings.json is a symlink; left alone" % config)
+
+settings = None
+if os.path.exists(SETTINGS):
+    try:
+        with open(SETTINGS, encoding="utf-8") as f:
+            settings = json.load(f)
+    except (OSError, ValueError):
+        give_up("%s/settings.json is not plain JSON; left alone" % config)
+    if not isinstance(settings, dict):
+        give_up("%s/settings.json is not a JSON object; left alone" % config)
+
+found = block_hash(settings) if settings is not None else ""
+pristine = settings is None or found in BASELINES
+tier = "relaxed" if pristine else "off"
+
+# Seed from the upstream file so the tier documentation lands with it. Its `enforced`
+# record describes the kit's own repo, not this install, and a record carrying a
+# ruleSetVersion would tell firewall.sh to subtract rules that were never here while
+# leaving the legacy ones behind. Drop it: "never applied" is the truth, and it is
+# what makes the next apply remove the legacy set.
+doc = {}
+try:
+    with open(upstream, encoding="utf-8") as f:
+        base = json.load(f)
+    if isinstance(base, dict):
+        doc = base
+except (OSError, ValueError):
+    pass
+doc.pop("enforced", None)
+doc["tier"] = tier
+doc["_migrated"] = "tier adopted by update.sh for a pre-firewall install"
+
+verb = "would set" if dry_run else "set"
+if pristine:
+    report(verb, "%s/security.json: tier %s on a pre-firewall install" % (config, tier))
+    if can_apply:
+        # Only the dry run reports settings.json from here. In a real run the caller
+        # reports what firewall.sh actually wrote, so a failed apply cannot leave a
+        # "[set]" line standing over a file nothing touched.
+        if dry_run:
+            report(verb, "%s/settings.json: %s firewall rules, replacing the kit's own" % (config, tier))
+    else:
+        report("notice", "firewall rules not generated: %s/bin/firewall.sh is missing."
+                         " Run /firewall %s once it is there." % (config, tier))
+else:
+    report(verb, "%s/security.json: tier off (permissions were tuned here)" % config)
+    report("notice", "%s/settings.json carries permission rules the kit did not write, so"
+                     " the firewall stays off and your rules are untouched."
+                     " Run /firewall relaxed to adopt the kit set." % config)
+
+if not dry_run:
+    tmp = SECURITY + ".firewall.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, SECURITY)  # atomic: same directory
+    if pristine and can_apply:
+        with open(os.path.join(temp, "firewall-apply"), "w", encoding="utf-8") as f:
+            f.write(tier)
+PY
+  # firewall.sh generates the rules; without it only the tier is recorded, and the
+  # kit's own rules stay exactly where they are.
+  FW_APPLY=false
+  FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
+  if [ -f "$FW_SH" ]; then
+    FW_APPLY=true
+  fi
+  MIGRATED="$(python3 "$TEMP_DIR/firewall_migrate.py" "$DRY_RUN" "$TARGET_DIR" "$CONFIG_NAME" \
+    "$TEMP_DIR/repo/.claude/security.json" "$TEMP_DIR" "$FW_APPLY")" || MIGRATED=""
+  [ -z "$MIGRATED" ] || CHANGES="$CHANGES$MIGRATED\n"
+  if [ -f "$TEMP_DIR/firewall-apply" ]; then
+    FW_TIER="$(cat "$TEMP_DIR/firewall-apply")"
+    # Contract: `firewall.sh apply [<tier>]`, resolving its own paths from bin/.
+    # The tier is recorded either way, so the bare form is equivalent.
+    if (bash "$FW_SH" apply "$FW_TIER" >/dev/null 2>&1) || (bash "$FW_SH" apply >/dev/null 2>&1); then
+      CHANGES="$CHANGES  [set] $CONFIG_NAME/settings.json: $FW_TIER rules generated by firewall.sh\n"
+    else
+      # Nothing was written here, so settings.json still holds the policy it had.
+      CHANGES="$CHANGES  [skipped] firewall rules: firewall.sh apply failed, settings.json unchanged. Run /firewall $FW_TIER\n"
+    fi
+  fi
+elif [ ! -f "$TARGET_DIR/$CONFIG_NAME/security.json" ]; then
+  CHANGES="$CHANGES  [skipped] firewall tier left unset (python3 or a writable temp dir not found)\n"
+fi
 
 # CHANGELOG.md stays in source repo — not shipped to user projects
 
