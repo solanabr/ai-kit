@@ -21,7 +21,7 @@ Harness setup and patterns: [testing.md](../skills/ext/solana-dev/skills/solana-
 ## Reading failures
 
 - LiteSVM `send_transaction` returns `Err(FailedTransactionMetadata)`: `e.err` is the transaction error and `e.meta.logs` holds the program logs. Read the logs before changing code.
-- `custom program error: 0x...` is hex. In Anchor, 2000-2999 are constraint violations (2006 `ConstraintSeeds`: client and program disagree on seeds), 3000-3999 account errors (3012 `AccountNotInitialized`), 4100 `DeclaredProgramIdMismatch` (the test loaded the program at an address other than its `declare_id!`), and 6000+ your `#[error_code]` variants in declaration order.
+- `custom program error: 0x...` is hex. In Anchor, 2000-2999 are constraint violations (2006 `ConstraintSeeds`: client and program disagree on seeds), 3000-3999 account errors (3012 `AccountNotInitialized`), 4100 `DeclaredProgramIdMismatch` (the test loaded the program at an address other than its `declare_id!`), and your `#[error_code]` variants at `offset` (default 6000) + discriminant: the variant's explicit `= N` if it sets one, else the previous variant's + 1.
 - LiteSVM rejects a byte-identical transaction sent twice; call `svm.expire_blockhash()` between identical sends.
 - `AccountNotFound` for a mainnet account under `anchor test`: Anchor starts Surfpool offline. Set `[surfpool] online = true` and `datasource_rpc_url` in Anchor.toml. Suites written for `solana-test-validator` can run with `anchor test --validator legacy`. Stop other local validators first, since both want port 8899.
 - Toolchain and environment errors (platform-tools, GLIBC, the litesvm native binary): [common-errors.md](../skills/ext/solana-dev/skills/solana-dev/references/common-errors.md).
