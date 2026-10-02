@@ -52,6 +52,16 @@ else
 fi
 
 echo ""
+echo "[test_commands] Checking /dream and /diff-review write to the Project Learnings subsections in CLAUDE-solana.md..."
+for sub in "### Recurring Issues" "### Fix Patterns" "### Config Conventions"; do
+  assert_file_contains "$REPO_ROOT/CLAUDE-solana.md" "$sub" "CLAUDE-solana.md has '$sub'"
+  assert_file_contains "$CMDS_DIR/dream.md" "\`$sub\`" "dream.md names '$sub'"
+done
+assert_file_contains "$CMDS_DIR/diff-review.md" '`### Recurring Issues`' "diff-review.md files repeated mistakes under ### Recurring Issues"
+assert_file_contains "$CMDS_DIR/diff-review.md" '`### Config Conventions`' "diff-review.md files confirmed conventions under ### Config Conventions"
+assert_file_contains "$CMDS_DIR/dream.md" "if it is missing (never a differently named one)" "dream.md creates a missing subsection instead of inventing one"
+
+echo ""
 echo "[test_commands] Checking --agents install-mode support..."
 assert_file_contains "$CMDS_DIR/resync.md" ".agents/bin" "resync.md supports --agents installs (.agents/bin)"
 assert_file_contains "$CMDS_DIR/update.md" ".agents/bin" "update.md supports --agents installs (.agents/bin)"

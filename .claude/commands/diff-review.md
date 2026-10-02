@@ -19,7 +19,7 @@ Review this branch's changes against the base branch ($ARGUMENTS, default `main`
    - CU waste: `msg!` with formatting on hot paths; needless `.clone()` or `Vec` copies of account data.
    - Changed instructions have tests, including their failure paths.
 3. AI slop: comments that restate the code; over-commented files; try/catch that only rethrows or swallows; defensive checks duplicating Anchor constraints; verbose errors leaking internals; dead helpers or copies of existing utilities; stubs and TODOs presented as finished; docs describing behavior the code does not have.
-4. Capture learnings: when a Critical or Warning finding repeats a mistake already seen in this repo, or the user confirms a convention, append one line under `## Project Learnings` in the project instruction file (`CLAUDE.md`, or `AGENTS.md` in `--agents` installs). Skip one-off findings.
+4. Capture learnings: when a Critical or Warning finding repeats a mistake already seen in this repo, or the user confirms a convention, append one line to the project instruction file (`CLAUDE.md`, or `AGENTS.md` in `--agents` installs) under `## Project Learnings`: a repeated mistake in `### Recurring Issues`, a confirmed convention in `### Config Conventions`. Add the `###` heading if it is missing. Skip one-off findings.
 
 ## Output
 
