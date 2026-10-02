@@ -76,6 +76,23 @@ print("\n".join(out) or "OK")
 PY
 )"
 assert_eq "OK" "$PROBLEMS" "Every submodule has one registry entry (tier, path, triggers, install command) and vice versa"
+# A renamed upstream keeps working through GitHub's redirect until the old name is reused,
+# so .gitmodules must clone the repo the registry names, not a redirect to it.
+URL_DRIFT="$(python3 - "$REGISTRY" "$REPO_ROOT/.gitmodules" <<'PY'
+import json, re, sys
+reg = json.load(open(sys.argv[1]))
+src = {e.get("path"): e.get("source", "") for e in reg["entries"] if "tier" in e}
+norm = lambda u: re.sub(r"(\.git)?/*$", "", u.strip()).lower()
+out = []
+for sec in re.split(r"^\[submodule ", open(sys.argv[2]).read(), flags=re.M)[1:]:
+    path = re.search(r"^\s*path\s*=\s*(\S+)", sec, re.M)
+    url = re.search(r"^\s*url\s*=\s*(\S+)", sec, re.M)
+    if path and url and path.group(1) in src and norm(url.group(1)) != norm(src[path.group(1)]):
+        out.append(f"{path.group(1)}: .gitmodules url {url.group(1)} != registry source {src[path.group(1)]}")
+print("\n".join(out) or "OK")
+PY
+)"
+assert_eq "OK" "$URL_DRIFT" "Every .gitmodules url matches its registry source (ignoring .git and trailing /)"
 TOTAL=$((TOTAL + 1))
 if [ -n "$CORE" ] && [ -n "$EXTENSIONS" ]; then
   echo "  PASS: registry has core packs ($CORE) and extensions"
