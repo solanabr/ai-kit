@@ -1,0 +1,56 @@
+name: Submodule review
+
+# A submodule bump PR's diff is only SHA lines; the real change is third-party markdown,
+# scripts and hooks that agents read and may run. This job diffs each bumped pack between
+# its old and new commit and flags hooks, scripts, executables, new hosts, pipe-to-shell
+# installers, new credential names and licence changes. It informs a human reviewer;
+# submodule bumps are not auto-merged.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".gitmodules"
+      - ".claude/skills/ext/**"
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Diff each bumped pack
+        id: review
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash .github/scripts/submodule-bump-review.sh "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/review.md"
+          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Same text as a PR comment, updated in place on later pushes. Fork PRs get a
+      # read-only token, so a failed post does not fail the job.
+      - name: Post the summary on the PR
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- submodule-bump-review -->'
+          { echo "$marker"; cat "$RUNNER_TEMP/review.md"; } > "$RUNNER_TEMP/comment.md"
+          id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          fi

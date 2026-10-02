@@ -19,7 +19,10 @@ What is in the kit repository, which parts reach an installed project, and the w
 ├── .github/workflows/
 │   ├── ci.yml                       # PR validation
 │   ├── claude-code-review.yml       # Automatic Claude review of every PR (advisory)
-│   └── claude.yml                   # @claude mention responder (issues/PRs)
+│   ├── claude.yml                   # @claude mention responder (issues/PRs)
+│   └── submodule-review.yml         # Flags risky content in ext/ pin bumps
+├── .github/scripts/
+│   └── submodule-bump-review.sh     # Diff each bumped pack (used by submodule-review.yml)
 ├── .github/templates/
 │   └── claude-code.yml              # Claude Code action template (copy into a project's own workflows/)
 └── .claude/
