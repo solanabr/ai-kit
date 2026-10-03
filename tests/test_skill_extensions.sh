@@ -268,6 +268,28 @@ assert_dir_exists "$P2/.claude/skills/my-skill" "prune leaves a .lock the kit di
 assert_contains "$PRUNE_OUT" "Removed old-core" "prune says which packs it removed"
 assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "prune keeps the core packs and recorded extensions"
 
+# --- A hand-edited extensions.txt is cleaned, not glob-expanded or propagated ---
+echo "[extensions.txt]"
+# A project-root folder named like a pack: an unquoted '*' would turn it into a recorded
+# extension, and the next update would keep that pack (#112, #117).
+mkdir -p "$P2/cloudflare"
+printf '# mine\n  jupiter  \nJUPITER\nSendAI\r\n*\nno-such-pack\n\n' > "$P2/.claude/skills/extensions.txt"
+cp -R "$REPO_ROOT/.claude/skills/ext/." "$P2/.claude/skills/ext/"
+HOSTILE_OUT="$(cd "$P2" && bash .claude/bin/skills.sh prune 2>&1)"
+assert_eq "jupiter sendai" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" | tr '\n' ' ' | sed 's/ $//')" "prune trims, lowercases and dedupes extensions.txt, and drops '*' and unknown ids"
+assert_contains "$HOSTILE_OUT" "ignoring 'no-such-pack'" "prune warns about an id that is not an extension"
+assert_contains "$HOSTILE_OUT" "ignoring '*'" "prune warns about a glob line instead of expanding it"
+assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "A glob in extensions.txt adds no pack, even with a project folder named like one"
+cp -R "$REPO_ROOT/.claude/skills/ext/." "$P2/.claude/skills/ext/"
+(cd "$P2" && bash .claude/bin/skills.sh prune) >/dev/null 2>&1
+assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "...and the next update keeps the same subset"
+printf 'jupiter\n*\n' > "$P2/.claude/skills/extensions.txt"
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$P2" >/dev/null 2>&1
+assert_eq "jupiter" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" | tr '\n' ' ' | sed 's/ $//')" "install.sh re-run (select) drops a glob line too"
+ADD_GLOB="$(cd "$P2" && bash .claude/bin/skills.sh add '*' 2>&1 || true)"
+assert_contains "$ADD_GLOB" "unknown skill pack '*'" "skills.sh add '*' names the '*', not a file it expanded to"
+rmdir "$P2/cloudflare"
+
 # --- A reformatted registry is refused rather than read as zero packs ---
 echo "[registry layout]"
 P5="$TEMP_DIR/reformatted"
