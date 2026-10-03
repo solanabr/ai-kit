@@ -187,7 +187,9 @@ apache_license() {
   text="$(tr -d '\r' < "$1" | tr -s ' \t\n' '   ' | sed 's/^ //; s/ $//')"
   terms="${text%%END OF TERMS AND CONDITIONS*}END OF TERMS AND CONDITIONS"
   rest="${text#"$terms"}"
-  rest="$(printf '%s' "${rest# }" | sed -E 's/^(.* )?Copyright [][A-Za-z0-9 ,.()&-]{1,120} Licensed under/\1Copyright [yyyy] [name of copyright owner] Licensed under/')"
+  # The appendix's one variable line: the template, or Anthropic's own copyright (the
+  # only source is anthropics/skills). Anything else in that slot fails the hash below.
+  rest="$(printf '%s' "${rest# }" | sed -E 's/^(.* )?Copyright [0-9]{4}(-[0-9]{4})? Anthropic, PBC\. Licensed under/\1Copyright [yyyy] [name of copyright owner] Licensed under/')"
   if [ "$(printf '%s' "$terms" | git hash-object --stdin)" != "$APACHE_TERMS" ] \
     || { [ -n "$rest" ] && [ "$(printf '%s' "$rest" | git hash-object --stdin)" != "$APACHE_APPENDIX" ]; }; then
     echo "its text is not the Apache License 2.0"; return 1

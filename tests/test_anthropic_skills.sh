@@ -13,7 +13,7 @@ PACK="anthropic-skills"
 # docx, pdf, pptx and xlsx are proprietary, doc-coauthoring has no license.
 DENIED="docx pdf pptx xlsx doc-coauthoring"
 
-TEMP_DIR="$(mktemp -d)"
+TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 echo "[test_anthropic_skills] Anthropic's Apache-2.0 skills as a cross-agent extension"
@@ -105,6 +105,7 @@ fixture_skill renamed "$APACHE" other-name
 fixture_skill denies-apache "This work is NOT offered under the Apache License. Version 2.0 of our PROPRIETARY terms applies. No redistribution."
 fixture_skill apache-reserved "$(printf '%s\n\n%s' "$APACHE" "Copyright 2026 Example Corp. All rights reserved.")"
 fixture_skill apache-copyright "$(printf '%s\n' "$APACHE" | sed 's/Copyright \[yyyy\] \[name of copyright owner\]/Copyright 2026 Anthropic, PBC./')"
+fixture_skill apache-copyright-prose "$(printf '%s\n' "$APACHE" | sed 's/Copyright \[yyyy\] \[name of copyright owner\]/Copyright 2026 Anthropic, PBC. NOT LICENSED for use outside Anthropic products. Proprietary and confidential./')"
 # Nested folders travel with the copy: a denied skill, or another license, inside an Apache one.
 fixture_skill nests-docx "$APACHE"
 fixture_skill nests-docx/vendor/docx "$PROPRIETARY" docx
@@ -217,6 +218,8 @@ assert_dir_not_exists "$P4/.claude/skills/mit-skill" "...and installs nothing"
 refused "skills.sh add refuses a LICENSE.txt that names Apache 2.0 but is not its text" "no Apache-2.0 LICENSE.txt" skills '["denies-apache"]'
 refused "skills.sh add refuses the Apache-2.0 text with \"All rights reserved\" added" "reserves rights" skills '["apache-reserved"]'
 assert_dir_not_exists "$P4/.claude/skills/apache-reserved" "...and installs nothing"
+refused "skills.sh add refuses the Apache-2.0 text with prose added to its copyright line" "no Apache-2.0 LICENSE.txt" skills '["apache-copyright-prose"]'
+assert_dir_not_exists "$P4/.claude/skills/apache-copyright-prose" "...and installs nothing"
 refused "skills.sh add refuses a denied skill nested inside an allowed folder" "contains vendor/docx/SKILL.md, a skill the kit refuses" skills '["nests-docx"]'
 assert_dir_not_exists "$P4/.claude/skills/nests-docx" "...and installs nothing"
 refused "skills.sh add refuses a nested license file that is not Apache-2.0" "lib/LICENSE is not an Apache-2.0 license" skills '["nests-license"]'
