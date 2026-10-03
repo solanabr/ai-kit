@@ -334,9 +334,10 @@ OLD_KEYS = {
     "modelDefaults": {"agent": "opus", "command": "sonnet"},
 }
 OLD_PLUGINS = ["rust-analyzer-lsp", "typescript-lsp", "csharp-lsp"]
+# context-mode is deliberately absent: it is a default server again, so stripping it here
+# would delete it from .mcp.json on the same run that installed it.
 OLD_SERVERS = {
     "playwright": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--headless"]},
-    "context-mode": {"command": "npx", "args": ["-y", "context-mode@latest"]},
     "memsearch": {"command": "npx", "args": ["-y", "memsearch-mcp@latest"]},
     "surfpool": {"command": "surfpool", "args": ["mcp"]},
 }
@@ -564,6 +565,111 @@ PY
   fi
 elif [ ! -f "$TARGET_DIR/$CONFIG_NAME/security.json" ]; then
   CHANGES="$CHANGES  [skipped] firewall tier left unset (python3 or a writable temp dir not found)\n"
+fi
+
+# ── MCP gating: reach the two things an existing install cannot get otherwise ──
+#
+# The hooks/ copy above already delivered the guard scripts, and `firewall.sh apply`
+# owns the permission block. Neither covers these two, so both need a migration here:
+#
+#   1. The PreToolUse matcher lives in settings.json under `hooks`, which this script
+#      never overwrites and firewall.sh never manages. An install that keeps matcher
+#      "Bash" has the new MCP-aware guards on disk and nothing routing MCP calls into
+#      them -- the worst of the three states, because it looks configured.
+#   2. An install that already has a security.json is skipped by firewall_migrate.py
+#      above (correctly -- /firewall owns the tier from then on), so a change to the
+#      generated corpus never lands. enforced.ruleSetVersion is the record of which
+#      corpus was written; when it is behind the shipped one, re-apply the declared
+#      tier. That is the general mechanism, not an MCP special case.
+#
+# Both are gated on content rather than a version window, so they are idempotent and a
+# user who edited either part is left alone.
+#
+# --agents installs are skipped for the same reason the tier migration skips them:
+# nothing under .agents/ reads a settings.json, so a matcher or a rule block there would
+# be weight that looks like protection. Codex takes its hooks from .codex/hooks.json.
+MCP_MATCHER='Bash|mcp__context-mode__.*'
+if [ "$CONFIG_NAME" != ".claude" ]; then
+  :
+elif command -v python3 >/dev/null 2>&1 && [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+  cat > "$TEMP_DIR/mcp_matcher.py" <<'PY'
+import json, os, sys
+
+dry_run, target, config, matcher = sys.argv[1] == "true", sys.argv[2], sys.argv[3], sys.argv[4]
+SETTINGS = os.path.join(target, config, "settings.json")
+
+# The three guards the kit registers. An entry is rewritten only when its command names
+# one of them, so a Bash hook the user added keeps its own narrower matcher.
+GUARDS = ("secrets-guard.sh", "onchain-guard.sh", "egress-guard.sh")
+
+if os.path.islink(SETTINGS):
+    sys.exit(0)
+try:
+    with open(SETTINGS, encoding="utf-8") as f:
+        data = json.load(f)
+except (OSError, ValueError):
+    sys.exit(0)
+if not isinstance(data, dict):
+    sys.exit(0)
+
+hooks = data.get("hooks")
+if not isinstance(hooks, dict):
+    sys.exit(0)
+entries = hooks.get("PreToolUse")
+if not isinstance(entries, list):
+    sys.exit(0)
+
+changed = 0
+for entry in entries:
+    if not isinstance(entry, dict) or entry.get("matcher") != "Bash":
+        continue
+    cmds = entry.get("hooks")
+    if not isinstance(cmds, list):
+        continue
+    if not any(
+        isinstance(h, dict) and any(g in (h.get("command") or "") for g in GUARDS)
+        for h in cmds
+    ):
+        continue
+    entry["matcher"] = matcher
+    changed += 1
+
+if not changed:
+    sys.exit(0)
+if not dry_run:
+    tmp = SETTINGS + ".mcp.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        os.replace(tmp, SETTINGS)
+    except OSError as e:
+        print("  [skipped] %s/settings.json: could not write (%s)" % (config, e.strerror))
+        sys.exit(0)
+print("  [%s] %s/settings.json: %d PreToolUse matcher(s) now also match context-mode's"
+      " MCP tools, so the secrets, on-chain and egress guards see ctx_execute payloads"
+      % ("would update" if dry_run else "updated", config, changed))
+PY
+  MCPM="$(python3 "$TEMP_DIR/mcp_matcher.py" "$DRY_RUN" "$TARGET_DIR" "$CONFIG_NAME" "$MCP_MATCHER")" || MCPM=""
+  [ -z "$MCPM" ] || CHANGES="$CHANGES$MCPM\n"
+
+  # Rule-set catch-up. Reads the shipped version out of the firewall.sh just copied in,
+  # so there is one source for it and no literal here to drift.
+  FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
+  SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
+  if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then
+    WANT_RS="$(awk -F= '/^RULE_SET_VERSION[[:space:]]*=/{gsub(/[^0-9]/,"",$2); print $2; exit}' "$FW_SH" 2>/dev/null)"
+    HAVE_RS="$(awk '/"ruleSetVersion"[[:space:]]*:/{gsub(/[^0-9]/,""); print; exit}' "$SEC_JSON" 2>/dev/null)"
+    DECL_TIER="$(awk '/"tier"[[:space:]]*:/{t=$0; sub(/.*"tier"[^"]*"/,"",t); sub(/".*/,"",t); print t; exit}' "$SEC_JSON" 2>/dev/null)"
+    if [ -n "$WANT_RS" ] && [ -n "$HAVE_RS" ] && [ "$HAVE_RS" -lt "$WANT_RS" ] 2>/dev/null; then
+      if [ "$DRY_RUN" = true ]; then
+        CHANGES="$CHANGES  [would update] $CONFIG_NAME/settings.json: firewall rule set v$HAVE_RS -> v$WANT_RS (re-applying ${DECL_TIER:-the declared tier})\n"
+      elif bash "$FW_SH" apply >/dev/null 2>&1; then
+        CHANGES="$CHANGES  [updated] $CONFIG_NAME/settings.json: firewall rule set v$HAVE_RS -> v$WANT_RS (${DECL_TIER:-declared tier} re-applied)\n"
+      else
+        CHANGES="$CHANGES  [skipped] firewall rule set still v$HAVE_RS: firewall.sh apply failed, settings.json unchanged. Run /firewall ${DECL_TIER:-relaxed}\n"
+      fi
+    fi
+  fi
 fi
 
 # CHANGELOG.md stays in source repo — not shipped to user projects

@@ -4,25 +4,33 @@ What the kit configures for you, what it leaves to you, and the MCP servers that
 
 ## MCP servers
 
-Three servers are on by default in `.mcp.json` (API keys go in `.env`). Claude Code asks once per project before it starts them, so approve the ones you want. `/setup-mcp` walks through the Helius API key and offers the optional servers below.
+Four servers are on by default in `.mcp.json` (API keys go in `.env`). Claude Code asks once per project before it starts them, so approve the ones you want. `/setup-mcp` walks through the Helius API key and offers the optional servers below.
 
 | Server | Capabilities |
 |--------|-------------|
 | **Helius** | RPC, DAS API, parsed transactions, webhooks, priority fees, token and NFT data |
 | **solana-dev** | Solana Foundation official MCP (remote HTTP): Solana docs, guides, and API references |
 | **Context7** | Up-to-date library documentation lookup |
+| **context-mode** | Keeps large tool output out of the context window (no key; needs Node 22.5+) |
+
+**`context-mode` is the one default server with a code executor**, so it is also the one the firewall has an opinion about. `ctx_execute` runs shell, Python, JavaScript, Go, Rust and more in a subprocess, and like every local MCP server it runs outside the OS sandbox — `ls ~/.claude/ide` is refused through Bash and succeeds through it. The kit's three `PreToolUse` guards therefore match its tools as well as Bash, so a credential read, a mainnet write or a denied egress host in a `ctx_execute` payload is gated the way the shell equivalent is; and **Medium and High deny `ctx_execute`, `ctx_execute_file`, `ctx_batch_execute`, `ctx_fetch_and_index` and `ctx_index` by name**, keeping only the search and stats tools. If you want the compression without the executor at Relaxed, drop the server from `.mcp.json`. Full reasoning, and what the gating does not cover, in [firewall.md](firewall.md#what-the-tiers-do-not-do).
 
 ### Optional MCP servers
 
-These need a browser, a CLI or a workflow choice, so they are not started by default. Add one for yourself with `claude mcp add` (add `--scope project` to share it through `.mcp.json`):
+These need a browser, a CLI, a key or a workflow choice, so they are not started by default. Add one for yourself with `claude mcp add` (add `--scope project` to share it through `.mcp.json`):
 
 | Server | Add with | Needs |
 |--------|----------|-------|
 | **Playwright**: browser automation for dApp testing | `claude mcp add playwright -- npx -y @playwright/mcp@latest --headless` | A browser Playwright can launch |
 | **Surfpool**: local validator / mainnet-fork control | `claude mcp add surfpool -- surfpool mcp` | The `surfpool` CLI (`brew install txtx/taps/surfpool`) |
-| **context-mode**: keeps large tool output out of context | `claude mcp add context-mode -- npx -y context-mode@latest` | Nothing |
+| **Chainstack**: multi-chain RPC platform control | `claude mcp add --transport http chainstack https://mcp.chainstack.com/mcp` | Nothing for 5 read-only tools; a key for the rest |
+| **Nansen**: wallet and token intelligence | `claude mcp add --transport http nansen https://mcp.nansen.ai/ra/mcp --header "NANSEN-API-KEY: <key>"` | A paid Nansen API key (free tier within credits); ~50 tool schemas per session |
 
-Playwright and context-mode are also the two servers that void the egress guarantee at every firewall tier: one is an arbitrary HTTP client, the other an arbitrary executor that runs commands outside the Bash tool. That is the reason they are opt-in — see [firewall.md](firewall.md#what-the-tiers-do-not-do).
+Two caveats on those last two. **Chainstack lists every tool whether or not a key is configured**, so a keyless install looks complete and fails at the call; node deployment, project management and testnet funding all need `--header "Authorization: Bearer <key>"`. **Nansen answers nothing without a key**, and it loads roughly 50 tool schemas into every session it is attached to — a standing context cost for something most projects never call, so attach it for analytics work and detach it after.
+
+**Playwright is the opt-in server with no gating at all.** `browser_network_request` is an arbitrary HTTP client, and no firewall tier touches it — unlike `context-mode`, it has no hook matcher and no tier deny. Attaching it voids the egress guarantee at every tier.
+
+**Phantom is documented here but deliberately not offered by `/setup-mcp`.** It is 29 tools and not a wallet reader: `solana_sign`/`solana_send` and `evm_sign`/`evm_send` land signed transactions, and `buy`, `pay`, `transfer`, `wallet_rebalance`, `withdraw_from_hyperliquid_spot` and nine `perps_*` tools move real funds. It needs no key once `phantom_login` has run — the session lives on disk — so nothing stands between an attached server and a trade. If you want it, you add it yourself: `claude mcp add phantom -- npx -y @phantom/mcp-server`.
 
 ## Persistent memory: memsearch
 

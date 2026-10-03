@@ -39,6 +39,62 @@ TIER=$(kit_tier)
 [ "$TIER" = "off" ] && exit 0
 TIERN=$(kit_tier_num "$TIER")
 
+# ---- denied domains, for MCP payloads only.
+#
+# For a Bash command this is already enforced one layer down, at the syscall, by
+# sandbox.network.deniedDomains — the hook has nothing to add and checking here
+# would only risk a false positive on a hostname that appears in prose.  A local
+# MCP server runs outside that sandbox, so for an MCP payload this hook is the
+# only thing between the agent and a host the tier says is blocked.
+#
+# Tier parity is automatic and not re-stated here: the list comes from the
+# generated settings.json, which carries the base sinks from Relaxed up, the bot
+# and free-compute hosts from Medium up, the PaaS wildcards at High, and nothing
+# at Off (where this hook has already exited).
+if [ -n "${KIT_MCP-}" ]; then
+  MCP_HOST=$(printf '%s\n' "$KIT_CMD" |
+    KIT_DENIED="$(kit_denied_domains)" awk '
+    function host(u,   h) {
+      h = u
+      sub(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "", h)   # scheme
+      sub(/[\/?#].*$/, "", h)                        # path, query, fragment
+      sub(/^[^@]*@/, "", h)                          # userinfo
+      sub(/:[0-9]+$/, "", h)                         # port
+      return tolower(h)
+    }
+    function denied(h,   i, p, suf) {
+      for (i = 1; i <= np; i++) {
+        p = PAT[i]
+        if (p == "") continue
+        if (p == h) return p
+        if (substr(p, 1, 2) == "*.") {
+          suf = substr(p, 2)                         # ".example.com"
+          # The apex too, not just subdomains.  The kit always ships both forms, so
+          # this changes nothing for its own list; it covers a user who added only
+          # the wildcard to their own deniedDomains and meant the host as well.
+          if (h == substr(suf, 2)) return p
+          if (length(h) > length(suf) && substr(h, length(h) - length(suf) + 1) == suf) return p
+        }
+      }
+      return ""
+    }
+    BEGIN { np = split(ENVIRON["KIT_DENIED"], PAT, "\n") }
+    {
+      s = $0
+      while (match(s, /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^[:space:]"'\''`<>]+/)) {
+        u = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+        h = host(u)
+        if (h == "") continue
+        d = denied(h)
+        if (d != "") { print h " " d; exit }
+      }
+    }' 2>/dev/null) || MCP_HOST=
+  if [ -n "$MCP_HOST" ]; then
+    kit_deny "reaches ${MCP_HOST%% *}, which the $TIER firewall tier denies (matched ${MCP_HOST#* }). That host is on the kit's exfil denylist — request bins, tunnels, paste sites and file drops. A local MCP server runs outside the OS sandbox, so this hook is the only thing enforcing that list here."
+  fi
+fi
+
 # ---- publish: irreversible, and the registry is always an allowed domain.
 PUB='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?(npm|yarn|pnpm|bun|cargo)[[:space:]]+publish([[:space:]][^;&|]*)?([;&|)]|$)'
 PSEG=$(printf '%s\n' "$KIT_CMD" | grep -oE "$PUB") || PSEG=

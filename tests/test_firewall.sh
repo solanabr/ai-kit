@@ -294,18 +294,60 @@ import json
 p = json.load(open('$WORK/gen.off.json')).get('permissions') or {}
 print(len(p.get('ask') or []))" 2>/dev/null)" "off emits zero permissions.ask entries"
 
-# ── the never-allowed set is identical at every tier ────────────────────────
-# Deny is the one axis where merge-monotonicity is harmless, because every tier agrees.
-# If it varied, descending a tier could not take the extra denies back out.
+# ── the never-allowed set varies only where it provably can ─────────────────
+# Deny is merge-monotonic: lists union across settings sources and there is no un-deny,
+# so a deny that reaches a user or managed file cannot be taken back on the way down a
+# tier. That is why every Bash deny is identical at every tier, and the assertion below
+# is what keeps it that way.
+#
+# The one sanctioned exception is MCP tool-name denies. They are safe because MCP rules
+# have no argument form at all (a parenthesised mcp__ rule is skipped on load), so a
+# tool-name deny is the only expressible gate, and because firewall.sh writes one file
+# and subtracts exactly its recorded ruleIds -- which the relaxed -> high -> relaxed
+# byte-identity test above is the proof of. Anything else that starts varying by tier
+# here is the bug this test exists to catch.
 echo "[never-allowed set]"
-DENY_HASHES="$(python3 -c "
-import hashlib, json
+DENY_DRIFT="$(python3 -c "
+import json
+base = None
+drift = []
 for t in '$TIERS'.split():
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
-    print(t, hashlib.sha256('\n'.join(sorted(deny)).encode()).hexdigest()[:16], len(deny))" 2>/dev/null)"
-UNIQUE_DENY="$(printf '%s\n' "$DENY_HASHES" | awk '{print $2}' | sort -u | wc -l | tr -d ' ')"
-assert_eq "1" "$UNIQUE_DENY" "permissions.deny is identical across all four tiers"
-if [ "$UNIQUE_DENY" != "1" ]; then printf '%s\n' "$DENY_HASHES" | sed 's/^/    /'; fi
+    bash_only = sorted(r for r in deny if not r.startswith('mcp__'))
+    if base is None:
+        base = bash_only
+    elif bash_only != base:
+        drift.append(t)
+print(';'.join(drift) or 'none')" 2>/dev/null)"
+assert_eq "none" "$DENY_DRIFT" "every non-MCP permissions.deny entry is identical across all four tiers"
+
+MCP_BY_TIER="$(python3 -c "
+import json
+out = []
+for t in '$TIERS'.split():
+    deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
+    out.append('%s=%d' % (t, len([r for r in deny if r.startswith('mcp__')])))
+print(' '.join(out))" 2>/dev/null)"
+assert_eq "off=0 relaxed=0 medium=5 high=5" "$MCP_BY_TIER" \
+  "only medium and high deny MCP tools by name (off and relaxed rely on the hooks)"
+
+# A parenthesised mcp__ rule is SKIPPED when Claude Code loads a settings file, so an
+# argument filter would read as policy and be none. No tier may emit one, in any list.
+MCP_PARENS="$(python3 -c "
+import json
+bad = []
+for t in '$TIERS'.split():
+    perms = json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}
+    for key in ('allow', 'ask', 'deny'):
+        for rule in perms.get(key) or []:
+            if rule.startswith('mcp__') and '(' in rule:
+                bad.append('%s:%s' % (t, rule))
+print(';'.join(bad) or 'none')" 2>/dev/null)"
+assert_eq "none" "$MCP_PARENS" "no tier emits an mcp__ rule with parentheses"
+if [ "$DENY_DRIFT" != "none" ]; then
+  printf '    non-MCP deny drifted at: %s\n' "$DENY_DRIFT"
+  printf '    mcp denies per tier: %s\n' "$MCP_BY_TIER"
+fi
 # A few members of that set, spot-checked once (the full list lives in the generator).
 DENY_LIVE="$(python3 -c "
 import json

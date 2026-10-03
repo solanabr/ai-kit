@@ -29,7 +29,7 @@ Only the core skill packs ship installed. A link into a missing `.claude/skills/
 
 ## MCP
 
-Helius, solana-dev and Context7 are configured in `.mcp.json`; Playwright, Surfpool and context-mode are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers.
+Helius, solana-dev, Context7 and context-mode are configured in `.mcp.json`; Playwright, Surfpool, Chainstack and Nansen are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers.
 
 ## Project Learnings
 

@@ -68,11 +68,15 @@ On by default (Claude Code asks once before it starts them):
 - **Helius** — On-chain data, DAS API, webhooks (needs API key from helius.dev)
 - **solana-dev** — Solana Foundation official docs and API references (no key needed)
 - **Context7** — Library documentation lookup (no key needed)
+- **context-mode** — Keeps large tool output out of the context window (no key needed; Node 22.5+)
 
-Opt-in, because each needs a browser, a CLI or a workflow choice. Run `/setup-mcp` to set the Helius key and add any of these:
+Opt-in, because each needs a browser, a CLI, a key or a workflow choice. Run `/setup-mcp` to set the Helius key and add any of these:
 - **Playwright** — Browser automation for dApp testing
 - **Surfpool** — Agent-driven local validator / mainnet-fork control (requires the `surfpool` CLI)
-- **context-mode** — Keeps large tool output out of the context window
+- **Chainstack** — Multi-chain RPC platform control (needs a key for most tools; 5 read-only ones answer without)
+- **Nansen** — Wallet and token intelligence (paid key required, free tier within credits; ~50 tool schemas per session)
+
+Documented but deliberately not offered by `/setup-mcp`: **Phantom** (`claude mcp add phantom -- npx -y @phantom/mcp-server`) is a 29-tool wallet and trading surface — signing, transfers, payments and perps — that needs no key once logged in. Add it only if you want Claude able to move your funds.
 
 The kit pins no effort level, agent teams or LSP plugins; [docs/configuration.md](docs/configuration.md#settings-the-kit-leaves-to-you) shows how to turn them on.
 
@@ -213,9 +217,10 @@ your-project/
 │   │   │   ├── auditor-skill/     # Security audit checklists + vectors (core)
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
-│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, eth-to-sol,
+│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, solana-fuzz,
 │   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new,
-│   │   │   │                      # sign-safe, counterparty-gate, community-moderation
+│   │   │   │                      # sign-safe, counterparty-gate, community-moderation,
+│   │   │   │                      # position-manager-skill, content-gen-skill, writer-style-skill
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
