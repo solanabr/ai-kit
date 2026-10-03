@@ -14,7 +14,7 @@ Harness setup and patterns: [testing.md](../skills/ext/solana-dev/skills/solana-
    - Native or Pinocchio: `cargo test-sbf` builds the program and sets `SBF_OUT_DIR`, where `Mollusk::new(&id, "<name>")` finds `<name>.so` (it also searches `tests/fixtures` and the cwd).
    - Mollusk, for single-instruction and CU tests: `Check::compute_units(n)` expects exactly n, so assert a ceiling on `result.compute_units_consumed` yourself. `MolluskComputeUnitBencher` (run through `cargo bench`) writes `compute_units.md` with deltas.
    - Surfpool, for mainnet-fork state and cheatcodes: `NO_DNA=1 surfpool start` and point tests at `http://127.0.0.1:8899`, or embed `surfpool-sdk` so each suite owns its surfnet. Install with `curl -sL https://run.surfpool.run/ | bash`; the `surfpool` crate on crates.io is an unrelated package.
-   - Fuzzing: Trident (`trident init` once, then `trident fuzz run fuzz_0`), or `anchor fuzz` (Crucible) on Anchor 1.2+. Give runs minutes to hours and assert invariants such as value conservation, not only "no panic".
+   - Fuzzing: Trident (`trident init` once, then `trident fuzz run fuzz_0 --with-exit-code`), or `anchor fuzz` (Crucible) on Anchor 1.2+. Without `--with-exit-code` a failing invariant is swallowed in parallel mode and the run still exits 0, so CI passes on a real bug. Give runs minutes to hours and assert invariants such as value conservation, not only "no panic".
    - Rust backends: `cargo test --workspace`; add `-- --test-threads=1` when tests share a database, and set `DATABASE_URL` for `#[sqlx::test]`.
 3. Rerun only the failures: `cargo test <name> -- --exact --nocapture`.
 
