@@ -37,9 +37,6 @@
 [submodule ".claude/skills/ext/quicknode-anchor"]
 	path = .claude/skills/ext/quicknode-anchor
 	url = https://github.com/quicknode/solana-finance-claude-plugin
-[submodule ".claude/skills/ext/eth-to-sol"]
-	path = .claude/skills/ext/eth-to-sol
-	url = https://github.com/solana-foundation/eth-to-sol-skill
 [submodule ".claude/skills/ext/magicblock"]
 	path = .claude/skills/ext/magicblock
 	url = https://github.com/magicblock-labs/magicblock-dev-skill
@@ -49,3 +46,12 @@
 [submodule ".claude/skills/ext/auditor-skill"]
 	path = .claude/skills/ext/auditor-skill
 	url = https://github.com/solanabr/auditor-skill
+[submodule ".claude/skills/ext/content-gen-skill"]
+	path = .claude/skills/ext/content-gen-skill
+	url = https://github.com/solanabr/content-gen-skill
+[submodule ".claude/skills/ext/position-manager-skill"]
+	path = .claude/skills/ext/position-manager-skill
+	url = https://github.com/solanabr/position-manager-skill
+[submodule ".claude/skills/ext/writer-style-skill"]
+	path = .claude/skills/ext/writer-style-skill
+	url = https://github.com/solanabr/writer-style-skill

@@ -68,11 +68,14 @@ On by default (Claude Code asks once before it starts them):
 - **Helius** — On-chain data, DAS API, webhooks (needs API key from helius.dev)
 - **solana-dev** — Solana Foundation official docs and API references (no key needed)
 - **Context7** — Library documentation lookup (no key needed)
+- **context-mode** — Keeps large tool output out of the context window (no key needed; Node 22.5+)
 
-Opt-in, because each needs a browser, a CLI or a workflow choice. Run `/setup-mcp` to set the Helius key and add any of these:
+Opt-in, because each needs a browser, a CLI, a key or a workflow choice. Run `/setup-mcp` to set the Helius key and add any of these:
 - **Playwright** — Browser automation for dApp testing
 - **Surfpool** — Agent-driven local validator / mainnet-fork control (requires the `surfpool` CLI)
-- **context-mode** — Keeps large tool output out of the context window
+- **Chainstack** — Multi-chain RPC platform control (5 read-only tools work keyless; the rest need `CHAINSTACK_API_KEY`)
+- **Phantom** — Phantom wallet: balances, signing, swaps (interactive login; it can sign and send transactions)
+- **Nansen** — Wallet and token intelligence (needs a `NANSEN-API-KEY`; a free API account works within its credit limits)
 
 The kit pins no effort level, agent teams or LSP plugins; README's "Settings the kit leaves to you" shows how to turn them on.
 
@@ -213,8 +216,9 @@ your-project/
 │   │   │   ├── auditor-skill/     # Security audit checklists + vectors (core)
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
-│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, eth-to-sol,
-│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new
+│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, position-manager-skill,
+│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new,
+│   │   │   │                      # content-gen-skill, writer-style-skill
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas

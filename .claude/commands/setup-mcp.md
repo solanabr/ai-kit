@@ -40,7 +40,11 @@ Never read `.env` — the firewall denies it at Medium and High, and a value rea
 4. Ask which optional MCP servers to add; the default is none, since each one starts with every session. Print the command for each one the user picks, for them to run — `Bash(claude *)` is denied at every firewall tier, since a nested `claude` re-rolls the whole policy. Each adds the server for this user and project only; append `--scope project` only if the user wants to share it through `.mcp.json`.
    - Playwright, browser automation (needs a browser Playwright can launch): `claude mcp add playwright -- npx -y @playwright/mcp@latest --headless`
    - Surfpool, local validator and mainnet-fork control: `claude mcp add surfpool -- surfpool mcp`. It needs the `surfpool` CLI on PATH; check with `command -v surfpool`, and if it is missing give the user the install command (`curl -L https://surfpool.run/install | sh` or `brew install txtx/taps/surfpool`) rather than running it.
-   - context-mode, keeps large tool output out of context: `claude mcp add context-mode -- npx -y context-mode@latest`
+   - Chainstack, multi-chain RPC platform control: `claude mcp add --transport http chainstack https://mcp.chainstack.com/mcp`. Five read-only tools (docs search, platform status, pricing) work with no key; node deployment, project management and testnet funding need a key from https://console.chainstack.com/user/settings/api-keys, passed as `--header "Authorization: Bearer <key>"` on that command. Every tool is listed either way, so say which half works before the user adds it keyless.
+   - Phantom, wallet balances, signing and swaps: `claude mcp add phantom -- npx -y @phantom/mcp-server`. No key: it authenticates through its own `phantom_login` tool and stores the session on disk. It can sign and send Solana and EVM transactions, so add it only when the user asks for wallet actions, and never as a convenience.
+   - Nansen, wallet and token intelligence: `claude mcp add --transport http nansen https://mcp.nansen.ai/ra/mcp --header "NANSEN-API-KEY: <key>"`. The server answers nothing without that key; a free API account at https://app.nansen.ai works within its credit limits, and premium data needs a paid plan. Have the user paste the key into their own command — don't ask them to send it here.
+
+   context-mode ships in `.mcp.json` as a default server, so it is not offered here.
 
 ## Output
 
