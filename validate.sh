@@ -175,6 +175,65 @@ for dir in .claude/skills/ext/*/; do
     check "ext/$name is initialized (non-empty)" 0
   fi
 done
+
+# Each pinned pack records its commit in skill-registry.json. That record is the only
+# pin a user project carries — install.sh vendors ext/ packs and strips their gitfiles —
+# so it has to match the gitlink a clone actually checks out. Without this check the two
+# drift apart silently and the registry promises a commit nobody ships. Dependabot moves
+# the gitlinks; .github/workflows/sync-skill-pins.yml rewrites the registry on its PR, so
+# a failure here means that sync did not run (fix: skills.sh pins --write).
+if [ -e .git ]; then
+  pins_ok=0
+  pins_out="$(bash .claude/bin/skills.sh pins 2>&1)" || pins_ok=1
+  [ "$pins_ok" -eq 0 ] || printf '%s\n' "$pins_out" | sed 's/^/    /'
+  check "Every submodule pack's registry commit matches its gitlink (skills.sh pins)" "$pins_ok"
+else
+  echo "  SKIP: not a git checkout, so registry pins cannot be compared to gitlinks"
+  SKIP=$((SKIP + 1))
+fi
+
+# An upstream pack (anthropic-skills) has no gitlink: its commit is the fetch target
+# skills.sh asserts against FETCH_HEAD. Either way the entry must carry a full SHA.
+unpinned=0
+python3 - <<'PY' || unpinned=1
+import json, re, sys
+bad = []
+for e in json.load(open(".claude/skills/skill-registry.json", encoding="utf-8"))["entries"]:
+    if "tier" not in e:
+        continue
+    if not re.fullmatch(r"[0-9a-f]{40}", e.get("commit", "")):
+        bad.append(f"  FAIL: {e['id']} has no 40-character commit in skill-registry.json")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+check "Every core/extension registry entry records a 40-character commit" "$unpinned"
+
+# Two packs carry submodules of their own, pinned by their authors rather than by this
+# kit: auditor-skill -> trailofbits (CC-BY-SA-4.0) and solana-game -> a second solana-dev
+# at a different commit. The installers deliberately do not recurse into them, so neither
+# reaches a user project; "vendored" records the pins anyway so a bump of a pack moves a
+# third-party pin here, in review, instead of invisibly. Update it with the new SHA after
+# reading what changed. Skipped when the pack is not checked out.
+nested_drift=0
+python3 - <<'PY' || nested_drift=1
+import json, os, subprocess, sys
+bad = []
+for e in json.load(open(".claude/skills/skill-registry.json", encoding="utf-8"))["entries"]:
+    for sub, want in (e.get("vendored") or {}).items():
+        pack = e["path"]
+        if not os.path.isdir(pack) or not os.listdir(pack):
+            continue
+        out = subprocess.run(["git", "-C", pack, "ls-files", "-s", "--", sub],
+                             capture_output=True, text=True).stdout.split()
+        have = out[1] if len(out) > 2 and out[0] == "160000" else ""
+        if not have:
+            continue
+        if have != want:
+            bad.append(f"  FAIL: {e['id']} pins {sub} at {have[:12]}, the registry records {want[:12]}")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+check "Every pack's own submodule pins match the registry's vendored record" "$nested_drift"
 echo ""
 
 # --- Versioning ---

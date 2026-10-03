@@ -28,7 +28,7 @@ new_pack() {  # new_pack <id>: a one-commit repo standing in for an upstream pac
   G -C "$TEMP_DIR/packs/$1" commit -qm "$1"
 }
 
-CORE="solana-dev safe-solana-builder"
+CORE="solana-dev auditor-skill colosseum"
 for id in $CORE jupiter sendai; do new_pack "$id"; done
 
 # The kit: its real .claude/ (no ext/ checkouts), with four packs as submodules.
@@ -45,6 +45,12 @@ done
 G -C "$KIT" config -f .gitmodules submodule..claude/skills/ext/sendai.url "file://$TEMP_DIR/packs/missing"
 G -C "$KIT" add -A
 G -C "$KIT" commit -qm kit
+# The fixture's gitlinks are its own one-commit packs, so the registry it inherited from
+# the real repo pins commits that do not exist here. install.sh refuses a pack whose
+# gitlink differs from the registry, so bring the two in line the way a maintainer (and
+# the sync-skill-pins CI job on a Dependabot bump) does.
+(cd "$KIT" && bash .claude/bin/skills.sh pins --write >/dev/null)
+G -C "$KIT" commit -qam "sync pins"
 export SOLANA_AI_KIT_UPSTREAM="file://$KIT"
 
 ext_dirs() { find "$1" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//'; }
@@ -94,6 +100,35 @@ else
   echo "  PASS: install.sh fails when a pack it keeps cannot be fetched"
   PASS=$((PASS + 1))
 fi
+
+# The registry pin is the only record of a pack's commit that reaches a project, so a kit
+# whose gitlink says something else must stop the install rather than vendor it quietly.
+echo "[pin mismatch]"
+PINS_OUT="$(cd "$KIT" && bash .claude/bin/skills.sh pins 2>&1)"
+assert_contains "$PINS_OUT" "match the registry" "skills.sh pins reports the synced fixture as matching"
+python3 - "$KIT/.claude/skills/skill-registry.json" <<'PY'
+import re, sys
+p = sys.argv[1]
+t = open(p, encoding="utf-8").read()
+# One core pack now claims a commit the fixture does not have.
+t = re.sub(r'("id": "solana-dev",.*?"commit": ")[0-9a-f]{40}', r"\g<1>" + "d" * 40, t, count=1, flags=re.S)
+open(p, "w", encoding="utf-8").write(t)
+PY
+G -C "$KIT" commit -qam "drift one pin"
+P7="$(new_project drifted)"
+TOTAL=$((TOTAL + 1))
+DRIFT_OUT="$(bash "$REPO_ROOT/install.sh" "$P7" 2>&1)" && DRIFT_RC=0 || DRIFT_RC=$?
+if [ "$DRIFT_RC" -ne 0 ] && printf '%s' "$DRIFT_OUT" | grep -q "solana-dev: gitlink"; then
+  echo "  PASS: install.sh refuses a pack whose gitlink differs from the registry pin"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: install.sh vendored a pack at a commit the registry does not record (exit $DRIFT_RC)"
+  printf '%s\n' "$DRIFT_OUT" | tail -5 | sed 's/^/    /'
+  FAIL=$((FAIL + 1))
+fi
+assert_dir_not_exists "$P7/.claude/skills/ext/solana-dev" "...and installs no pack"
+(cd "$KIT" && bash .claude/bin/skills.sh pins --write >/dev/null)
+G -C "$KIT" commit -qam "resync pins"
 
 # A release without skills.sh has no tiers: every pack is fetched, as before.
 echo "[release without skills.sh]"

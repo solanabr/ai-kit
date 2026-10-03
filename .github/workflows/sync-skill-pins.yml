@@ -1,0 +1,78 @@
+name: Sync skill pins
+
+# skill-registry.json records the commit every skill pack is pinned at, and validate.sh
+# fails when that record and the gitlink disagree. Dependabot can only move the gitlink,
+# so without this job every weekly bump PR would be red until a human ran one command.
+# This job runs it for them: it rewrites the registry from the new gitlinks and pushes
+# that back onto the bump branch, which re-runs CI and turns the PR green.
+#
+# Why workflow_run and not pull_request: a workflow triggered directly by Dependabot gets
+# a read-only GITHUB_TOKEN and cannot push. A workflow_run job runs from the default
+# branch with the repository's own token, which can. That also means the job must not
+# execute code from the PR branch — so it takes skills.sh from the default branch and
+# lets the branch contribute nothing but .gitmodules and gitlinks. It refuses outright if
+# the branch changed anything else.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # Only Dependabot's own submodule-bump branches.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/submodules/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Refuse a branch that changed anything but submodule pins
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          base="$(git merge-base "origin/${GITHUB_REF_NAME:-main}" HEAD 2>/dev/null || git rev-parse HEAD~1)"
+          changed="$(git diff --name-only "$base" HEAD)"
+          unexpected="$(printf '%s\n' "$changed" | grep -vE '^(\.gitmodules|\.claude/skills/ext/[^/]+)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::$BRANCH changes files beyond submodule pins; not syncing the registry"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+
+      - name: Rewrite the registry from the new gitlinks
+        id: sync
+        run: |
+          # The script comes from the default branch, never from the PR branch.
+          git fetch -q origin "${GITHUB_REF_NAME:-main}"
+          git checkout -q "origin/${GITHUB_REF_NAME:-main}" -- .claude/bin/skills.sh
+          bash .claude/bin/skills.sh pins --write
+          git checkout -q HEAD -- .claude/bin/skills.sh
+          if git diff --quiet -- .claude/skills/skill-registry.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push the synced registry onto the bump branch
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .claude/skills/skill-registry.json
+          git commit -m "chore(skills): record the bumped pins in skill-registry.json"
+          git push origin "HEAD:$BRANCH"
+
+      - name: Say what the pins now are
+        run: bash .claude/bin/skills.sh pins >> "$GITHUB_STEP_SUMMARY"

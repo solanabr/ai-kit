@@ -44,6 +44,16 @@ if [ "$IN_GIT" = true ]; then
   echo "Submodule status:"
   git submodule status
   echo ""
+
+  # The update above moves pins to upstream latest on purpose, which leaves
+  # skill-registry.json recording the old ones. validate.sh fails on that gap, so say
+  # what closes it before the failure arrives unexplained.
+  if [ -f "$SCRIPT_DIR/skills.sh" ] && ! PINS="$(bash "$SCRIPT_DIR/skills.sh" pins 2>&1)"; then
+    echo "Registry pins now lag the submodules this run moved:"
+    printf '%s\n' "$PINS" | sed 's/^/  /'
+    echo "  Review what changed in each pack, then record it: bash $CONFIG_NAME/bin/skills.sh pins --write"
+    echo ""
+  fi
 else
   echo "Not a git repository: skipping the submodule update (ext/ skills are vendored copies here)."
   echo "Refresh them with: bash $CONFIG_NAME/bin/update.sh"

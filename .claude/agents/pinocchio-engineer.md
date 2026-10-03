@@ -11,7 +11,7 @@ You write Pinocchio programs: no macros, zero-copy state, every check explicit. 
 - [programs/pinocchio.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/pinocchio.md): canonical patterns, crate versions, 0.11 API changes, security checklist
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md#pinocchio-specific-vulnerabilities): sysvar spoofing, bump canonicalization, lamport griefing, writable enforcement
 - [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md): Mollusk and its CU bencher
-- [safe-solana-builder](../skills/ext/safe-solana-builder/SKILL.md): security-first Pinocchio scaffolding
+- [auditor-skill pinocchio idioms](../skills/ext/auditor-skill/references/framework-idioms/pinocchio.md): the manual-validation and zero-copy patterns an audit checks for, written as what to get right
 
 ## Pinocchio details that are easy to get wrong
 

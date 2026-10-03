@@ -3,7 +3,7 @@
 # Solana AI Kit
 
 [![CI](https://github.com/solanabr/ai-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/solanabr/ai-kit/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Solana](https://img.shields.io/badge/Solana-black?logo=solana)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-powered-orange)
@@ -120,7 +120,7 @@ Use this when you want the kit's guidance in any agent (Claude Code, Codex, Grok
 | Project instructions (what the installer writes to `CLAUDE.md` or `AGENTS.md`) | https://aikit.superteam.codes/CLAUDE-solana.md |
 | Skill hub: routes each Solana task to the file to read | https://aikit.superteam.codes/.claude/skills/SKILL.md |
 | Solana Foundation dev skill, the hub's default entry point | https://aikit.superteam.codes/.claude/skills/ext/solana-dev/skills/solana-dev/SKILL.md |
-| Security-first code generation rules | https://aikit.superteam.codes/.claude/skills/ext/safe-solana-builder/SKILL.md |
+| Security audit pack: checklists, known vectors, report format | https://aikit.superteam.codes/.claude/skills/ext/auditor-skill/SKILL.md |
 | An agent or command as a reference prompt (any file in `.claude/agents/` or `.claude/commands/`) | https://aikit.superteam.codes/.claude/agents/anchor-engineer.md |
 
 Paste this into your agent at the start of a session:
@@ -216,21 +216,21 @@ What the plugin **cannot** carry (Claude Code plugins are plain git clones — t
 - the curated permissions allowlist + sandbox policy — and therefore the [firewall tier](#firewall-tiers): a plugin's `settings` object honors only `agent` and `subagentStatusLine`, so its `permissions` and `sandbox` keys are dropped at load. A plugin install has hooks and no tier
 - the `ext/` skill packs: the core packs by default, extensions on demand (protocol, security, infra, ecosystem depth)
 
-For skill-pack depth, use the full install or the [no-install route](#no-install-read-the-kit-from-aikitsuperteamcodes) rather than adding each pack's own marketplace (`sendaifun/skills`, `trailofbits/skills`, …): every marketplace is one more publisher to trust.
+For skill-pack depth, use the full install or the [no-install route](#no-install-read-the-kit-from-aikitsuperteamcodes) rather than adding each pack's own marketplace (`sendaifun/skills`, `cloudflare/skills`, …): every marketplace is one more publisher to trust.
 
 Don't enable the plugin and the full install in the same project: both load the same commands, hooks and MCP servers, and `/doctor` warns about it.
 
 ## External Skill Submodules
 
-The kit pins every skill pack below as a git submodule, except `anthropic-skills`, which it pins to an upstream commit. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
+The kit pins every skill pack below as a git submodule, except `anthropic-skills`, which it pins to an upstream commit. Every entry records that commit in [`skill-registry.json`](.claude/skills/skill-registry.json), and `validate.sh` fails if the record and the gitlink disagree — the registry is the only pin a user project carries, since ext/ packs arrive as vendored copies with their gitfiles stripped. **Core** packs install with every full install. **Extensions** are pinned the same way but install on demand, so a project carries only the packs it uses (in `--agents` installs, Codex and opencode load every nested `SKILL.md` they find, so each pack costs context on every request).
+
+A pack's *own* submodules are not fetched: they are pinned by that pack's author, not here, and the install vendors what it fetches, so recursing would copy a third-party tree into your project at a commit nobody in this repo records. Two packs have one — `auditor-skill` → `trailofbits` (CC-BY-SA-4.0), `solana-game` → a second `solana-dev` at a different commit — and both test for it and fall back when it is absent. The registry's `vendored` field records those pins so a bump moves them in review rather than silently. `/update` prunes them for the same reason (its clone recurses, from a frozen code path). To opt in, clone the tree yourself at the commit `vendored` records — in a project an installed pack is a plain copy with no git metadata, so `git submodule update` there has nothing to act on, and the next `/update` removes it again.
 
 | Submodule | Tier | Source | Purpose |
 |-----------|------|--------|---------|
 | `ext/solana-dev` | Core | [solana-foundation/solana-dev-skill](https://github.com/solana-foundation/solana-dev-skill) | Core Solana development (programs, frontend, testing, security) |
-| `ext/safe-solana-builder` | Core | [frankcastleauditor/safe-solana-builder](https://github.com/frankcastleauditor/safe-solana-builder) | Security-first code generation (70+ audit-derived rules) |
-| `ext/trailofbits` | Extension | [trailofbits/skills](https://github.com/trailofbits/skills) | Security auditing and vulnerability scanning |
-| `ext/ghostsecurity` | Extension | [ghostsecurity/skills](https://github.com/ghostsecurity/skills) | 7 AppSec skills: SAST criteria, SCA, secrets, validation |
-| `ext/defending-code` | Extension | [anthropics/defending-code-reference-harness](https://github.com/anthropics/defending-code-reference-harness) | Anthropic vuln-discovery reference harness + 6 skills |
+| `ext/auditor-skill` | Core | [solanabr/auditor-skill](https://github.com/solanabr/auditor-skill) | Security audits: 20 checklists / 1,424 items / 138 known vectors, over programs and the code around them. MIT. Replaces the trailofbits, ghostsecurity, defending-code and safe-solana-builder packs |
+| `ext/colosseum` | Core | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon archives. **Proprietary** (README: Copyright Colosseum; no LICENSE file) — the only non-open-source pack installed by default. Signs in with `npx @colosseum-org/copilot-connect login`, Node 20+ |
 | `ext/qedgen` | Extension | [QEDGen/solana-skills](https://github.com/QEDGen/solana-skills) | Formal verification with Lean 4 theorem proving |
 | `ext/sendai` | Extension | [sendaifun/skills](https://github.com/sendaifun/skills) | DeFi protocol integrations (Jupiter, Raydium, Kamino, perps, cross-chain, oracles, etc.) |
 | `ext/jupiter` | Extension | [jup-ag/agent-skills](https://github.com/jup-ag/agent-skills) | Official Jupiter skills: Ultra swap, Lend, swap migration, VRFD |
@@ -245,7 +245,6 @@ The kit pins every skill pack below as a git submodule, except `anthropic-skills
 | `ext/cloudflare` | Extension | [cloudflare/skills](https://github.com/cloudflare/skills) | Infrastructure (Workers, Agents SDK, MCP servers) |
 | `ext/vercel` | Extension | [vercel-labs/agent-skills](https://github.com/vercel-labs/agent-skills) | Vercel deployment, Next.js, AI SDK, v0, edge functions |
 | `ext/solana-new` | Extension | [sendaifun/solana-new](https://github.com/sendaifun/solana-new) | 32 idea→launch journey skills + idea datasets/knowledge base; routed via local wrappers |
-| `ext/colosseum` | Extension | [ColosseumOrg/colosseum-copilot](https://github.com/ColosseumOrg/colosseum-copilot) | Startup research, idea validation, hackathon projects |
 | `anthropic-skills` (not a submodule) | Extension | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills any agent loads ([details](#anthropics-skills-in-any-agent)) |
 
 **Installing extensions.** At install time: `bash install.sh --with sendai,jupiter` (`--with all` installs every pack). Later: `/add-skill <id>` or `bash .claude/bin/skills.sh add <id>` (`.agents/bin/` for `--agents` installs); `skills.sh list` shows every pack and when to use it; `skills.sh add --force <id>` reinstalls a pack. Agents do the same on their own: each hub row, agent and command line that links into an extension names its install command. `/update` keeps the extensions a project installed (recorded in `.claude/skills/extensions.txt`); installs made before the core/extension split keep every pack. When a kit update drops a pack from the registry, `/update` removes it from projects the kit installed it in (`skills/kit-packs.txt`, `extensions.txt`); folders you put in `skills/ext/` yourself stay.
@@ -283,7 +282,7 @@ Recommended team patterns:
 |---------|------|----------|
 | **program-ship** | architect → anchor/pinocchio → qa | Build program from spec to tested |
 | **full-stack** | architect → anchor → frontend → qa | End-to-end feature |
-| **audit-and-fix** | qa → trailofbits context → anchor | Audit and remediate |
+| **audit-and-fix** | qa → auditor-skill context → anchor | Audit and remediate |
 | **game-ship** | game-architect → unity → qa | Game feature |
 | **research-and-build** | researcher → architect → anchor/pinocchio | Investigate a protocol or pattern, then design and implement |
 | **defi-compose** | researcher → defi-engineer → qa | DeFi integration |
@@ -434,18 +433,15 @@ The pin moves by hand, not through Dependabot: review the upstream diff of the t
     │   ├── SKILL.md                 # Unified hub routing to all skills
     │   ├── ext/                     # External skill submodules (core: installed; others: extensions)
     │   │   ├── solana-dev/              # Solana Foundation dev skill (core)
-    │   │   ├── safe-solana-builder/   # Security-first code generation (core)
+    │   │   ├── auditor-skill/         # Security audit checklists + vectors (core)
+    │   │   ├── colosseum/              # Colosseum Copilot, startup research (core)
     │   │   ├── sendai/                  # SendAI protocol skills (DeFi)
     │   │   ├── solana-game/             # Solana game skill (Unity, PSG1)
     │   │   ├── cloudflare/              # Cloudflare Workers, Agents SDK
-    │   │   ├── trailofbits/             # Trail of Bits security skills
     │   │   ├── qedgen/                # QEDGen formal verification (Lean 4)
     │   │   ├── solana-mobile/           # Mobile Wallet Adapter, Genesis Token
-    │   │   ├── colosseum/              # Colosseum Copilot (startup research)
     │   │   ├── vercel/                # Vercel deployment, Next.js, AI SDK
     │   │   ├── solana-new/            # SendAI idea→launch journey skills + datasets
-    │   │   ├── ghostsecurity/         # Ghost Security AppSec skills
-    │   │   ├── defending-code/        # Anthropic vuln-discovery reference harness
     │   │   ├── jupiter/               # Official Jupiter skills (swap, lend, VRFD)
     │   │   ├── metaplex/              # Official Metaplex (NFT, candy machine)
     │   │   ├── magicblock/            # Official MagicBlock (Ephemeral Rollups)

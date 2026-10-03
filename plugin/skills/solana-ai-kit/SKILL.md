@@ -36,8 +36,7 @@ Plugins cannot carry git submodules, so the kit's external skill packs (the `ext
 | Domain | Add the marketplace | Then install |
 |--------|---------------------|--------------|
 | DeFi protocols, infra, data (Jupiter, Raydium, Kamino, perps, oracles, cross-chain) | `/plugin marketplace add sendaifun/skills` | the protocol plugins you need |
-| AppSec scanning (SAST, SCA, secrets) | `/plugin marketplace add ghostsecurity/skills` | `ghost` |
-| Security auditing, vulnerability scanning | `/plugin marketplace add trailofbits/skills` | the audit plugins you need |
+| Security audits of programs and the code around them | nothing to add: a full install carries `auditor-skill` as a core pack (20 checklists, 1,424 items, 138 known vectors) | — |
 | Infrastructure (Workers, Agents SDK, MCP servers) | `/plugin marketplace add cloudflare/skills` | `cloudflare` |
 
 For Jupiter, Metaplex, Helius, MagicBlock and Alchemy the official skill repos are the primary sources; `skill-registry.json` lists their current upstream locations. Route to a marketplace and install the plugin rather than pointing at an upstream repo's `SKILL.md`.

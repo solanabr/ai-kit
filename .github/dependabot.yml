@@ -2,6 +2,14 @@
 # CI runs validate.sh and the tests on that PR with the new pins checked out, so a
 # path an upstream pack moved fails the PR (every hub, agent, command and local-skill
 # link into ext/ is checked) instead of breaking a user's session after /update.
+#
+# A bump moves the gitlink only, and skill-registry.json records the same commit for
+# every pack (that record is the pin a user project carries). Rather than leave the two
+# to drift, .github/workflows/sync-skill-pins.yml rewrites the registry from the new
+# gitlinks and pushes it onto this branch, so the registry change arrives in the same
+# PR and is reviewed with it. A pack's own nested submodule pin is recorded too, in the
+# entry's "vendored" field, and is NOT rewritten automatically: a third party moving a
+# pin inside a pack we ship fails validate.sh so a human reads the diff first.
 version: 2
 updates:
   - package-ecosystem: "gitsubmodule"

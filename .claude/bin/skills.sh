@@ -3,10 +3,16 @@ set -euo pipefail
 
 # Solana AI Kit — skill packs
 # The kit pins every ext/ skill pack as a git submodule. skills/skill-registry.json
-# marks each pack "core" (installed by default) or "extension" (installed on demand).
-# A pack entry with a "commit" is an upstream pack instead (anthropic-skills): the
-# skills it lists are fetched from its source at that commit and installed as
-# top-level skills, skills/<name>/, where every Agent Skills client finds them.
+# marks each pack "core" (installed by default) or "extension" (installed on demand),
+# and records the commit each one is pinned at. A pack entry with a "skills" list is an
+# upstream pack instead (anthropic-skills): the folders it lists are fetched from its
+# source at that commit and installed as top-level skills, skills/<name>/, where every
+# Agent Skills client finds them.
+#
+# Both kinds carry their pin in the same "commit" field, and both are verified against
+# it rather than trusted: an upstream pack's fetch asserts FETCH_HEAD, and a submodule
+# pack is checked against the kit checkout's gitlink before it is copied. A mismatch
+# stops the install instead of silently delivering a commit nobody recorded.
 #
 # Usage, from the project root (.agents/bin/skills.sh for --agents installs):
 #   bash .claude/bin/skills.sh list              # packs, tier, installed or not, when to install
@@ -17,6 +23,7 @@ set -euo pipefail
 #   skills.sh select <kit .claude dir> <project config dir> [ids]   # trim a kit checkout before install copies it
 #   skills.sh prune                                                 # after update.sh has copied every pack
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
+#   skills.sh pins [--write] [<kit repo root>]                      # registry pins vs the gitlinks (maintainers, CI)
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
 # those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
@@ -79,15 +86,24 @@ entry_value() {
   ' "$1"
 }
 
-# Packs with a "commit": fetched from their upstream repo, not from a kit submodule.
+# Packs with a "skills" list: fetched from their upstream repo folder by folder, not
+# vendored from a kit submodule. Every pack has a "commit", so the skills list is what
+# separates the two kinds.
 upstream_ids() {
   awk -F'"' '
-    /^    \{/            { id = ""; tier = ""; commit = "" }
-    /^      "id": "/     { id = $4 }
-    /^      "tier": "/   { tier = $4 }
-    /^      "commit": "/ { commit = $4 }
-    /^    \}/            { if (tier != "" && commit != "") print id }
+    /^    \{/             { id = ""; tier = ""; skills = "" }
+    /^      "id": "/      { id = $4 }
+    /^      "tier": "/    { tier = $4 }
+    /^      "skills": \[/ { skills = "y" }
+    /^    \}/             { if (tier != "" && skills != "") print id }
   ' "$1"
+}
+
+# The commit a kit checkout has pack <path> pinned at: the gitlink in its index. Empty
+# when <root> is not a git repo or <path> is not a submodule there — a vendored copy,
+# where there is nothing to compare against.
+gitlink() {
+  git -C "$1" ls-files -s -- "$2" 2>/dev/null | awk '$1 == "160000" { print $2 }' || true
 }
 
 has_line() { printf '%s\n' "$1" | grep -qxF -- "$2"; }
@@ -229,6 +245,30 @@ ensure_upstream() {
   rm -rf "$tmp"
   write_lock "$lock" "$id" "$url" "$commit" $skills || return 1
   echo "✓ Installed $id in $(basename "$cfg")/skills/: ${skills% }"
+}
+
+# Pack <id> in the kit checkout <src> is at the commit the registry records for it.
+# A mismatch, or an entry with no commit, returns non-zero and says what to do. A source
+# with no gitlink for it cannot be checked (a vendored checkout, a test fixture): that
+# says so and passes, since the registry the project receives still carries the pin.
+check_pin() {
+  local reg="$1" src="$2" id="$3" path want have
+  path="$(entry_value "$reg" "$id" path)"
+  want="$(entry_value "$reg" "$id" commit)"
+  if ! printf '%s\n' "$want" | grep -qxE '[0-9a-f]{40}'; then
+    echo "skills.sh: $id: the registry records no 40-character commit for it" >&2
+    return 1
+  fi
+  have="$(gitlink "$src" "$path")"
+  if [ -z "$have" ]; then
+    echo "  note: could not verify $id's pin ($src has no gitlink for $path)" >&2
+    return 0
+  fi
+  if [ "$have" != "$want" ]; then
+    echo "skills.sh: $id: $src has it at ${have:0:12}, the registry pins ${want:0:12}." >&2
+    echo "  Not installing a commit the kit does not record. In a kit checkout, resync the two with: bash $CONFIG_NAME/bin/skills.sh pins --write" >&2
+    return 1
+  fi
 }
 
 # Validate ids against the registry; "all" means every extension.
@@ -425,13 +465,17 @@ cmd_add() {
       echo "Fetching the pinned packs from $url ($branch)..."
       git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit"
       for id in $todo; do paths+=(".claude/skills/ext/$id"); done
-      git -C "$tmp/kit" submodule update -q --init --recursive --depth 1 --jobs 8 -- "${paths[@]}"
+      # Not --recursive: a pack's own submodules are pinned by its author, not by this
+      # kit, and add would vendor that tree into the project at a pin nobody here
+      # records. The registry's "vendored" field keeps those pins visible instead.
+      git -C "$tmp/kit" submodule update -q --init --depth 1 --jobs 8 -- "${paths[@]}"
       src="$tmp/kit"
     fi
     mkdir -p "$CONFIG_DIR/skills/ext"
     for id in $todo; do
       [ -n "$(ls -A "$src/.claude/skills/ext/$id" 2>/dev/null)" ] \
         || die "$id is empty in $src (run: git submodule update --init there)"
+      check_pin "$reg" "$src" "$id" || die "$id is not at its recorded pin in $src; nothing was installed"
       copy_pack "$src/.claude/skills/ext/$id" "${CONFIG_DIR:?}/skills/ext/${id:?}" \
         || die "could not copy $id into $CONFIG_NAME/skills/ext/ (nothing was installed for it)"
       echo "✓ Installed $id in $CONFIG_NAME/skills/ext/$id"
@@ -445,6 +489,72 @@ cmd_add() {
     $(for id in $ids; do if has_line "$extensions" "$id" && ! has_word "$failed" "$id"; then echo "$id"; fi; done)
   write_packs "$CONFIG_DIR" "$reg"
   [ -z "$failed" ] || die "not installed:$failed"
+}
+
+# Registry pins against the gitlinks of a kit checkout (default: this install's root).
+# Read-only, so validate.sh and CI can run it; --write rewrites each submodule entry's
+# commit from its gitlink, which is how a Dependabot bump becomes a registry change in
+# the same pull request. Nothing here touches an upstream pack's commit: that one is a
+# fetch target, not a gitlink, and skills.sh asserts it against FETCH_HEAD instead.
+cmd_pins() {
+  local write="" root="" arg reg id path want have tmp upstream drift=0 checked=0 pins=""
+  for arg in "$@"; do
+    case "$arg" in
+      -w|--write) write=write ;;
+      -*) die "unknown option '$arg' (use: skills.sh pins [--write] [<kit repo root>])" ;;
+      *) root="$arg" ;;
+    esac
+  done
+  if [ -n "$root" ]; then
+    reg="$root/.claude/skills/skill-registry.json"
+    [ -f "$reg" ] || reg="$root/.agents/skills/skill-registry.json"
+  else
+    root="$(cd "$CONFIG_DIR/.." && pwd)"
+    reg="$CONFIG_DIR/skills/skill-registry.json"
+  fi
+  check_registry "$reg"
+  upstream="$(upstream_ids "$reg")"
+  for id in $(registry_rows "$reg" | cut -f1); do
+    has_line "$upstream" "$id" && continue
+    path="$(entry_value "$reg" "$id" path)"
+    want="$(entry_value "$reg" "$id" commit)"
+    have="$(gitlink "$root" "$path")"
+    [ -n "$have" ] || continue
+    checked=$((checked + 1))
+    pins="$pins$path $have
+"
+    [ "$have" = "$want" ] && continue
+    drift=$((drift + 1))
+    echo "$id: gitlink ${have:0:12}, registry ${want:0:12}"
+  done
+  if [ "$checked" = 0 ]; then
+    echo "No submodule gitlinks in $root: nothing to check against (a vendored install records its pins in the registry only)."
+    return 0
+  fi
+  if [ "$drift" = 0 ]; then
+    echo "✓ All $checked submodule pins match the registry"
+    return 0
+  fi
+  if [ "$write" != write ]; then
+    echo "$drift of $checked pins differ. Rewrite the registry from the gitlinks: bash $CONFIG_NAME/bin/skills.sh pins --write" >&2
+    return 1
+  fi
+  tmp="$(mktemp -d)" || return 1
+  printf '%s' "$pins" > "$tmp/pins"
+  # Each entry lists "path" then "commit", so the path line selects the commit line to rewrite.
+  if awk 'NR == FNR { want[$1] = $2; next }
+    /^    \{/ { path = "" }
+    /^      "path": "\.claude\/skills\/ext\// { split($0, f, "\""); path = f[4] }
+    /^      "commit": "/ && path != "" && (path in want) {
+      printf "      \"commit\": \"%s\",\n", want[path]; path = ""; next }
+    { print }' "$tmp/pins" "$reg" > "$tmp/registry.json" && mv "$tmp/registry.json" "$reg"; then
+    rm -rf "$tmp"
+    check_registry "$reg"
+    echo "✓ Rewrote $drift pin(s) in $(basename "$reg") from the gitlinks"
+  else
+    rm -rf "$tmp"
+    die "could not rewrite $reg"
+  fi
 }
 
 cmd_list() {
@@ -466,6 +576,7 @@ case "${1:-list}" in
   select) shift; [ "$#" -ge 2 ] || die "usage: skills.sh select <kit .claude dir> <config dir> [ids]"; cmd_select "$@" ;;
   prune) cmd_prune ;;
   uninstalled) cmd_uninstalled ;;
-  -h|--help|help) sed -n '4,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  pins) shift; cmd_pins "$@" ;;
+  -h|--help|help) sed -n '4,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac

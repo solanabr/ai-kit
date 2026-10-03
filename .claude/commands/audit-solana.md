@@ -6,10 +6,9 @@ Audit the program(s) in $ARGUMENTS (default: every program in the workspace) for
 
 ## Read before auditing
 
+- [auditor-skill](../skills/ext/auditor-skill/SKILL.md): the audit itself. Declare the scope it asks for, then work its program checklists — [account validation](../skills/ext/auditor-skill/checklists/01-program-account-validation.md), [access control](../skills/ext/auditor-skill/checklists/02-program-access-control.md), [arithmetic](../skills/ext/auditor-skill/checklists/03-program-arithmetic-safety.md), [CPI and PDA](../skills/ext/auditor-skill/checklists/04-program-cpi-pda.md), [state machine](../skills/ext/auditor-skill/checklists/05-program-state-machine.md), [economics](../skills/ext/auditor-skill/checklists/06-program-economic-logic.md), [opsec and governance](../skills/ext/auditor-skill/checklists/07-program-opsec-governance.md) — item by item, with [known-vectors](../skills/ext/auditor-skill/known-vectors/) for worked exploits and [false-positives.md](../skills/ext/auditor-skill/references/false-positives.md) before you report anything. A whole-repo run is [FULL-AUDIT.md](../skills/ext/auditor-skill/FULL-AUDIT.md).
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): vulnerability classes plus the program-side and Token-2022 checklists
-- [solana-vulnerability-scanner](../skills/ext/trailofbits/plugins/building-secure-contracts/skills/solana-vulnerability-scanner/) (install first: `bash .claude/bin/skills.sh add trailofbits`): CPI, PDA, account-validation and instruction-introspection sweeps
-- [safe-solana-builder](../skills/ext/safe-solana-builder/SKILL.md): audit-derived rules
-- [programs/anchor.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/anchor.md) and [programs/pinocchio.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/pinocchio.md): framework-specific patterns
+- [programs/anchor.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/anchor.md) and [programs/pinocchio.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/pinocchio.md): framework-specific patterns; the matching [framework idioms](../skills/ext/auditor-skill/references/framework-idioms/) say what an audit expects of each
 
 ## Steps
 

@@ -2,6 +2,22 @@
 
 All notable changes to solana-ai-kit.
 
+## [2.3.0] - 2026-10-03
+
+### Added
+- **`auditor-skill` is a new core pack** ([solanabr/auditor-skill](https://github.com/solanabr/auditor-skill), MIT) — 20 scope-gated checklists over 1,424 verification items and 138 known attack vectors, covering Solana programs and the code around them (TypeScript, Rust services, Python, backend, frontend, supply chain, secrets, deployment, logging, privacy, AI-agent surface). `/audit-solana`, `/audit-infra`, `/diff-review` and the Anchor and Pinocchio agents now read it.
+- **Every pinned pack records its commit in `skill-registry.json`** — previously only `anthropic-skills` did; the other 20 were pinned by the gitlink alone, which does not survive into a user project (ext/ packs are vendored and their gitfiles stripped). Both kinds now use the same `commit` field, and both are verified rather than trusted: an upstream pack's fetch asserts `FETCH_HEAD`, and a submodule pack's gitlink is checked before `install.sh` or `skills.sh add` copies it. A mismatch stops the install and names the fix.
+- **`bash .claude/bin/skills.sh pins`** — compares every registry pin with its gitlink; `--write` rewrites the registry from the gitlinks. `validate.sh` runs the read-only form, so the registry cannot drift from `.gitmodules` silently.
+- **`.github/workflows/sync-skill-pins.yml`** — Dependabot can only move a gitlink, so this job rewrites the registry on its weekly bump branch and pushes it, keeping the new check from turning every bump PR red. It uses `workflow_run` (a Dependabot-triggered run gets a read-only token and cannot push), takes `skills.sh` from the default branch, and refuses a branch that changed anything but submodule pins.
+- **A pack's own submodule pins are recorded** in the entry's `vendored` field and checked by `validate.sh`, so a third party moving a pin inside a pack the kit ships fails CI until someone reads the diff. Not auto-synced, deliberately.
+
+### Changed
+- **`colosseum` is now a core pack**, re-pinned to Copilot 2.0.1. Its auth is no longer a PAT: it signs in through `npx @colosseum-org/copilot-connect login` (Node 20+, `--device` where no browser can open; `status`/`logout`/`revoke` alongside), which keeps the credential in the OS store. `COLOSSEUM_COPILOT_PAT` and `COLOSSEUM_COPILOT_API_BASE` are gone from `.env.example` and `/setup-mcp` — v1 tokens stop working 2026-10-28. It is the only non-open-source pack installed by default (README: Copyright Colosseum, no LICENSE file), recorded as such in the registry and the README row. The installer's closing box and `/doctor` check 5 both surface the sign-in, since the installer cannot perform it.
+- **The installers no longer recurse into a pack's own submodules** (`--recursive` dropped for pack paths in `install.sh` and `skills.sh`). Those pins belong to the pack's author, and since the install *vendors* what it fetches, recursing copied a third-party tree into user projects at a commit nobody here recorded: `auditor-skill` → `trailofbits` (CC-BY-SA-4.0, into an MIT project) and `solana-game` → a second `solana-dev` at a different commit. Both packs test for the directory and fall back when it is absent.
+
+### Removed
+- **`trailofbits`, `ghostsecurity`, `defending-code` and `safe-solana-builder`** — `auditor-skill` covers all four, and every agent, command and hub route that read them now reads it. `safe-solana-builder` was the only pack the kit ever pinned from a personal account, with no LICENSE file and no commit in 165 days; its own registry entry said to recheck the core tier if it stayed inactive.
+
 ## [2.2.0] - 2026-10-02
 
 ### Added
