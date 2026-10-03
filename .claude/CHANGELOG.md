@@ -2,6 +2,26 @@
 
 All notable changes to solana-ai-kit.
 
+## [Unreleased]
+
+Merged to `main` after the 2.3.0 bump (#168); not yet in a tagged release.
+
+### Added
+- **`solana-fuzz` extension** (#173) — Trident harness API and invariant patterns, pinned under `testing-qa`.
+- **`sign-safe`, `counterparty-gate` and `community-moderation` extensions; `solana-airdrop` catalogued as an add-on** (#174). `counterparty-gate` calls SolSentry's hosted API, recorded in its entry's `safety` field.
+- **`position-manager-skill`, `content-gen-skill` and `writer-style-skill` extensions** (#176).
+- **`validate.sh` fails when the shipped `.claude/VERSION` falls inside `update.sh`'s retired-defaults migration case** — if it matched, `/update` would strip settings the user of a current install set themselves. `tests/test_validate.sh` covers both outcomes (#127).
+- **Registry install commands are checked** (#177) — each `install.command` matches its declared method, an npmjs.com source names the package the command installs, and (network-gated) every npx package resolves. It caught a nonexistent `@pythnetwork/pyth-mcp` and two HTTP servers mislabelled as npx.
+
+### Changed
+- **`context-mode` is a default MCP server** (#176). `update.sh`'s retired-defaults migration no longer removes it, and FIREWALL-SPEC.md now says its `ctx_execute` runs outside every rule and hook, so shipping it ends the egress guarantee unless the user removes it. Chainstack, Phantom and Nansen are opt-in servers in `/setup-mcp`.
+- **`eth-to-sol` is a documented add-on, not a pinned extension** (#176) — it has no license, so vendoring it redistributed an all-rights-reserved tree.
+- **README slimmed to install and orientation** (#172) — the spec (plugin route, firewall mechanism, skill-pack tables, agent and command reference, MCP catalogue) moved to `docs/`, which `install.sh` never copies into a project.
+
+### Fixed
+- **`trident fuzz run` gets `--with-exit-code`** in `/test-rust` and `/audit-solana` (#175); without it a failing invariant exits 0.
+- **Registry pins for `metaplex` and `cloudflare` synced** (`b7c9c3e`) after their gitlinks moved without `skills.sh pins --write`, which left `validate.sh` and every install-dependent suite failing on `main`.
+
 ## [2.3.0] - 2026-10-03
 
 ### Added
@@ -10,13 +30,30 @@ All notable changes to solana-ai-kit.
 - **`bash .claude/bin/skills.sh pins`** — compares every registry pin with its gitlink; `--write` rewrites the registry from the gitlinks. `validate.sh` runs the read-only form, so the registry cannot drift from `.gitmodules` silently.
 - **`.github/workflows/sync-skill-pins.yml`** — Dependabot can only move a gitlink, so this job rewrites the registry on its weekly bump branch and pushes it, keeping the new check from turning every bump PR red. It uses `workflow_run` (a Dependabot-triggered run gets a read-only token and cannot push), takes `skills.sh` from the default branch, and refuses a branch that changed anything but submodule pins.
 - **A pack's own submodule pins are recorded** in the entry's `vendored` field and checked by `validate.sh`, so a third party moving a pin inside a pack the kit ships fails CI until someone reads the diff. Not auto-synced, deliberately.
+- **`/resync` reports the registry pins it leaves behind** (#168) — it moves packs to upstream latest on purpose, so it names the packs that moved and the `skills.sh pins --write` that closes the gap before `validate.sh` fails on it.
+- **`bash .claude/bin/skills.sh add --force`** (#131) reinstalls a partially installed pack, and kit packs are copied atomically, so an interrupted add no longer leaves a pack `add` refuses to repair.
+- **`skills.sh list` and `skills.sh add` run without a prompt** (#150), so agents can install an extension pack before linking into it; `prune`, `select` and `uninstalled` still prompt. `firewall.sh` generates the two rules (ALLOW, every tier), and `validate.sh` now fails if the committed `settings.json` differs from what `firewall.sh` generates for the declared tier.
 
 ### Changed
 - **`colosseum` is now a core pack**, re-pinned to Copilot 2.0.1. Its auth is no longer a PAT: it signs in through `npx @colosseum-org/copilot-connect login` (Node 20+, `--device` where no browser can open; `status`/`logout`/`revoke` alongside), which keeps the credential in the OS store. `COLOSSEUM_COPILOT_PAT` and `COLOSSEUM_COPILOT_API_BASE` are gone from `.env.example` and `/setup-mcp` — v1 tokens stop working 2026-10-28. It is the only non-open-source pack installed by default (README: Copyright Colosseum, no LICENSE file), recorded as such in the registry and the README row. The installer's closing box and `/doctor` check 5 both surface the sign-in, since the installer cannot perform it.
 - **The installers no longer recurse into a pack's own submodules** (`--recursive` dropped for pack paths in `install.sh` and `skills.sh`). Those pins belong to the pack's author, and since the install *vendors* what it fetches, recursing copied a third-party tree into user projects at a commit nobody here recorded: `auditor-skill` → `trailofbits` (CC-BY-SA-4.0, into an MIT project) and `solana-game` → a second `solana-dev` at a different commit. Both packs test for the directory and fall back when it is absent.
+- **`install.sh` fetches only the skill packs it keeps** (#134), instead of downloading every pack and then pruning to the core tier.
+- **`metaplex` and `cloudflare` re-pinned** (`f8d5cc4`); the metaplex upstream had corrected four facts the kit was still shipping.
+
+### Fixed
+- **A wrapper in front of a gated command bypassed the secrets and on-chain gates** (#138). Both gates now share one PreToolUse hook that splits the command like `sh` (unquoted `;` `&&` `||` `|` `&` and newlines, quotes, heredocs, `$(...)`), strips `VAR=` assignments and wrappers (`env`, `xargs`, `nohup`, `time`, `sudo`, absolute paths), re-parses `sh -c`, `bash -c` and `eval` payloads, and treats heredoc bodies, `echo`/`printf` arguments, grep patterns and git/gh messages as data. A command it cannot parse gets an approval prompt. The allow list drops `env *`, `xargs *` and `command *`. FIREWALL-SPEC.md no longer says those wrappers need no defence (`a20419e`).
+- **Every session raised macOS's privacy prompt for users with a password manager** (`e808764`, `164e688`). Resolving the keychain and 1Password group-container denies touched another app's data; macOS already gates those for every process, so the denies are gone. Bitwarden's Application Support directory is unsandboxed and stays denied.
+- **`skills.sh` ignored a registry it could not parse and never pruned packs the kit dropped** (#136).
+- **Stale registry entries** (#135): `meteora-sdk-skill` → `MeteoraAg/meteora-invent`, `get-shit-done` marked archived, the `emilkowalski/skills` rename followed, seven placeholder `last_commit` rows refreshed, and qedgen's `ARISTOTLE_API_KEY` added to `.env.example`.
+- **The SessionStart banner shows the cluster and wallet to the user again** (#144): the RPC host with its API key stripped and the wallet, or "Solana CLI not found on PATH." Same in the plugin hook.
+- **token-extensions** (#147): mint space calculation, CLI multisig scope, a linked-file contradiction and the memo v4 note.
+- **Ripple Map rows point at the files that hold the counts**, and every kit link is checked (#148).
+- **`install.sh` stripped the only content under `## Project Learnings`** (#153, root cause of #104); installed instruction files now keep its subsections, and `/dream` and `/diff-review` write to them (#155).
+- **The marketplace entry** gains `license`, `homepage` and `keywords` and drops `strict` and the component counts (#154).
 
 ### Removed
 - **`trailofbits`, `ghostsecurity`, `defending-code` and `safe-solana-builder`** — `auditor-skill` covers all four, and every agent, command and hub route that read them now reads it. `safe-solana-builder` was the only pack the kit ever pinned from a personal account, with no LICENSE file and no commit in 165 days; its own registry entry said to recheck the core tier if it stayed inactive.
+- **The dead `rules` entries** in the install and update copy loops (#143); the kit ships no rules.
 
 ## [2.2.0] - 2026-10-02
 
@@ -27,9 +64,18 @@ All notable changes to solana-ai-kit.
 - **`permissions.deny` is identical at every tier** — the never-allowed set: credential stores and vaults, code-execution-on-next-build files (`~/.cargo/config.toml`, `~/.zshenv`, `~/.gitconfig`, in-project `**/.cargo/config.toml`), login-shell and autostart persistence, shell/REPL history, the kit's own settings and hooks (as `Edit(...)`, not `Read(...)`, so the kit can still read its own config), `Bash(claude *)` policy re-roll, and matcher-evading wrappers (`env`, `sh -c`, `git -c`, `git -C`, `flock`, `docker exec`, …). Deny is the one axis where merge-monotonicity is harmless, because every tier agrees.
 - **Tier migration in `update.sh`** — existing installs now receive the firewall. An install whose `permissions` block still matches the shipped baseline adopts `relaxed`; one with a hand-edited policy adopts `off` and prints a notice rather than silently rewriting a tuned policy; a symlinked `settings.json` is reported `[skipped]`.
 - **`tests/test_firewall.sh` and `tests/test_egress_guard.sh`**, plus four `validate.sh` checks (`security.json` validity and tier range, `enforced.ruleIds` ⊆ the live lists, generator idempotency and tier round-trip, and a rejection of `/`-anchored path rules in anything destined for `~/.claude/`, where `/secrets/**` resolves to `~/.claude/secrets/**` rather than the project).
+- **Core and extension skill packs** — a full install ships only the core packs (`solana-dev`, `safe-solana-builder`); the other `ext/` packs stay pinned and install on demand with `install.sh --with <id>`, `bash .claude/bin/skills.sh add <id>` or the new `/add-skill` command (command count 30 → 31). `skill-registry.json` gains `tier`, `path` and `triggers`; the hub lists every extension with when to use it. Adds the official MagicBlock and Alchemy packs. Dependabot bumps the pins weekly in one grouped PR.
+- **safe-ai-skill as a core plugin** — the `stbr` marketplace lists safe-ai-skill (SHA-pinned), `plugin.json` depends on it, and a full install registers the marketplace and enables `safe-ai-skill@stbr` for the project.
+- **anthropic-skills extension** — installs Anthropic's Apache-2.0 skills (`frontend-design`, `webapp-testing`, `mcp-builder`) at a pinned commit into `<config>/skills/<name>/`, so Codex, Grok Build and other Agent Skills clients see them. `DENIED_SKILLS` refuses the proprietary document skills before any fetch.
+- **token-extensions skill** — a kit-owned skill covering every Token-2022 extension (choosing and combining, creation order, sizing, fees, hooks, metadata and groups, issuer controls, confidential transfers, display amounts), replacing `token-2022.md`. Routed from token-engineer and both skill hubs, and bundled in the plugin.
+- **Model routing** (#65) — agents and commands run on `opus`, `sonnet` or inherit the session model; `tests/test_model_routing.sh` enforces allowed values and README drift.
+- **Mainnet and wallet permission gates** (#74) — a PreToolUse hook that names the resolved cluster replaces the `CONFIRM_MAINNET=1` prefix for program deploys, upgrades, closes, authority changes, token transfers and stake withdrawals. `solana-keygen new`/`recover` with `--force` asks before overwriting the default wallet.
+- **Claude reviews every PR in CI** (#156) — `claude-code-review.yml` runs the code-review plugin when a PR opens, leaves draft or reopens, and posts the report as a comment; `claude.yml` uses the same pinned action with read-only contents.
+- **README: other agents and a no-install route** — sections for Codex, Grok Build and other AGENTS.md tools, a no-install route through aikit.superteam.codes, and copy-paste install steps (installer, one-liner, from a clone; plugin marketplace last).
+- **Tests** — `test_hooks.sh`, `test_resync.sh`, `test_local_skills.sh`, `test_skill_extensions.sh`, `test_anthropic_skills.sh`, `test_validate.sh`; `test_plugin.sh` validates a dereferenced copy of the plugin tree (#119); `test_cross_references.sh` follows the from-a-clone install steps.
 
 ### Fixed
-- **Sandbox read-denies were bypassable through `sandbox.excludedCommands`** — any entry lifts the OS sandbox for the **entire** command line, so `git push -h >/dev/null 2>&1; <read of a denied path>` exited 0 where the bare read got EPERM. The six git/gh entries are gone; exactly two remain, `surfpool *` and `anchor test*`, because Surfpool needs unsandboxed Mach access.
+- **Sandbox read-denies were bypassable through `sandbox.excludedCommands`** — any entry lifts the OS sandbox for the **entire** command line, so `git push -h >/dev/null 2>&1; <read of a denied path>` exited 0 where the bare read got EPERM. `surfpool *` and `anchor test*` stay because Surfpool needs unsandboxed Mach access; the six git/gh entries stay because a sandboxed `git push` cannot reach the ssh-agent socket or the gh token. The secrets hook inspects each statement of the command line, so the read in `git push -h; <read>` is still blocked.
 - **`anchor test` was broken on a default install** — `surfpool start` panics instantly under the Bash sandbox (macOS SystemConfiguration), which also took out `/test-rust`, `/test-ts`, `/profile-cu` and `/debug-user-tx` on Anchor 1.x's default path. `network.allowLocalBinding` does not cover it.
 - **`cargo build` could not write its registry cache** — the toolchain roots (`~/.cargo/**`, `~/.rustup/**`, `~/.cache/solana/**`, `~/.local/share/solana/**`, `~/.avm/**`) are now carved out of the outside-write deny at every tier, with credentials and `config.toml` still denied.
 - **`/update` and `/add-skill` failed at `mktemp -d` under the sandbox** — the platform temp root is now writable at every tier. The same failure truncated a tracked file when an unguarded variable expanded to empty.
@@ -40,6 +86,18 @@ All notable changes to solana-ai-kit.
 - **The on-chain hook resolved the wrong cluster** with `ANCHOR_PROVIDER_URL=` set or `-C`/`--config` passed, mislabelling mainnet as devnet and vice versa. It is also headless-aware now, instead of returning `ask` for every on-chain write on every cluster and hard-failing every `-p` run.
 - **Rules that protected nothing** — `Read(**/Local Extension Settings/**)` is cwd-bounded while browser profiles live under `~/Library`, so it never matched; mainnet denies anchored to the cluster string blocked read-only `anchor verify --provider.cluster mainnet` and `solana program dump --url mainnet-beta`, and now anchor to the verb.
 - **Verified-live git and CLI evasions closed** — `git clean -xdf`, `git reset --ha HEAD` (long options abbreviate in git), `git restore .` (absent from the policy entirely), `git branch --delete --force`, `git gc --prune=all`, `git push origin +main`, `solana config set -k /path`, `npm run release` wrapping `npm publish`, `gh api -X DELETE /repos/O/R`, and `gh variable set`.
+- **anchor-engineer's "one `#[error_code]` enum" rule was wrong** (#129) — replaced with the real check: each enum's codes are `offset` plus each variant's discriminant, and two enums whose ranges overlap cannot be told apart.
+- **`/test-and-fix`, `/test-rust` and `/test-ts` decoded Anchor error ids by declaration order** (#133); they now use offset plus discriminant.
+- **`.gitmodules` URLs for `quicknode-anchor` and `solana-mobile`** point at the renamed repos (#130), and `test_skill_extensions.sh` checks every `.gitmodules` URL against the registry source.
+- `/resync` and `/update` work in `--agents` installs; `/resync` no longer reports links into uninstalled extensions as broken; `resync.sh` runs from its target dir regardless of cwd.
+- install and update no longer fail when a config subdir is a symlink.
+- `update.sh --dry-run` no longer deletes `.agents/commands/cleanup.md`; `install.sh --agents` removes a `/cleanup` an older install left behind.
+- The `.gitignore` config block is backfilled in both install orders, without duplicates on CRLF files.
+- The manual install clones into `solana-ai-kit/`, so its `cp` steps find the files.
+- `validate.sh` skips, rather than fails, links into uninitialized submodules.
+- Destructive-command deny rules restored; the mainnet deploy deny rule dropped so `/deploy`'s mainnet step gets the approval prompt.
+- `plugin.json` no longer declares a redundant hooks path (duplicate load error).
+- Anchor TS package is `@anchor-lang/core`; `anchor-specialist` references point to `anchor-engineer`; `settings.json` syntax error fixed; `/setup-mcp` covers every `.env.example` key.
 
 ### Changed
 - **The Solana config directory is never added to `sandbox.filesystem.denyRead`** — only `*.json` under it. `anchor init` writes `wallet = "~/.config/solana/id.json"` into `Anchor.toml`, `Read` denies project into `denyRead`, and the sandbox covers Bash *and its children*, so a directory-wide read deny left `solana`/`anchor` unable to resolve a signer at all. `cli/config.yml` stays readable so `solana config get` keeps working.
@@ -50,6 +108,21 @@ All notable changes to solana-ai-kit.
 - **Writes under `git rev-parse --git-common-dir` are allowed** so submodule init survives a linked worktree.
 - **Egress is documented as unenforceable, not claimed** — `sandbox.network.strictAllowlist` has no effect from the scopes the kit writes, and `sandbox.credentials` is not applied from project or local settings at all. What ships is a `deniedDomains` exfil denylist, command rules for `npm publish`/`cargo publish`/`git push`, and the egress hook; `strictAllowlist` is documented as a line the user adds to `~/.claude/settings.json`. Local MCP servers run outside the sandbox and outside every rule and hook, so attaching servers beyond the three defaults removes the guarantee. Relaxed's honest guarantee is "your secrets won't additionally reach a third party", not confidentiality.
 - **`--agents` installs are unfirewalled** — `settings.json` is inert there; `.claude/security.json` installs with its paths rewritten and the mode is documented rather than silently looking protected.
+- **Always-loaded context cut ~91%** (#66) — the five `.claude/rules/` files used `globs:`, which Claude Code ignores, so all of them loaded every session. They are gone; CLAUDE-solana.md drops to 36 lines, agent descriptions are routing-only, and agent, command and hub bodies are slimmed. `validate.sh` fails on an unscoped rule and on over-budget descriptions.
+- **settings.json stops pinning session behavior** — drops the agent-teams env flag, `enableAllProjectMcpServers`, the top-level `defaultMode`, the LSP `enabledPlugins` and `modelDefaults`. `/update` removes these from installs made by kit 2.1.0 or earlier, only where they still hold the kit's value.
+- **Default MCP servers trimmed** to helius, solana-dev (now native HTTP) and context7. playwright, surfpool and context-mode are opt-in; memsearch is dropped.
+- **Hooks** — read stdin JSON and block with exit 2; the Stop, SubagentStop, PostToolUse and git-commit hooks are removed; SessionStart shows the banner to the user and gives Claude the RPC host and wallet. The plugin's `hooks.json` mirrors settings.json, including the secrets gate.
+- **Sandbox** — git push/pull/fetch and `gh pr/run/issue` run outside it; local binding is allowed for validators and dev servers; `gh auth token` is denied.
+- **`install.sh --agents`** writes AGENTS.md (HTML comments stripped), rewrites project `.claude/` paths to `.agents/`, registers `ext/` packs under `.agents/skills/ext/`, and no longer installs `/cleanup`.
+- **Repo renamed** to `solanabr/ai-kit` (the frozen `update.sh:16` keeps the old URL; GitHub redirects it).
+- **Skill submodules resynced** to upstream HEAD, with moved paths updated in agents, commands and the hub.
+- **Plugin skills hub** moved to `plugin/skills/solana-ai-kit/SKILL.md` so every bundled skill registers (#118).
+
+### Removed
+- `.claude/rules/` (anchor, dotnet, pinocchio, rust, typescript).
+- `.claude/skills/token-2022.md` (replaced by the token-extensions skill).
+- Drift and Ranger Finance references (protocols gone).
+- The live `claude-code.yml` workflow (moved to a template, stopping duplicate `@claude` runs).
 
 ## [2.1.0] - 2026-06-26
 
