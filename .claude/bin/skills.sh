@@ -497,7 +497,7 @@ cmd_add() {
 # the same pull request. Nothing here touches an upstream pack's commit: that one is a
 # fetch target, not a gitlink, and skills.sh asserts it against FETCH_HEAD instead.
 cmd_pins() {
-  local write="" root="" arg reg id path want have tmp drift=0 checked=0 pins=""
+  local write="" root="" arg reg id path want have tmp upstream drift=0 checked=0 pins=""
   for arg in "$@"; do
     case "$arg" in
       -w|--write) write=write ;;
@@ -513,8 +513,9 @@ cmd_pins() {
     reg="$CONFIG_DIR/skills/skill-registry.json"
   fi
   check_registry "$reg"
+  upstream="$(upstream_ids "$reg")"
   for id in $(registry_rows "$reg" | cut -f1); do
-    has_line "$(upstream_ids "$reg")" "$id" && continue
+    has_line "$upstream" "$id" && continue
     path="$(entry_value "$reg" "$id" path)"
     want="$(entry_value "$reg" "$id" commit)"
     have="$(gitlink "$root" "$path")"
