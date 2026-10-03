@@ -113,7 +113,12 @@ SECURITY_REL = CONFIG + "/security.json"
 SETTINGS = os.path.join(TARGET, SETTINGS_REL)
 SECURITY = os.path.join(TARGET, SECURITY_REL)
 
-RULE_SET_VERSION = 1
+# Bump whenever the generated corpus changes in a way an existing install needs.
+# update.sh compares this against enforced.ruleSetVersion and re-applies the declared
+# tier when it is behind, which is the only route by which a rule change reaches a
+# project that already has a security.json.
+#   1 -> 2: DENY_MCP_ARBITRARY_EXECUTION at Medium and High.
+RULE_SET_VERSION = 2
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
@@ -640,6 +645,49 @@ DENY_SUPPLY_CHAIN = [
     "Bash(gh variable set *)",
 ]
 
+# The one tier-varying group in permissions.deny, and the reason it is allowed to be.
+#
+# `context-mode` ships in .mcp.json, so an arbitrary executor is on by default. Bash has
+# three layers in front of it and only two read the command string: permissions.deny and
+# the hooks match patterns, and under them sandbox.* refuses at the syscall, which no
+# amount of obfuscation reaches. A local MCP server runs outside that sandbox -- verified,
+# not assumed: the same `ls ~/.claude/ide` is refused through Bash and succeeds through
+# ctx_execute, and ctx_execute can write under $HOME, which is not in the Bash write
+# allowlist. So for MCP the hooks are a single layer, and a single pattern layer is one
+# obfuscation away from nothing.
+#
+# A tool-name deny is the second layer. Permission rules for MCP carry no argument
+# specifier -- worse than ignored, a parenthesised mcp__ rule is SKIPPED on load -- but a
+# tool that cannot be called at all cannot be obfuscated past, and that is exactly what
+# Medium and High need, because "there is no arbitrary executor here" is their promise.
+# Off and Relaxed make no such promise and keep every tool, with the hooks gating them;
+# that is what keeps Relaxed usable and CI-safe.
+#
+# Why this may vary by tier when DENY_SUPPLY_CHAIN above says publishing may not: the
+# objection there is cross-scope merging (no un-deny primitive, so a deny that reached a
+# user or managed file could not be taken back on the way down). firewall.sh writes one
+# file and removes exactly the strings in enforced.ruleIds, so descending does remove
+# these -- the relaxed -> high -> relaxed byte-identity test in validate.sh is what holds
+# that. The residual is unchanged from every other rule: a block hand-copied into user or
+# managed scope stops tracking the tier.
+#
+# ctx_index earns its place next to the executors even though it neither executes nor
+# fetches. Its `path` takes a file OR a directory, with followSymlinks and
+# respectGitignore available, and what it reads becomes retrievable through ctx_search --
+# an arbitrary-file-read primitive, outside the sandbox, whose output lands in the
+# transcript. At Medium and High, whose whole read story is a path fence, that is the
+# fence's negation. The remaining tools stay callable at every tier: ctx_search,
+# ctx_stats, ctx_doctor and ctx_purge touch only local indexed state; ctx_insight opens
+# one fixed URL; ctx_upgrade returns a command for Bash to run, where all three layers
+# still apply.
+DENY_MCP_ARBITRARY_EXECUTION = [
+    "mcp__context-mode__ctx_execute",
+    "mcp__context-mode__ctx_execute_file",
+    "mcp__context-mode__ctx_batch_execute",
+    "mcp__context-mode__ctx_fetch_and_index",
+    "mcp__context-mode__ctx_index",
+]
+
 DENY = [
     DENY_SELF_PROTECTION,
     DENY_CREDENTIALS,
@@ -958,6 +1006,7 @@ def plan(tier):
         # permissionDecision "ask"; every hard block is a deny rule or hook exit 2.
         # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
         "permissions.ask": [],
+        # DENY_MCP_ARBITRARY_EXECUTION is appended below, at Medium and High only.
         "permissions.deny": DENY,
         "sandbox.excludedCommands": [] if off else [EXCLUDED_COMMANDS],
         "sandbox.network.deniedDomains": [],
@@ -981,6 +1030,12 @@ def plan(tier):
         # never-allowed deny set above still applies: it is unconditional, and it is
         # what stops the agent rewriting its own tier.
         return lists, scalars
+
+    # Medium and High both state that an arbitrary executor is not reachable, and a
+    # default-on MCP server with one makes that false unless the tool itself is refused.
+    # Relaxed keeps every context-mode tool and relies on the hooks; see the group above.
+    if medium_up:
+        lists["permissions.deny"] = DENY + [DENY_MCP_ARBITRARY_EXECUTION]
 
     domains = [DOMAINS_EXFIL_SINKS, DOMAINS_TUNNELS, DOMAINS_PASTE_AND_DROPS]
     if medium_up:

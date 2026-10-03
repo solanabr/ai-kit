@@ -14,9 +14,9 @@
 
   "enforced": {
     "tier": "relaxed",
-    "ruleSetVersion": 1,
+    "ruleSetVersion": 2,
     "target": ".claude/settings.json",
-    "sha256": "044d497ccbb5e2e47bea1be80eadd30e1dafb3753545f0e81af46faab5f8612f",
+    "sha256": "6f6fcb810c8ef7557b99e4fa8f0116da0966cfef97321426cbff713fd26f5bae",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
