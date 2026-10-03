@@ -59,7 +59,7 @@ OK when it parses and lists the default servers (helius, solana-dev, context7) p
 - FAIL parse failure: `curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/.mcp.json -o .mcp.json`
 - WARN a listed server's API key failed check 5: `/setup-mcp`
 - WARN `surfpool` listed but the CLI is missing: `curl -L https://surfpool.run/install | sh` (or `brew install txtx/taps/surfpool`)
-- WARN `memsearch-mcp` listed: that npm package is not published, so the server never starts; delete the `memsearch` entry from `.mcp.json`
+- WARN `memsearch-mcp` listed: that npm package is not published, so the server never starts; delete the `memsearch` entry from `.mcp.json`. memsearch ships as a Claude Code plugin instead (`/plugin marketplace add zilliztech/memsearch`, `/plugin install memsearch`, then restart Claude Code)
 
 **8. Dual-install guard.** The plugin (`/plugin install solana-ai-kit@stbr`) and a full install (`install.sh` into `.claude/`) in the same project double-load commands, hooks and MCP servers (`/deploy` beside `/solana-ai-kit:deploy`, the banner printed twice).
 Detect it from the project config alone. `$HOME/.claude/settings.json` is outside the working directory, so High's read fence refuses it.

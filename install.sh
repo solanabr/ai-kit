@@ -184,7 +184,7 @@ fi
 # vendored ext/ repos, bin/ (scripts resolve their own dir), and lines that
 # already name .agents/ (those are written to handle both modes).
 # Claude-Code-only files, not installed by --agents. /cleanup turns a fork of the
-# kit repo into a project (README "Using as a GitHub Template"); its paths
+# kit repo into a project (docs/install.md "Using as a GitHub Template"); its paths
 # describe the kit's own repo, so in an .agents/ project every step of it is false.
 # Not shipping it beats rewriting it into something plausible but wrong.
 # The firewall is the same case, for a sharper reason: nothing reads a permission
