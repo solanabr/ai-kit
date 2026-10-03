@@ -445,7 +445,7 @@
       "domain": "frontend-design",
       "description": "Design-engineering system for AI coding agents (the design counterpart to GSD): 45+ skills + 13 sub-agents covering brand strategy, identity, design systems, UI build, accessibility, and critique via a dual-diamond pipeline, with 35 style presets. Not Solana-specific.",
       "source": "https://github.com/jubscodes/get-shit-pretty",
-      "install": { "method": "npx", "command": "pnpm dlx get-shit-pretty   # or: bunx get-shit-pretty", "env": ["FIGMA_ACCESS_TOKEN (optional, for the bundled Figma MCP)"] },
+      "install": { "method": "npx", "command": "npx -y get-shit-pretty", "env": ["FIGMA_ACCESS_TOKEN (optional, for the bundled Figma MCP)"] },
       "license": "MIT",
       "maintainer": "jubscodes",
       "signal": { "stars": 43, "last_commit": "2026-06-07", "reputability": "individual" },
