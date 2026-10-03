@@ -141,11 +141,34 @@ if [ -d "$TEMP_DIR/repo/.git" ] && [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
   fi
   if [ "${#PACK_PATHS[@]}" -gt 0 ]; then
     step "Fetching skill packs..."
-    # Parallel + shallow (pins preserved; far faster than serial)
-    if ! git -C "$TEMP_DIR/repo" submodule update -q --init --recursive --depth 1 --jobs "$JOBS" -- "${PACK_PATHS[@]}"; then
+    # Parallel + shallow (pins preserved; far faster than serial). Not --recursive: a
+    # pack's own submodules are pinned by that pack's author, not by this kit, and the
+    # install vendors what it fetches, so recursing would copy a third-party tree at an
+    # unrecorded pin into the project (auditor-skill -> trailofbits, CC-BY-SA-4.0;
+    # solana-game -> a second solana-dev at a different commit). The registry records
+    # those nested pins so validate.sh notices when they move; the packs that use one
+    # test for it and fall back when it is absent.
+    if ! git -C "$TEMP_DIR/repo" submodule update -q --init --depth 1 --jobs "$JOBS" -- "${PACK_PATHS[@]}"; then
       fail "Could not fetch the skill packs from $REPO_URL"
       exit 1
     fi
+  fi
+fi
+
+# The packs about to be vendored must sit at the commits skill-registry.json records.
+# That record is the only pin the project keeps — the gitfiles go away just below — so a
+# checkout that drifted from it would deliver a commit nobody here wrote down. A clone is
+# checked where it was fetched; a local source in place. A source with no gitlinks (a
+# vendored checkout) has nothing to compare and says so.
+if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+  PIN_ROOT="$TEMP_DIR/repo"
+  [ -n "$LOCAL_SRC" ] && PIN_ROOT="$LOCAL_SRC"
+  if PIN_OUT="$(bash "$TEMP_DIR/repo/.claude/bin/skills.sh" pins "$PIN_ROOT" 2>&1)"; then
+    ok "${PIN_OUT#✓ }"
+  else
+    printf '%s\n' "$PIN_OUT"
+    fail "A skill pack is not at the commit skill-registry.json records for it"
+    exit 1
   fi
 fi
 
@@ -494,6 +517,10 @@ BOX_LINES=(
   "Next steps:"
   "  1. cd $TARGET_DIR"
   "  2. Edit .env to add your API keys (Helius, RPC, etc.)"
+  "     The core colosseum skill signs in separately, once per"
+  "     machine (Node 20+), and has nothing to query until then:"
+  "       npx @colosseum-org/copilot-connect login"
+  "     /doctor reports whether that connection is in place."
 )
 if [ "$AGENTS_ONLY" = true ]; then
   BOX_LINES+=(

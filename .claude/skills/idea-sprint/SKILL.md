@@ -79,7 +79,7 @@ Idea-source guides (markdown commentary on the same sources): [../ext/solana-new
 
 ## Live hackathon landscape
 
-[ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — 5,400+ Colosseum submissions for crowdedness checks, winner patterns, and gap analysis (requires `COLOSSEUM_COPILOT_PAT`; install first: `bash .claude/bin/skills.sh add colosseum`).
+[ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — 5,400+ Colosseum submissions for crowdedness checks, winner patterns, and gap analysis. Installed by default; sign in once per machine with `npx @colosseum-org/copilot-connect login` (Node 20+).
 
 ## Output format
 

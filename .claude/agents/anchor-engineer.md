@@ -11,7 +11,7 @@ You implement Solana programs with Anchor 1.x (Solana 3.x / Agave toolchain). Le
 
 - [programs/anchor.md](../skills/ext/solana-dev/skills/solana-dev/references/programs/anchor.md): canonical Anchor patterns
 - [anchor/migrating-v0.32-to-v1.md](../skills/ext/solana-dev/skills/solana-dev/references/anchor/migrating-v0.32-to-v1.md): the 1.0 API changes, when upgrading or when errors point at CPI contexts, IDL, or duplicate accounts
-- [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md) and [safe-solana-builder](../skills/ext/safe-solana-builder/SKILL.md): vulnerability classes to design out
+- [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): vulnerability classes to design out; [auditor-skill anchor idioms](../skills/ext/auditor-skill/references/framework-idioms/anchor.md) for the validation patterns an audit looks for
 - [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM, Mollusk, Surfpool
 
 ## Anchor 1.x details older habits get wrong

@@ -29,12 +29,13 @@ sorted() { printf '%s\n' "$@" | awk 'NF' | sort | tr '\n' ' ' | sed 's/ $//'; }
 
 CORE="$(tier_ids core)"
 EXTENSIONS="$(tier_ids extension)"
-# Extensions vendored from a kit submodule into ext/. A pack with a "commit" is fetched
-# from its upstream repo into top-level skill folders instead (tests/test_anthropic_skills.sh).
+# Extensions vendored from a kit submodule into ext/. A pack with a "skills" list is
+# fetched from its upstream repo into top-level skill folders instead
+# (tests/test_anthropic_skills.sh). Every pack, both kinds, carries a "commit".
 KIT_EXTENSIONS="$(python3 - "$REGISTRY" <<'PY'
 import json, sys
 reg = json.load(open(sys.argv[1]))
-print(" ".join(sorted(e["id"] for e in reg["entries"] if e.get("tier") == "extension" and "commit" not in e)))
+print(" ".join(sorted(e["id"] for e in reg["entries"] if e.get("tier") == "extension" and "skills" not in e)))
 PY
 )"
 
@@ -54,11 +55,18 @@ for e in kit:
     i = e["id"]
     if e["tier"] not in ("core", "extension"):
         out.append(f"{i}: tier must be core or extension")
-    if "commit" in e:
-        if e["tier"] != "extension" or e.get("path") != ".claude/skills" or not e.get("skills"):
-            out.append(f"{i}: a pack pinned by commit must be an extension with path .claude/skills and a skills list")
+    # The pin a user project carries. validate.sh checks a submodule's against the gitlink;
+    # skills.sh asserts an upstream pack's against FETCH_HEAD.
+    if not re.fullmatch(r"[0-9a-f]{40}", e.get("commit", "")):
+        out.append(f"{i}: needs a 40-character commit")
+    if "skills" in e:
+        if e["tier"] != "extension" or e.get("path") != ".claude/skills":
+            out.append(f"{i}: a pack with a skills list must be an extension with path .claude/skills")
     elif e.get("path") != f".claude/skills/ext/{i}":
         out.append(f"{i}: path must be .claude/skills/ext/{i}")
+    for sub, sha in (e.get("vendored") or {}).items():
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            out.append(f"{i}: vendored {sub} needs a 40-character commit")
     if e.get("default_installed") is not (e["tier"] == "core"):
         out.append(f"{i}: default_installed must be true for core, false for extensions")
     if (e.get("install") or {}).get("command") != f"bash .claude/bin/skills.sh add {i}":
@@ -70,7 +78,7 @@ for p in paths:
     if p not in [e.get("path") for e in kit]:
         out.append(f".gitmodules path {p} has no registry entry with a tier")
 for e in kit:
-    if "commit" not in e and e.get("path") not in paths:
+    if "skills" not in e and e.get("path") not in paths:
         out.append(f"{e['id']}: not a submodule in .gitmodules")
 print("\n".join(out) or "OK")
 PY

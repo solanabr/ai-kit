@@ -28,6 +28,12 @@ Run the nine checks below, then report. Status values: `OK` healthy, `WARN` work
 grep -oE '^[A-Z_]+=' .env.example 2>/dev/null | tr -d = | sort -u   # expected names
 bash .claude/bin/env-keys.sh 2>/dev/null || echo "HELPER_UNAVAILABLE"
 ```
+The core `colosseum` skill is the one credential that is not an env key: it signs in through a helper that keeps the token in the OS store. Check it the same way the skill does, which neither reads nor prints a credential:
+```bash
+npx --yes @colosseum-org/copilot-connect status 2>&1 | tail -3 || echo "HELPER_UNAVAILABLE"
+```
+- `n/a` when there is no network or npx is unavailable.
+- WARN no connection: `npx @colosseum-org/copilot-connect login` (Node 20+; `--device` where no browser can open). Until then the colosseum skill has nothing to query.
 - `n/a — skipped (firewall tier denies .env reads)` when the helper is missing or exits non-zero: list the expected names and stop. A gate doing its job is never a `FAIL`.
 - WARN key missing or empty: `/setup-mcp` (MCP keys) or edit `.env` by hand
 - FAIL the helper reports no `.env` at all: `cp .env.example .env`, then `/setup-mcp`
@@ -114,7 +120,7 @@ One table, then fix-its for the non-OK rows only, in the order to run them:
 | 2 | Solana CLI         | WARN   | cluster=mainnet, devnet bal 0   |
 | 3 | Rust/Anchor        | OK     | anchor 1.0.2 = Anchor.toml      |
 | 4 | Submodules         | FAIL   | 2 uninitialized (-)             |
-| 5 | .env keys          | WARN   | HELIUS_API_KEY empty            |
+| 5 | Credentials        | WARN   | HELIUS_API_KEY empty; colosseum not signed in |
 | 6 | Config version     | OK     | 2.1.0 = upstream                |
 | 7 | MCP config         | OK     | 3 servers parsed                |
 | 8 | Dual-install guard | OK     | full install only (no plugin)   |
