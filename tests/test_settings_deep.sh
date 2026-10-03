@@ -205,6 +205,33 @@ p = json.load(open('$SETTINGS'))['permissions']
 print(' '.join(sorted(set(p.get('ask', [])) & set(p['deny']))) or 'none')
 " 2>/dev/null)"
 assert_eq "none" "$OVERLAP" "no rule sits in both permissions.ask and permissions.deny"
+# A wrapper in front of a gated command (env, xargs, sh -c, an absolute path...) must not turn
+# an ask or deny into a silent allow (issue #110). Run each ask/deny Bash rule's command through
+# the wrappers: whenever an allow rule matches the wrapped form, an ask or deny rule must match too.
+SHADOWED="$(python3 -c "
+import fnmatch, json
+p = json.load(open('$SETTINGS'))['permissions']
+globs = lambda k: [r[5:-1] for r in p.get(k, []) if r.startswith('Bash(') and r.endswith(')')]
+allow, gated = globs('allow'), globs('ask') + globs('deny')
+cmds = [g.replace('*', 'X').strip() for g in gated if g.split()[0] in ('solana', 'anchor', 'spl-token')]
+wraps = ['env {}', 'env FOO=1 {}', 'env -u HOME {}', 'xargs {}', 'xargs -I{{}} {}', 'sh -c \'{}\'', 'bash -c \'{}\'',
+         '/usr/local/bin/{}', 'nohup {}', 'command {}', 'time {}', 'nice {}', 'timeout 60 {}']
+hit = lambda c, rules: any(fnmatch.fnmatchcase(c, r) for r in rules)
+bad = sorted({w.format(c) for c in cmds for w in wraps if hit(w.format(c), allow) and not hit(w.format(c), gated)})
+print(' | '.join(bad) or 'none')
+" 2>/dev/null)"
+assert_eq "none" "$SHADOWED" "no allow rule turns a wrapped ask/deny command (env, xargs, sh -c, absolute path) into a silent allow"
+for r in "Bash(env *)" "Bash(xargs *)" "Bash(command *)"; do
+  assert_rule allow "$r" no "permissions.allow drops the wrapper glob $r"
+done
+for r in "Bash(command -v *)" "Bash(xargs grep *)"; do
+  assert_rule allow "$r" yes "permissions.allow keeps the read-only form $r"
+done
+# `env` is not narrowed to a bare-`env` allow but denied as a whole binary (spec §2 lists it
+# as a matcher-evading wrapper). That subsumes the narrowing, so re-adding Bash(env) to allow
+# would be dead config: deny wins over allow.
+assert_rule deny "Bash(env *)" yes "permissions.deny covers the env wrapper outright"
+
 # Mainnet writes are a hook ask below High and a hard deny at High, so whether a deny rule
 # may match /deploy's mainnet step depends on the tier in .claude/security.json. What holds
 # at EVERY tier: the deny anchors to the write verb, never to the cluster string, so

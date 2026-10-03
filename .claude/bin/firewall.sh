@@ -231,7 +231,7 @@ ALLOW = [
         "Bash(diff *)",
         "Bash(tree *)",
         "Bash(which *)",
-        "Bash(command *)",
+        "Bash(command -v *)",
         "Bash(type *)",
         "Bash(export *)",
         "Bash(date *)",
@@ -239,7 +239,11 @@ ALLOW = [
         "Bash(dirname *)",
         "Bash(realpath *)",
         "Bash(readlink *)",
-        "Bash(xargs *)",
+        "Bash(xargs grep *)",
+        "Bash(xargs rg *)",
+        "Bash(xargs wc *)",
+        "Bash(xargs ls *)",
+        "Bash(xargs -0 grep *)",
         "Bash(sed *)",
         "Bash(awk *)",
         "Bash(cut *)",
@@ -508,6 +512,13 @@ DENY_WRAPPERS = [
     # command substitutions, control-flow bodies, and the timeout/time/nice/nohup/
     # stdbuf/command/builtin/noglob wrappers plus bare xargs — the matcher handles all
     # of those already.
+    #
+    # The matcher handling them is not the same as the HOOKS handling them: a wrapped
+    # command still reaches a PreToolUse hook with the wrapper attached, so the on-chain
+    # hook normalises statements before matching (see .claude/hooks/onchain-guard.sh).
+    # Separately, `command` and `xargs` are allowed only in their read-only forms
+    # (`command -v`, `xargs grep|rg|wc|ls`) rather than as blanket globs, because
+    # `Bash(xargs *)` pre-approved `xargs -I{} solana program deploy …` outright.
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
