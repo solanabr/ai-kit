@@ -352,7 +352,7 @@ fi
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)"; do
+for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)"; do
   TOTAL=$((TOTAL + 1))
   if printf '%s\n' "$DENY_LIVE" | grep -qxF "$r"; then
     echo "  PASS: the never-allowed set denies $r"

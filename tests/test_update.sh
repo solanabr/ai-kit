@@ -308,9 +308,11 @@ for e in (d.get("hooks") or {}).get("PreToolUse", []):
     e["matcher"] = "Bash"
 json.dump(d, open(sys.argv[1], "w"), indent=2)' "$FW_SETTINGS"
 
+# The rule-set version this kit ships; the catch-up goes from 1 to it.
+FW_RS="$(awk -F= '/^RULE_SET_VERSION[[:space:]]*=/{gsub(/[^0-9]/,"",$2); print $2; exit}' "$REPO_ROOT/.claude/bin/firewall.sh")"
 FW_DRY="$(fw_update --dry-run)"
 assert_contains "$FW_DRY" "PreToolUse matcher" "--dry-run reports the matcher migration"
-assert_contains "$FW_DRY" "firewall rule set v1 -> v2" "--dry-run reports the rule-set catch-up"
+assert_contains "$FW_DRY" "firewall rule set v1 -> v$FW_RS" "--dry-run reports the rule-set catch-up"
 assert_eq "Bash" "$(python3 -c "
 import json
 print((json.load(open('$FW_SETTINGS')).get('hooks') or {})['PreToolUse'][0]['matcher'])" 2>/dev/null)" \
@@ -334,7 +336,7 @@ import json
 p = json.load(open('$FW_SETTINGS')).get('permissions') or {}
 print(len([r for r in (p.get('deny') or []) if r.startswith('mcp__')]))" 2>/dev/null)" \
   "re-applying High on an older rule set adds the MCP executor denies"
-assert_eq "2" "$(python3 -c "
+assert_eq "$FW_RS" "$(python3 -c "
 import json
 print((json.load(open('$FW_SECURITY')).get('enforced') or {}).get('ruleSetVersion'))" 2>/dev/null)" \
   "security.json records the new rule-set version"

@@ -14,9 +14,9 @@
 
   "enforced": {
     "tier": "relaxed",
-    "ruleSetVersion": 2,
+    "ruleSetVersion": 3,
     "target": ".claude/settings.json",
-    "sha256": "6f6fcb810c8ef7557b99e4fa8f0116da0966cfef97321426cbff713fd26f5bae",
+    "sha256": "71cad8cff9f397cdd04373d958695b9c848d38e3046c1100b5aeb7fcacf99546",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -189,6 +189,7 @@
       "Edit(/.claude/security.json)",
       "Edit(/.claude/hooks/**)",
       "Edit(/.mcp.json)",
+      "Edit(/.safe-ai-skill/**)",
       "Edit(~/.claude/settings.json)",
       "Edit(~/.claude/**)",
       "Edit(//**/managed-settings.json)",

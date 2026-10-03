@@ -118,7 +118,8 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 # tier when it is behind, which is the only route by which a rule change reaches a
 # project that already has a security.json.
 #   1 -> 2: DENY_MCP_ARBITRARY_EXECUTION at Medium and High.
-RULE_SET_VERSION = 2
+#   2 -> 3: Edit(/.safe-ai-skill/**) in DENY_SELF_PROTECTION, every tier.
+RULE_SET_VERSION = 3
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
@@ -347,6 +348,9 @@ DENY_SELF_PROTECTION = [
     "Edit(/.claude/security.json)",
     "Edit(/.claude/hooks/**)",
     "Edit(/.mcp.json)",
+    # safe-ai-skill deep-merges the whole file over its default policy, so an edit
+    # here could loosen any of its gates, spend caps included, not just supply_chain.
+    "Edit(/.safe-ai-skill/**)",
     "Edit(~/.claude/settings.json)",
     "Edit(~/.claude/**)",
     "Edit(//**/managed-settings.json)",
