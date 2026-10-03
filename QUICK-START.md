@@ -73,9 +73,10 @@ On by default (Claude Code asks once before it starts them):
 Opt-in, because each needs a browser, a CLI, a key or a workflow choice. Run `/setup-mcp` to set the Helius key and add any of these:
 - **Playwright** — Browser automation for dApp testing
 - **Surfpool** — Agent-driven local validator / mainnet-fork control (requires the `surfpool` CLI)
-- **Chainstack** — Multi-chain RPC platform control (5 read-only tools work keyless; the rest need `CHAINSTACK_API_KEY`)
-- **Phantom** — Phantom wallet: balances, signing, swaps (interactive login; it can sign and send transactions)
-- **Nansen** — Wallet and token intelligence (needs a `NANSEN-API-KEY`; a free API account works within its credit limits)
+- **Chainstack** — Multi-chain RPC platform control (needs a key for most tools; 5 read-only ones answer without)
+- **Nansen** — Wallet and token intelligence (paid key required, free tier within credits; ~50 tool schemas per session)
+
+Documented but deliberately not offered by `/setup-mcp`: **Phantom** (`claude mcp add phantom -- npx -y @phantom/mcp-server`) is a 29-tool wallet and trading surface — signing, transfers, payments and perps — that needs no key once logged in. Add it only if you want Claude able to move your funds.
 
 The kit pins no effort level, agent teams or LSP plugins; [docs/configuration.md](docs/configuration.md#settings-the-kit-leaves-to-you) shows how to turn them on.
 
