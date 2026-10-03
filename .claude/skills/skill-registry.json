@@ -351,6 +351,25 @@
       "tags": ["frontend", "nextjs", "react", "deploy", "official"]
     },
     {
+      "id": "supabase",
+      "name": "Supabase Agent Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "data",
+      "path": ".claude/skills/ext/supabase",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "description": "Supabase's official skills for the off-chain half of a Solana app. The supabase skill covers Database, Auth, Edge Functions, Realtime, Storage, Vectors, Cron and Queues, supabase-js and @supabase/ssr in the usual frameworks, the CLI, migrations and declarative schemas, and reading logs. The supabase-postgres-best-practices skill is a 34-file Postgres reference that holds for Postgres anywhere: query performance and EXPLAIN plans, connection pooling and exhaustion, partitioning, RLS policy performance, missing foreign-key indexes, and SKIP LOCKED queue patterns — the one to read when a Solana indexer or webhook consumer is writing high-volume rows.",
+      "triggers": ["Supabase", "Postgres schema or migration", "row-level security policy", "slow query or connection exhaustion", "indexer or webhook database writes"],
+      "source": "https://github.com/supabase/agent-skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add supabase", "env": [] },
+      "license": "MIT — verbatim 21-line text in the repo-root LICENSE, Copyright (c) 2026 Supabase. No per-folder license file, which is why the kit pins it as a submodule rather than fetching its folders",
+      "maintainer": "supabase",
+      "signal": { "stars": 2693, "last_commit": "2026-10-02", "reputability": "official" },
+      "default_installed": false,
+      "safety": "clean at this pin: both skill folders are markdown only (40 .md files, no scripts or binaries), package.json has no install lifecycle hook, and no eval, atob, createRequire or new Function appears anywhere in the pinned ancestry. A new Function does exist on the unmerged feature/workflow-evals branch, which the pin does not reach. The root test/sanity.test.ts calls execSync to run npx skills add into a temp dir — a vendor dev harness, never run by an install. Two behaviours to know rather than defects. Standing egress: skills/supabase/SKILL.md line 16 tells the agent to fetch https://supabase.com/changelog.md whenever the skill loads, and supabase.com/docs/**.md at several decision points, so every Supabase task makes a vendor-host call; no credentials travel with it. Outbound publishing: references/skill-feedback.md can open a public GitHub issue on supabase/agent-skills from a conversation-derived template. Its step 1 is to ask permission, so it is gated, but it is a path that puts conversation content outside the machine, and this kit has been conservative about those",
+      "tags": ["data", "postgres", "backend", "supabase", "official"]
+    },
+    {
       "id": "solana-new",
       "name": "solana.new",
       "type": "skill",

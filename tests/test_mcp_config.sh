@@ -27,11 +27,13 @@ assert_contains "$MCP_CONTENT" '"mcpServers"' ".mcp.json has mcpServers key"
 # Default servers: the ones that work in any Solana project with no key and no extra install
 SERVERS="$(python3 -c "import json; print(' '.join(sorted(json.load(open('$MCP_FILE'))['mcpServers'])))" 2>/dev/null)"
 assert_eq "context-mode context7 helius solana-dev" "$SERVERS" ".mcp.json ships helius, solana-dev, context7 and context-mode"
-# Opt-in (README "Optional MCP servers"): playwright needs browser binaries, surfpool the
-# surfpool CLI, chainstack and nansen a key for most or all of their tools. phantom is
-# documented but not even offered by /setup-mcp — 29 tools that sign, transfer and trade,
-# with no key once logged in. memsearch-mcp is not a published npm package.
-for opt in playwright surfpool chainstack phantom nansen memsearch; do
+# Opt-in (docs/configuration.md "Optional MCP servers"): playwright needs browser binaries,
+# surfpool the surfpool CLI, chainstack and nansen a key for most or all of their tools.
+# supabase needs an account and only belongs in a project with ?read_only=true&project_ref,
+# since its default feature set hands over 12 write tools including an unrestricted
+# execute_sql. phantom is documented but not even offered by /setup-mcp — 29 tools that
+# sign, transfer and trade, with no key once logged in. memsearch-mcp is not published.
+for opt in playwright surfpool chainstack phantom nansen supabase memsearch; do
   assert_file_not_contains "$MCP_FILE" "\"$opt\"" ".mcp.json leaves $opt opt-in"
 done
 # Nothing a default server needs is missing on a fresh machine: npx or a remote URL

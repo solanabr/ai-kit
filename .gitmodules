@@ -67,3 +67,6 @@
 [submodule ".claude/skills/ext/writer-style-skill"]
 	path = .claude/skills/ext/writer-style-skill
 	url = https://github.com/solanabr/writer-style-skill
+[submodule ".claude/skills/ext/supabase"]
+	path = .claude/skills/ext/supabase
+	url = https://github.com/supabase/agent-skills
