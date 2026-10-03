@@ -444,6 +444,7 @@
       "Edit(/.claude/security.json)",
       "Edit(/.claude/hooks/**)",
       "Edit(/.mcp.json)",
+      "Edit(/.safe-ai-skill/**)",
       "Edit(~/.claude/settings.json)",
       "Edit(~/.claude/**)",
       "Edit(//**/managed-settings.json)",

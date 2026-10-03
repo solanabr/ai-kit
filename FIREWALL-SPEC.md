@@ -76,7 +76,7 @@ Expressed as `permissions.deny` plus a matching `sandbox.filesystem.denyRead`/`d
 ```
 Edit(/.claude/settings.json), Edit(/.claude/settings.local.json),
 Edit(/.claude/settings.*.json), Edit(/.claude/security.json),
-Edit(/.claude/hooks/**), Edit(/.mcp.json),
+Edit(/.claude/hooks/**), Edit(/.mcp.json), Edit(/.safe-ai-skill/**),
 Edit(~/.claude/settings.json), Edit(~/.claude/**),
 Edit(//**/managed-settings.json)
 ```
