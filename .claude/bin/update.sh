@@ -229,6 +229,39 @@ if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/$CONFIG_NAME/skills/ext" ]; then
   done < <(find "$TARGET_DIR/$CONFIG_NAME/skills/ext" -name .git -type f)
 fi
 
+# A pack's own submodules are pinned by that pack's author, not by the kit. install.sh
+# does not fetch them, so a project should not receive them here either: the clone at the
+# top of this file uses --recurse-submodules and that line is inside the frozen region,
+# so the pruning happens after the copy instead of before the fetch. The registry's
+# "vendored" field lists the paths and the commits they were pinned at; the packs that use
+# one test for it and fall back when it is absent. To opt in, clone it yourself at the
+# recorded commit.
+if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/$CONFIG_NAME/skills/ext" ]; then
+  REG_FILE="$TARGET_DIR/$CONFIG_NAME/skills/skill-registry.json"
+  if [ -f "$REG_FILE" ]; then
+    while IFS= read -r nested; do
+      [ -n "$nested" ] || continue
+      case "$nested" in */*) ;; *) continue ;; esac
+      rm -rf "$TARGET_DIR/$CONFIG_NAME/skills/ext/${nested:?}"
+    done < <(awk -F'"' '
+      /^      "id": "/            { id = $4 }
+      /^      "vendored": \{/     { for (i = 4; i <= NF; i += 4) if ($i != "") print id "/" $i }
+    ' "$REG_FILE")
+  fi
+fi
+
+# The packs just copied should be at the commits the registry records. The copy has
+# already happened by here, so this reports rather than blocks — a fresh install.sh run
+# refuses the same mismatch outright.
+if [ "$DRY_RUN" = false ] && [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
+  PIN_SRC="$TEMP_DIR/repo"
+  [ -n "$LOCAL_SRC" ] && PIN_SRC="$LOCAL_SRC"
+  if ! PIN_REPORT="$(bash "$TEMP_DIR/repo/.claude/bin/skills.sh" pins "$PIN_SRC" 2>&1)"; then
+    echo "Note: a skill pack is not at the commit skill-registry.json records for it:"
+    printf '%s\n' "$PIN_REPORT" | sed 's/^/  /'
+  fi
+fi
+
 # Merge .gitmodules (don't overwrite — user may have their own submodules)
 if [ -f "$TEMP_DIR/repo/.gitmodules" ]; then
   if [ ! -f "$TARGET_DIR/.gitmodules" ]; then
