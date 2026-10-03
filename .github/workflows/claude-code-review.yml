@@ -90,7 +90,8 @@ jobs:
               every user session and subagent, kept under 60 lines). A wrong deploy, verify,
               upgrade-authority, keypair or Token-2022 instruction makes users lose funds or
               programs, so check such claims against the cited source.
-            - Ripple Map drift: counts, README/QUICK-START trees, the plugin manifest version
+            - Ripple Map drift: counts, the docs/repo-structure.md and QUICK-START trees, the
+              docs/ reference tables (agents, commands, skill packs), the plugin manifest version
               (= .claude/VERSION) and the tests that hardcode them move together. Behaviour
               changes come with tests in tests/, and validate.sh still passes.
 

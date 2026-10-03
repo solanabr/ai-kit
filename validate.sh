@@ -473,6 +473,7 @@ import glob, re
 RULE = re.compile(r"\b(Read|Edit|Write|Bash)\((/(?!/)[^)]*)\)")
 hits = []
 files = ["README.md", "QUICK-START.md", "CLAUDE-solana.md"]
+files += sorted(glob.glob("docs/*.md"))
 files += sorted(glob.glob(".claude/commands/*.md")) + sorted(glob.glob(".claude/skills/*.md"))
 for path in files:
     try:
