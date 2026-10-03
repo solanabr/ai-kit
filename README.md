@@ -249,6 +249,8 @@ A pack's *own* submodules are not fetched: they are pinned by that pack's author
 
 **Installing extensions.** At install time: `bash install.sh --with sendai,jupiter` (`--with all` installs every pack). Later: `/add-skill <id>` or `bash .claude/bin/skills.sh add <id>` (`.agents/bin/` for `--agents` installs); `skills.sh list` shows every pack and when to use it; `skills.sh add --force <id>` reinstalls a pack. Agents do the same on their own: each hub row, agent and command line that links into an extension names its install command. `/update` keeps the extensions a project installed (recorded in `.claude/skills/extensions.txt`); installs made before the core/extension split keep every pack. When a kit update drops a pack from the registry, `/update` removes it from projects the kit installed it in (`skills/kit-packs.txt`, `extensions.txt`); folders you put in `skills/ext/` yourself stay.
 
+**Finding the right pack.** You should not have to know the catalogue for the kit to use it. [`.claude/skills/skill-packs/SKILL.md`](.claude/skills/skill-packs/SKILL.md) indexes work to packs — program development and formal verification, landing pages and UI design, animation, NFTs, DeFi SDKs, Unity games, mobile, RPC and indexing, audits, pitch and go-to-market, data visualization — covering both the pinned extensions above and the unpinned add-ons below. Only its one-paragraph description loads every session (about 130 tokens), which is what lets a task in one of those domains surface a pack unprompted; the table itself loads when something reads the file. The hub, `/add-skill` and the anchor-, pinocchio- and frontend-engineer agents all route into it. It *suggests*: the install is a network fetch plus a write under `.claude/skills/`, so it names the one-line command and waits for your yes, and a pack that is inert without an API key you have not set is raised as a question rather than installed.
+
 **Updates.** Dependabot opens one grouped pull request a week that bumps the pins (`.github/dependabot.yml`, with a 7-day cooldown on upstream commits). CI runs `validate.sh` on it, which resolves every `ext/` link in the hub, agents, commands and local skills against the new pins, so a path an upstream pack moved fails the PR instead of a user's session.
 
 **Adding a pack.** `git submodule add <url> .claude/skills/ext/<id>`, then an entry in [`skill-registry.json`](.claude/skills/skill-registry.json) with `tier`, `path`, `triggers` and the install command, a hub route, and a row in the hub's Extensions table; `tests/test_skill_extensions.sh` checks they agree. New packs come in as extensions from official or organization-owned repos with a permissive license and recent activity.
@@ -364,7 +366,7 @@ Featured add-ons by domain:
 
 For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos; install the solana-new extension first).
 
-See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats. The same file records the tier and triggers of each pinned pack above; entries without a tier are these opt-in add-ons.
+See [`skill-registry.json`](.claude/skills/skill-registry.json) for the complete extended catalog — every entry with its install command, license, and safety caveats. The same file records the tier and triggers of each pinned pack above; entries without a tier are these opt-in add-ons. The registry is a reference, not a browsing surface: [`skill-packs`](.claude/skills/skill-packs/SKILL.md) is the short index that puts the useful add-ons next to the work they suit, with the caveat (no license, stale, writes to `settings.json`) spelled out for each.
 
 ## Use with Codex, Grok Build and other agents
 
@@ -450,6 +452,7 @@ The pin moves by hand, not through Dependabot: review the upstream diff of the t
     │   │   ├── quicknode-anchor/      # Anchor/Quasar reference files (quarantined)
     │   │   └── eth-to-sol/            # EVM/Solidity → Anchor porting
     │   ├── skill-registry.json     # Pack tiers (core/extension) + opt-in add-on catalog
+    │   ├── skill-packs/            # Work → pack index: which extension or add-on to offer (local)
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
     │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
