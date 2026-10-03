@@ -12,15 +12,24 @@ Merged to `main` after the 2.3.0 bump (#168); not yet in a tagged release.
 - **`position-manager-skill`, `content-gen-skill` and `writer-style-skill` extensions** (#176).
 - **`validate.sh` fails when the shipped `.claude/VERSION` falls inside `update.sh`'s retired-defaults migration case** — if it matched, `/update` would strip settings the user of a current install set themselves. `tests/test_validate.sh` covers both outcomes (#127).
 - **Registry install commands are checked** (#177) — each `install.command` matches its declared method, an npmjs.com source names the package the command installs, and (network-gated) every npx package resolves. It caught a nonexistent `@pythnetwork/pyth-mcp` and two HTTP servers mislabelled as npx.
+- **Submodule review job** (#146) — on every PR that moves an `ext/` pin, CI diffs each pack from the merge-base to the new commit and flags new hooks, scripts and executables, network hosts, `curl | sh`, `postinstall`, credential names and licence changes in the job summary and one PR comment. The Dependabot cooldown comment no longer calls the delay a security control, and `CLAUDE.md` says pin bumps are never auto-merged.
+- **`safe-ai-skill` project policy** (#149) — `install.sh` writes `.safe-ai-skill/policy.yaml` (only `verify_skills_dirs: [".claude/skills"]`, so the SessionStart sweep stops touching `~/.claude/skills`) and `/update` adds it when missing; the firewall denies agent edits to it (`RULE_SET_VERSION` 3). The `ext/` false positives still need upstream solanabr/safe-ai-skill#5.
 
 ### Changed
 - **`context-mode` is a default MCP server** (#176). `update.sh`'s retired-defaults migration no longer removes it, and FIREWALL-SPEC.md now says its `ctx_execute` runs outside every rule and hook, so shipping it ends the egress guarantee unless the user removes it. Chainstack, Phantom and Nansen are opt-in servers in `/setup-mcp`.
 - **`eth-to-sol` is a documented add-on, not a pinned extension** (#176) — it has no license, so vendoring it redistributed an all-rights-reserved tree.
 - **README slimmed to install and orientation** (#172) — the spec (plugin route, firewall mechanism, skill-pack tables, agent and command reference, MCP catalogue) moved to `docs/`, which `install.sh` never copies into a project.
+- **Default MCP servers are pinned to exact versions** (#140): `helius-mcp@2.2.0`, `@upstash/context7-mcp@4.1.1`, `context-mode@1.0.169`. `validate.sh` rejects `@latest` and unversioned `npx` servers. Existing installs keep their `.mcp.json`; re-pin by hand.
+- **One build rule for deploy and verify** (#139) — `anchor build` for the IDL, then `solana-verify build` last, and deploy the `target/deploy/` binary it produces, which is what `solana-verify` / `anchor verify` reproduce. `CLAUDE-solana.md`, `/deploy`, `/build-program`, `/setup-ci-cd`, `/audit-solana`, `deployment.md` and two agents now agree.
 
 ### Fixed
 - **`trident fuzz run` gets `--with-exit-code`** in `/test-rust` and `/audit-solana` (#175); without it a failing invariant exits 0.
 - **Registry pins for `metaplex` and `cloudflare` synced** (`b7c9c3e`) after their gitlinks moved without `skills.sh pins --write`, which left `validate.sh` and every install-dependent suite failing on `main`.
+- **CI template** (#152) — `.github/templates/claude-code.yml` installed Solana with `solana-labs/setup-solana@v1`, which 404s. It now installs Agave from release.anza.xyz and Anchor through avm at the project's `Anchor.toml` / `rust-toolchain.toml` versions, and CI resolves every `uses:` under `.github/`.
+- **Deploy commands that aborted or hit the wrong account** (#139) — `verify-from-repo --remote` is replaced by `remote submit-job`, `anchor verify` passes `--current-dir` and the cluster after `--`, and legacy IDL accounts close with `anchor legacy-idl close`.
+- **anthropic-skills licence gate** (#142) — the Apache-2.0 check compares the normalised licence text instead of two substrings, accepts only Anthropic's copyright line in the appendix, refuses "All rights reserved", checks nested folders, runs the denylist before the lock short-circuit, treats a `pending` lock as not installed, and the offline pin check fails unless `ALLOW_OFFLINE=1`.
+- **`extensions.txt` glob expansion** (#181) — ids are quoted everywhere, and each line is trimmed, lowercased and dropped with a warning unless it is an extension id, so a `*` or a mangled line can't become a recorded pack.
+- **Plugin installs have a next step for `ext/` links** (#120) — the plugin hub names the solana-dev MCP, the kit site and the registry `source` when a pack isn't there, and `test_plugin.sh` checks every `ext/` link and `skills.sh add` hint in plugin agents, commands and skills names a pack with a `source`.
 
 ## [2.3.0] - 2026-10-03
 
