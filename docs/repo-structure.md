@@ -51,7 +51,9 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   │   ├── helius/                # Official Helius infra + SVM internals
     │   │   ├── alchemy/               # Official Alchemy (Solana RPC, DAS, gRPC)
     │   │   ├── quicknode-anchor/      # Anchor/Quasar reference files (quarantined)
-    │   │   └── eth-to-sol/            # EVM/Solidity → Anchor porting
+    │   │   ├── position-manager-skill/ # CLMM LP lifecycle (Orca, Raydium, Meteora)
+    │   │   ├── content-gen-skill/      # Educational content pipeline (courses, explainers)
+    │   │   └── writer-style-skill/     # Prose in a named author's voice
     │   ├── skill-registry.json     # Pack tiers (core/extension) + opt-in add-on catalog
     │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
     │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)

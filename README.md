@@ -22,8 +22,8 @@ A complete `.claude/` configuration that turns Claude into a Solana development 
 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research) — [full table](docs/agents-and-commands.md#agents)
 - **32 workflow commands** for building, testing, deploying, profiling, migrating, and committing — [full table](docs/agents-and-commands.md#commands)
-- **3 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev) and library docs (Context7), plus opt-in browser automation (Playwright), local-validator / mainnet-fork control (Surfpool) and context optimization (context-mode)
-- **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands and egress — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
+- **4 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev), library docs (Context7) and context optimization (context-mode), plus opt-in browser automation (Playwright) and local-validator / mainnet-fork control (Surfpool)
+- **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands, egress and `context-mode`'s code executor — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
 - **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — three installed by default, the rest on demand ([skill-packs.md](docs/skill-packs.md))
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
@@ -112,6 +112,8 @@ Its engine ships prebuilt for macOS and Linux (x64, arm64) and fails closed else
 
 One tier is in force per project. `.claude/security.json` names it; `/firewall` (or `/firewall <tier>`) switches it and rewrites the kit-owned rules in `.claude/settings.json` to match. The default is **Relaxed**. A switch takes effect in the **next** session: permission and sandbox rules are read once at session start, so the session you are in keeps the rules it started with, whether the change was a tightening or a loosening.
 
+The hooks also gate `context-mode`'s MCP tools at every tier, and Medium and High refuse its code executor and arbitrary-path reader outright — a local MCP server runs outside the OS sandbox, so the two stricter tiers cannot keep their read and egress promises while it is callable. [Details](docs/firewall.md#what-the-tiers-do-not-do).
+
 | Tier | Readable | Writable | On-chain | Use it for |
 |------|----------|----------|----------|------------|
 | **Off** | Everything your user account can read. The sandbox is off. | Everything. | The hooks still run: mainnet and authority writes stop for approval, irreversible ones are refused. | A machine you have already isolated — a container or throwaway VM — or a session where you supply your own policy in `~/.claude/settings.json`. |
@@ -119,7 +121,7 @@ One tier is in force per project. `.claude/security.json` names it; `/firewall` 
 | **Medium** | Relaxed's denials, plus the Solana config dir's `*.json` (the wallet files; `cli/config.yml` stays readable), session transcript `*.jsonl`, and the host credential files Relaxed leaves open. | The repo and the toolchain carve-outs. Writes outside the repo ask. The project's `.env` becomes **write-deny** — nothing in a Solana build legitimately rewrites it, and an ask there is walked around by `python3 -c`, `perl -pi` or `sed -i`. | As Relaxed, plus `npm`/`cargo publish` and `gh api` denied, and force push asks. | Reading code you did not write — audits, dependency triage, a repo you cloned to look at. Interactive sessions only. |
 | **High** | Only the working directory and the toolchain roots the build needs. `permissions.blockReadsOutsideWorkingDirectories` is on and the sandbox denies `~/` with a narrow `allowRead` carve-out for `~/.cargo`, `~/.rustup` and the Solana caches. The project's `.env` becomes read-deny. | The repo plus those toolchain roots (cargo needs *write* to the registry cache or the build dies); everything else outside the repo is denied. The project's `.env` stays writable, since the model can no longer read it back. | Mainnet writes are denied outright rather than asked. Recoverable git operations ask. | A repo you actively distrust, or a session on a machine that holds production credentials. Interactive sessions only. |
 
-Which gate stops what, how a tier is generated, and — at length — **what the tiers do not do**: [docs/firewall.md](docs/firewall.md). Short version: High and Medium are interactive-only, an allowlist is not something the kit can enforce, MCP servers are ungateable at every tier, and the tier is not immune to the agent.
+Which gate stops what, how a tier is generated, and — at length — **what the tiers do not do**: [docs/firewall.md](docs/firewall.md). Short version: High and Medium are interactive-only, an allowlist is not something the kit can enforce, an MCP server runs outside the sandbox so only the hooks reach it (and at Medium and High `context-mode`'s executor is refused outright), and the tier is not immune to the agent.
 
 ## Full documentation
 
