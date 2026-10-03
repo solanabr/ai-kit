@@ -166,7 +166,7 @@ Knowledge loads on-demand:
 - PlaySolana/PSG1 integration
 - Security auditing
 
-Only the core skill packs (solana-dev, safe-solana-builder) install by default. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too (README: "Use with Codex, Grok Build and other agents").
+Only the core skill packs (solana-dev, auditor-skill, colosseum) install by default. `colosseum` needs one sign-in per machine before it can answer anything: `npx @colosseum-org/copilot-connect login` (Node 20+); `/doctor` reports whether that is in place. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too (README: "Use with Codex, Grok Build and other agents").
 
 Need a capability the kit doesn't bundle? See [`.claude/skills/skill-registry.json`](.claude/skills/skill-registry.json) — a curated catalog of opt-in skills/MCPs/repos the agent can install on request, at your own expense (not bundled by default).
 
@@ -210,11 +210,11 @@ your-project/
 │   │   ├── SKILL.md           # Unified hub (start here)
 │   │   ├── ext/               # Skill packs: core by default, extensions as installed
 │   │   │   ├── solana-dev/        # Core Solana (Foundation) (core)
-│   │   │   ├── safe-solana-builder/ # Security-first code gen (core)
+│   │   │   ├── auditor-skill/     # Security audit checklists + vectors (core)
+│   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
-│   │   │   │                      # helius, alchemy, trailofbits, ghostsecurity, defending-code,
-│   │   │   │                      # qedgen, quicknode-anchor, eth-to-sol, solana-game,
-│   │   │   │                      # solana-mobile, cloudflare, vercel, solana-new, colosseum
+│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, eth-to-sol,
+│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer

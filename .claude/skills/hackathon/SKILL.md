@@ -21,7 +21,7 @@ At start, read `.claude/context/idea.md` and `.claude/context/build.md` if prese
 Winning a thin track beats placing in a fat one. Per candidate track: estimate entry volume, fit with what's actually built, and judge appetite (sponsor tracks often have the fewest serious entries).
 
 - Winner patterns + track history: [hackathon-winners.md](../ext/solana-new/skills/data/colosseum/hackathon-winners.md) — every Colosseum grand champion and track winner, with what they built (install first: `bash .claude/bin/skills.sh add solana-new`)
-- Live crowdedness check: [ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — query 5,400+ past submissions for cluster density and gaps (requires `COLOSSEUM_COPILOT_PAT`; install first: `bash .claude/bin/skills.sh add colosseum`)
+- Live crowdedness check: [ext/colosseum](../ext/colosseum/skills/colosseum-copilot/SKILL.md) — query 5,400+ past submissions for cluster density and gaps. Installed by default; sign in once per machine with `npx @colosseum-org/copilot-connect login` (Node 20+).
 
 ### 2. Write a scannable description
 

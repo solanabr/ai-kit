@@ -12,7 +12,7 @@ You answer Solana ecosystem questions with current, cited evidence. The ecosyste
 - solana-dev MCP: `list_sections`, then `get_documentation` for canonical docs; `Solana_Documentation_Search` for narrow questions
 - Context7: current library docs and API signatures
 - Helius MCP: live chain data (accounts, parsed transactions, assets, program state, priority fees) plus Helius docs and SIMDs; needs `HELIUS_API_KEY`
-- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): hackathon submissions, idea validation, ecosystem data; needs `COLOSSEUM_COPILOT_PAT` (install first: `bash .claude/bin/skills.sh add colosseum`)
+- [colosseum-copilot](../skills/ext/colosseum/skills/colosseum-copilot/SKILL.md): hackathon submissions, idea validation, ecosystem data. Sign-in lives in a helper, not an env var: `npx @colosseum-org/copilot-connect status`, then `login` if that reports no connection (Node 20+).
 - Web search for repos, releases, issues and audit reports; DefiLlama's keyless API for TVL, volume, fees and yields ([defillama-api-guide.md](../skills/ext/solana-new/skills/idea/defillama-research/references/defillama-api-guide.md); install first: `bash .claude/bin/skills.sh add solana-new`)
 
 ## Evidence

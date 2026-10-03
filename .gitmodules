@@ -10,9 +10,6 @@
 [submodule ".claude/skills/ext/cloudflare"]
 	path = .claude/skills/ext/cloudflare
 	url = https://github.com/cloudflare/skills.git
-[submodule ".claude/skills/ext/trailofbits"]
-	path = .claude/skills/ext/trailofbits
-	url = https://github.com/trailofbits/skills.git
 [submodule ".claude/skills/ext/qedgen"]
 	path = .claude/skills/ext/qedgen
 	url = https://github.com/QEDGen/solana-skills.git
@@ -22,21 +19,12 @@
 [submodule ".claude/skills/ext/solana-mobile"]
 	path = .claude/skills/ext/solana-mobile
 	url = https://github.com/solana-mobile/solana-mobile-skills.git
-[submodule ".claude/skills/ext/safe-solana-builder"]
-	path = .claude/skills/ext/safe-solana-builder
-	url = https://github.com/frankcastleauditor/safe-solana-builder.git
 [submodule ".claude/skills/ext/vercel"]
 	path = .claude/skills/ext/vercel
 	url = https://github.com/vercel-labs/agent-skills.git
 [submodule ".claude/skills/ext/solana-new"]
 	path = .claude/skills/ext/solana-new
 	url = https://github.com/sendaifun/solana-new
-[submodule ".claude/skills/ext/ghostsecurity"]
-	path = .claude/skills/ext/ghostsecurity
-	url = https://github.com/ghostsecurity/skills
-[submodule ".claude/skills/ext/defending-code"]
-	path = .claude/skills/ext/defending-code
-	url = https://github.com/anthropics/defending-code-reference-harness
 [submodule ".claude/skills/ext/jupiter"]
 	path = .claude/skills/ext/jupiter
 	url = https://github.com/jup-ag/agent-skills
@@ -58,3 +46,6 @@
 [submodule ".claude/skills/ext/alchemy"]
 	path = .claude/skills/ext/alchemy
 	url = https://github.com/alchemyplatform/skills
+[submodule ".claude/skills/ext/auditor-skill"]
+	path = .claude/skills/ext/auditor-skill
+	url = https://github.com/solanabr/auditor-skill
