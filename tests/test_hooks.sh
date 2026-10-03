@@ -461,6 +461,40 @@ run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute \
   '{"language":"python","code":"import os; os.system(\"solana program deploy --url mainnet-beta ./t.so\")"}'
 assert_eq "ask" "$DECISION" "ctx_execute: a mainnet shell-out from python code is gated"
 
+# --- Oversize payloads fail closed. A hook that times out does NOT block the call, so a
+# --- payload big enough to blow the 10s budget would otherwise be an evasion by padding.
+BIG_OK="$(python3 -c '
+import json
+print(json.dumps({"language": "python",
+                  "code": "\n".join("print(%d)" % i for i in range(100))}))')"
+BIG_OVER="$(python3 -c '
+import json
+print(json.dumps({"language": "python",
+                  "code": "\n".join("print(%d); d = {\"k\": [1,2,3]}" % i for i in range(2000))}))')"
+run_mcp "$M_SECRETS" relaxed mcp__context-mode__ctx_execute "$BIG_OK"
+assert_eq "silent" "$DECISION" "a payload inside the inspectable size is analysed, not refused"
+for G in "$M_SECRETS" "$M_EGRESS"; do
+  run_mcp "$G" relaxed mcp__context-mode__ctx_execute "$BIG_OVER"
+  assert_eq "deny" "$DECISION" "an oversize MCP payload is refused rather than left uninspected"
+done
+# The on-chain guard keeps its cheap prefilter: a payload that never mentions solana,
+# anchor or spl-token exits before the parse, oversize or not, because it is not that
+# guard's business. Padding is still not an evasion -- a payload carrying an on-chain
+# verb passes the prefilter and then meets the same cap.
+run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute "$BIG_OVER"
+assert_eq "silent" "$DECISION" "the on-chain guard ignores an oversize payload with no on-chain verb in it"
+BIG_OVER_CHAIN="$(python3 -c '
+import json
+body = "\n".join("print(%d); d = {\"k\": [1,2,3]}" % i for i in range(2000))
+print(json.dumps({"language": "python", "code": body + "\nos.system(\"solana balance\")"}))')"
+run_mcp "$M_CHAIN" relaxed mcp__context-mode__ctx_execute "$BIG_OVER_CHAIN"
+assert_eq "deny" "$DECISION" "an oversize payload that does carry an on-chain verb is refused"
+# Bash is deliberately exempt: a pattern miss there still meets the OS sandbox, so there
+# is no fail-open to protect against and capping it would break legitimate long scripts.
+run_bash "$M_SECRETS" relaxed "$(python3 -c '
+print("\n".join("echo %d" % i for i in range(4000)))')"
+assert_eq "silent" "$DECISION" "a long Bash command is not size-capped (the sandbox backs it up)"
+
 # --- No false positives. Prose fields are prose, and ordinary work stays silent.
 for G in "$M_SECRETS" "$M_CHAIN" "$M_EGRESS"; do
   run_mcp "$G" relaxed mcp__context-mode__ctx_search \

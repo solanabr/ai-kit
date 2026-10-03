@@ -195,6 +195,25 @@ $(printf '%s' "$_v" | tr '\042\047\140' '   ')
 
   KIT_CMD=$_acc
   [ -z "$KIT_CMD" ] || KIT_MCP=1
+
+  # Fail closed above a size the hook can analyse inside its budget.
+  #
+  # Measured on the shipped corpus: a 75 KB non-shell payload costs ~7.3 s across the
+  # three guards, and each hook is registered with timeout 10.  A hook that times out
+  # does not block the call, so without this cap a payload could be walked past the
+  # whole corpus simply by padding it — the cheapest evasion there is, and the one with
+  # no sandbox behind it to catch the miss.  Truncating instead would be worse: it
+  # inspects the head and silently ignores the tail.
+  #
+  # 32 KB leaves roughly a 3x margin.  A real ctx_execute program is a few KB; anything
+  # this large is either machine-generated data that belongs in ctx_index, or padding.
+  # The user can still run it through Bash, where the sandbox backs up the patterns.
+  if [ ${#KIT_CMD} -gt 32768 ]; then
+    kit_deny "carries a ${#KIT_CMD}-byte payload, past the 32 KB the firewall hooks can
+inspect within their timeout. A hook that times out does not block the call, so an
+oversize payload is refused rather than waved through. Split it, move the data into
+ctx_index, or run it through Bash where the OS sandbox also applies."
+  fi
 }
 
 # kit_parse — fills KIT_CMD, KIT_PERMISSION_MODE, KIT_CWD from $KIT_INPUT.
