@@ -6,6 +6,7 @@
     "extension": "Pinned by the kit the same way and installed on demand: bash .claude/bin/skills.sh add <id>. An entry with a commit is not a submodule: skills.sh fetches the skills it lists from its source at that commit into .claude/skills/<name>/.",
     "add-on": "Entries without a tier are opt-in tools the kit does not pin. Install one only when the user asks."
   },
+  "triggers": "Display text: the INSTALL WHEN column of skills.sh list, for people and agents choosing a pack. Nothing matches on it.",
   "entries": [
     {
       "id": "solana-dev",
