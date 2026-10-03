@@ -10,6 +10,8 @@ Find the task, read the linked file, and follow further links only as needed. Pa
 
 Every install carries the core packs, solana-dev and safe-solana-builder. The other `ext/` packs are extensions: the kit pins them, and a project installs one when a task needs it. A row that links into an extension gives its install command; run it when the linked folder is missing (`/update` keeps what you install). The Extensions table at the end lists each one with when to use it.
 
+The tables below answer "what do I read for this task". When the task instead suggests a pack this project has not installed — formal verification for program code, a design or animation pack for a landing page — [skill-packs](skill-packs/SKILL.md) maps work to packs, add-ons included, and gives the rules for offering one.
+
 When sources overlap: the program-code house rules in the project instruction file (`CLAUDE.md`, or `AGENTS.md` in `--agents` installs) win; a protocol's official skill wins for its own SDK (Jupiter, Metaplex, Helius, MagicBlock, Alchemy); [ext/solana-dev](ext/solana-dev/skills/solana-dev/SKILL.md) wins for general Solana work; sendai and community skills fill gaps only.
 
 ## Programs
@@ -116,4 +118,4 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 
 ## Add-ons
 
-[skill-registry.json](skill-registry.json) records each pack's tier, triggers, license and source. Its entries without a tier are opt-in tools the kit doesn't pin; install one only when the user asks and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Wider ecosystem catalogs: [ext/solana-new/cli/data/](ext/solana-new/cli/data/) (install: `bash .claude/bin/skills.sh add solana-new`).
+[skill-registry.json](skill-registry.json) records each pack's tier, triggers, license and source. Its entries without a tier are opt-in tools the kit doesn't pin; install one only when the user asks and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. [skill-packs](skill-packs/SKILL.md) indexes the useful ones by the work they suit (design, animation, motion, iOS simulator, data viz, market data), so you don't have to read the whole registry to find one. Wider ecosystem catalogs: [ext/solana-new/cli/data/](ext/solana-new/cli/data/) (install: `bash .claude/bin/skills.sh add solana-new`).
