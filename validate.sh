@@ -387,6 +387,16 @@ if [ -f .claude/bin/firewall.sh ] && [ -f .claude/security.json ]; then
       else
         check "firewall.sh relaxed -> high -> relaxed restores the original bytes" 1
       fi
+      # The committed settings.json has to be what the generator produces for the
+      # declared tier. A rule added to it by hand looks right in the diff and passes
+      # every check above, yet reaches no user: install.sh copies this file, so the
+      # first apply adopts the rule into enforced.ruleIds and the next one deletes it.
+      fw_tier="$(python3 -c "import json; print(json.load(open('.claude/security.json')).get('tier') or 'relaxed')" 2>/dev/null || echo relaxed)"
+      if fw_run "$fw_tier" && cmp -s "$fw_tmp/.claude/settings.json" .claude/settings.json; then
+        check "settings.json is what firewall.sh generates for the declared tier ($fw_tier)" 0
+      else
+        check "settings.json is what firewall.sh generates for the declared tier ($fw_tier) — run: bash .claude/bin/firewall.sh apply $fw_tier" 1
+      fi
     else
       check "firewall.sh apply <tier> runs in a clean copy" 1
     fi

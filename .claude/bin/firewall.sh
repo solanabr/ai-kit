@@ -297,6 +297,12 @@ ALLOW = [
         "Bash(cross *)",
         "Bash(cargo-generate *)",
         "Bash(solana-install *)",
+        # Kit-owned script, so /add-skill can install the extension pack an agent is
+        # told to link into before using it. Only list and add: prune, select and
+        # uninstalled still prompt. add fetches commit-pinned packs and writes nothing
+        # outside skills/ext/, which is narrower than the curl and npm rules above.
+        "Bash(bash .claude/bin/skills.sh list)",
+        "Bash(bash .claude/bin/skills.sh add *)",
     ],
     [
         "Read(*)",

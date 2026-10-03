@@ -16,7 +16,7 @@
     "tier": "relaxed",
     "ruleSetVersion": 1,
     "target": ".claude/settings.json",
-    "sha256": "da331a949ea4905556983519e0e74d8589383dd2b8d45db84fb9d9e04ff5e0ca",
+    "sha256": "3cce7ed89e2c02b4ca1e973287425ff732f8f7bf8630933829984d134f248a04",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -173,6 +173,8 @@
       "Bash(cross *)",
       "Bash(cargo-generate *)",
       "Bash(solana-install *)",
+      "Bash(bash .claude/bin/skills.sh list)",
+      "Bash(bash .claude/bin/skills.sh add *)",
       "Read(*)",
       "Edit(*)",
       "Write(*)",
