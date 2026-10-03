@@ -21,6 +21,7 @@ When sources overlap: the program-code house rules in the project instruction fi
 | Pinocchio, CU optimization | [programs/pinocchio.md](ext/solana-dev/skills/solana-dev/references/programs/pinocchio.md) |
 | Account and PDA design | [programs/design-patterns.md](ext/solana-dev/skills/solana-dev/references/programs/design-patterns.md) |
 | Tests: LiteSVM, Mollusk, Surfpool | [testing.md](ext/solana-dev/skills/solana-dev/references/testing.md), [surfpool/overview.md](ext/solana-dev/skills/solana-dev/references/surfpool/overview.md) |
+| Fuzzing a program with Trident (harness API, invariants) | [solana-fuzz](ext/solana-fuzz/solana-fuzz/SKILL.md) from [belumume](ext/solana-fuzz/); run it as `trident fuzz run fuzz_0 --with-exit-code` -- without that flag a failing invariant is swallowed and the run exits 0 (install: `bash .claude/bin/skills.sh add solana-fuzz`) |
 | Error codes, failing transactions | [common-errors.md](ext/solana-dev/skills/solana-dev/references/common-errors.md) |
 | Toolchain version pairing | [compatibility-matrix.md](ext/solana-dev/skills/solana-dev/references/compatibility-matrix.md) |
 | Security review | [security.md](ext/solana-dev/skills/solana-dev/references/security.md), then [auditor-skill](ext/auditor-skill/SKILL.md) for the audit itself (scope-gated checklists, 1,424 items; see Security tooling below) |
@@ -93,6 +94,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | Extension | Install when the task involves | Install |
 |-----------|--------------------------------|---------|
 | qedgen | Formal verification with Lean 4 (needs the `qedgen` CLI, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY`) | `bash .claude/bin/skills.sh add qedgen` |
+| solana-fuzz | Trident fuzzing: the v0.12.0 harness API, invariant post-conditions, and the `--with-exit-code` flag a run needs in order to fail | `bash .claude/bin/skills.sh add solana-fuzz` |
 | sendai | DeFi and other protocols (Raydium, Orca, Meteora, Kamino, marginfi, Sanctum, Pyth, Switchboard, Squads, pump.fun, bridges), web3.js to Kit migration | `bash .claude/bin/skills.sh add sendai` |
 | jupiter | Jupiter swap, lend, perps, trigger and recurring orders | `bash .claude/bin/skills.sh add jupiter` |
 | metaplex | NFTs: Core, Token Metadata, Bubblegum, Candy Machine, Umi | `bash .claude/bin/skills.sh add metaplex` |

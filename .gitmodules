@@ -49,3 +49,6 @@
 [submodule ".claude/skills/ext/auditor-skill"]
 	path = .claude/skills/ext/auditor-skill
 	url = https://github.com/solanabr/auditor-skill
+[submodule ".claude/skills/ext/solana-fuzz"]
+	path = .claude/skills/ext/solana-fuzz
+	url = https://github.com/belumume/solana-fuzz.git

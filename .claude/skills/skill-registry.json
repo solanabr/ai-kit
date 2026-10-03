@@ -87,6 +87,25 @@
       "tags": ["formal-verification", "lean4", "security"]
     },
     {
+      "id": "solana-fuzz",
+      "name": "Solana Fuzz Skill",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "testing-qa",
+      "path": ".claude/skills/ext/solana-fuzz",
+      "commit": "f44b71054b7a164224aedb6e4c9427e2aa9a5ff7",
+      "description": "The Trident harness API at a pinned version, plus the flag that makes a fuzz run mean anything. Two things the kit does not already have: the v0.12.0 call surface written out (#[flow_executor], #[init]/#[flow]/#[end], process_transaction, get_account_with_type and its discriminator offset, PDA seeds in fuzz_accounts) so an agent stops authoring Trident calls from memory against an API that moves every minor version; and the --with-exit-code trap, where a failing invariant is swallowed in parallel mode and the run still exits 0, so a green CI job proves nothing. No other pinned pack mentions that flag, and /test-rust and /audit-solana both print trident fuzz run without it. It layers under auditor-skill rather than overlapping: that pack already calls Trident the default primary harness and ships 19 invariants phrased as Trident post-conditions, deciding what to assert; this one is how to build the harness that asserts it. Ships one runnable Anchor example that goes red on a planted wrapping_sub bug and green on the fix, pins Trident 0.12.0 stable over the 0.13 RC, and marks its own regression and trident compare surface as unverified.",
+      "triggers": ["Trident", "fuzzing", "fuzz test", "invariant testing", "property testing"],
+      "source": "https://github.com/belumume/solana-fuzz",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add solana-fuzz", "env": [] },
+      "license": "MIT",
+      "maintainer": "belumume",
+      "signal": { "stars": 3, "last_commit": "2026-08-12", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "clean; no env keys, no nested submodules, and it only writes test code. The Trident CLI it drives is a separate cargo install trident-cli --locked, and a fuzz run builds and executes the program under test, so run it on code you intend to build. Pinned pre-fix: the worked example still pins anchor-lang 0.31 and uses the pre-1.0 space = 8 + INIT_SPACE form (belumume/solana-fuzz#1, fix open in #2). That is the example program only -- the harness API this pack is pinned for is unaffected, since trident-tests/ depends on borsh and trident-fuzz and not on anchor-lang.",
+      "tags": ["testing", "fuzzing", "trident", "invariants", "solana", "anchor"]
+    },
+    {
       "id": "sendai",
       "name": "SendAI Skills",
       "type": "skill",
