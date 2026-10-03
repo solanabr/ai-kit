@@ -209,7 +209,7 @@ if [ "$AGENTS_ONLY" = true ]; then
   strip_md_comments "$R/CLAUDE-solana.md"
   agents_paths "$R/CLAUDE-solana.md" "$R/.gitmodules" "$R/.claude/settings.json"
   while IFS= read -r f; do agents_paths "$f"; done < <(
-    find "$R/.claude/agents" "$R/.claude/commands" "$R/.claude/rules" "$R/.claude/skills" \
+    find "$R/.claude/agents" "$R/.claude/commands" "$R/.claude/skills" \
       "$R/.claude/hooks" -path "$R/.claude/skills/ext" -prune -o -type f -print 2>/dev/null
   )
 fi
@@ -228,7 +228,7 @@ fi
 # Copy contents (src/.) into a pre-created destination so an existing symlink
 # (e.g. .agents/skills -> ../.claude/skills) is followed and merged into,
 # instead of cp failing with "cannot overwrite non-directory".
-for dir in agents skills rules commands bin hooks; do
+for dir in agents skills commands bin hooks; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
     mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
     cp -r "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
