@@ -30,7 +30,8 @@ Never read `.env` — the firewall denies it at Medium and High, and a value rea
    Optional skill/CLI keys, read at runtime by skill CLIs in `.claude/skills/ext/`, not by any MCP server:
    - `COLOSSEUM_COPILOT_PAT`: Colosseum Copilot startup-research skill (PAT at https://arena.colosseum.org/copilot)
    - `COLOSSEUM_COPILOT_API_BASE`: the default `https://copilot.colosseum.com/api/v1` works for most
-   - `MISTRAL_API_KEY`: QEDGen formal-verification CLI (https://console.mistral.ai)
+   - `MISTRAL_API_KEY`: QEDGen formal-verification CLI, for `fill-sorry` and `generate` (https://console.mistral.ai)
+   - `ARISTOTLE_API_KEY`: QEDGen formal-verification CLI, for the `aristotle` proof-search commands (https://aristotle.harmonic.fun)
    - `THEGRID_API_KEY`: TheGrid Colosseum project-graph queries (https://thegrid.id)
    - `THEGRID_GRAPHQL_ENDPOINT`: the default `https://beta.node.thegrid.id/graphql` works for most
    - `QUICKNODE_RPC_URL`, `QUICKNODE_WSS_URL`, `QUICKNODE_API_KEY`: QuickNode RPC, WebSocket/Streams and DAS for the `quicknode` skill (https://www.quicknode.com)
