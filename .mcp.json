@@ -14,6 +14,10 @@
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "context-mode": {
+      "command": "npx",
+      "args": ["-y", "context-mode@latest"]
     }
   }
 }

@@ -334,9 +334,10 @@ OLD_KEYS = {
     "modelDefaults": {"agent": "opus", "command": "sonnet"},
 }
 OLD_PLUGINS = ["rust-analyzer-lsp", "typescript-lsp", "csharp-lsp"]
+# context-mode is deliberately absent: it is a default server again, so stripping it here
+# would delete it from .mcp.json on the same run that installed it.
 OLD_SERVERS = {
     "playwright": {"command": "npx", "args": ["-y", "@playwright/mcp@latest", "--headless"]},
-    "context-mode": {"command": "npx", "args": ["-y", "context-mode@latest"]},
     "memsearch": {"command": "npx", "args": ["-y", "memsearch-mcp@latest"]},
     "surfpool": {"command": "surfpool", "args": ["mcp"]},
 }

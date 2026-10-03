@@ -120,7 +120,7 @@ json.dump(m, open(sys.argv[2], "w"), indent=2)' "$SETTINGS" "$MCP"
 
 DRY_RETIRED="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
 assert_contains "$DRY_RETIRED" "[would remove] .claude/settings.json: env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" "--dry-run reports the retired settings"
-assert_contains "$DRY_RETIRED" "[would remove] .mcp.json: mcpServers.context-mode, mcpServers.memsearch, mcpServers.surfpool" "--dry-run reports the retired MCP servers"
+assert_contains "$DRY_RETIRED" "[would remove] .mcp.json: mcpServers.memsearch, mcpServers.surfpool" "--dry-run reports the retired MCP servers"
 assert_eq "max" "$(json_at "$SETTINGS" env CLAUDE_CODE_EFFORT_LEVEL)" "--dry-run leaves settings.json alone"
 
 UPDATE_OUT="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh 2>&1)"
@@ -139,7 +139,7 @@ assert_eq '{"csharp-lsp@claude-plugins-official": false, "my-plugin@my-market": 
 assert_eq "false" "$(json_at "$SETTINGS" includeCoAuthoredBy)" "attribution setting untouched"
 assert_eq "true" "$(json_at "$SETTINGS" sandbox enabled)" "sandbox policy untouched"
 MCP_LEFT="$(python3 -c "import json; print(' '.join(sorted(json.load(open('$MCP'))['mcpServers'])))")"
-assert_eq "context7 helius my-server playwright solana-dev" "$MCP_LEFT" "kit MCP servers removed; user and user-edited servers kept"
+assert_eq "context-mode context7 helius my-server playwright solana-dev" "$MCP_LEFT" "kit MCP servers removed; user and user-edited servers kept (context-mode is a default again, so it stays)"
 
 # Idempotent: a second run changes nothing
 cp "$SETTINGS" "$TEMP_DIR/settings.before"
