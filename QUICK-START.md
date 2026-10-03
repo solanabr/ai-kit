@@ -214,7 +214,8 @@ your-project/
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
 │   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, eth-to-sol,
-│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new
+│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new,
+│   │   │   │                      # sign-safe, counterparty-gate, community-moderation
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas

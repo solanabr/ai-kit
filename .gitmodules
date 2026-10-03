@@ -52,3 +52,12 @@
 [submodule ".claude/skills/ext/solana-fuzz"]
 	path = .claude/skills/ext/solana-fuzz
 	url = https://github.com/belumume/solana-fuzz.git
+[submodule ".claude/skills/ext/sign-safe"]
+	path = .claude/skills/ext/sign-safe
+	url = https://github.com/lrafasouza/sign-safe-skill
+[submodule ".claude/skills/ext/counterparty-gate"]
+	path = .claude/skills/ext/counterparty-gate
+	url = https://github.com/solsentry/solana-counterparty-gate
+[submodule ".claude/skills/ext/community-moderation"]
+	path = .claude/skills/ext/community-moderation
+	url = https://github.com/soufoka/community-moderation-skill
