@@ -38,7 +38,7 @@ That's it. Claude now has Solana superpowers.
 
 > The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
 
-> A full install starts on the **Relaxed** firewall tier, meant for local development: it blocks SSH and GPG keys, keychains, browser profiles, shell startup files and history, and it deliberately leaves your Solana config dir and the project's `.env` readable so the toolchain works. `/firewall` switches tier; [README → Firewall tiers](README.md#firewall-tiers) has the full matrix and the limits.
+> A full install starts on the **Relaxed** firewall tier, meant for local development: it blocks SSH and GPG keys, keychains, browser profiles, shell startup files and history, and it deliberately leaves your Solana config dir and the project's `.env` readable so the toolchain works. `/firewall` switches tier; [README → Firewall tiers](README.md#firewall-tiers) has the full matrix and [docs/firewall.md](docs/firewall.md) the limits.
 
 > The kit's security firewall, [safe-ai-skill](https://github.com/solanabr/safe-ai-skill), is a Claude Code plugin that `.claude/settings.json` enables. After you trust the folder, install it once with `claude plugin install safe-ai-skill@stbr --scope project`. The README's "Security firewall: safe-ai-skill" section covers what it gates and how to opt out.
 
@@ -56,9 +56,9 @@ That's it. Claude now has Solana superpowers.
   curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
   ```
 
-- **Pin a release or review every file first:** clone the kit and run the installer from the clone, as in [README → Installer](README.md#installer-recommended).
-- **No install:** point any agent that can fetch URLs at https://aikit.superteam.codes/CLAUDE-solana.md and the skill hub at https://aikit.superteam.codes/.claude/skills/SKILL.md. [README → No install](README.md#no-install-read-the-kit-from-aikitsuperteamcodes) has a copy-paste prompt and the trade-offs.
-- **Claude Code plugin marketplace: not recommended.** A plugin runs hooks and MCP servers with your user permissions and can update from a remote repository, so every marketplace you add widens your supply-chain attack surface. If you use it anyway, [README → Install as a Claude Code plugin](README.md#install-as-a-claude-code-plugin-not-recommended) shows how to pin a release, install at local scope and keep auto-update off.
+- **Pin a release or review every file first:** clone the kit and run the installer from the clone, as in [docs/install.md → From a clone](docs/install.md#from-a-clone).
+- **No install:** point any agent that can fetch URLs at https://aikit.superteam.codes/CLAUDE-solana.md and the skill hub at https://aikit.superteam.codes/.claude/skills/SKILL.md. [docs/install.md → No install](docs/install.md#no-install-read-the-kit-from-aikitsuperteamcodes) has a copy-paste prompt and the trade-offs.
+- **Claude Code plugin marketplace: not recommended.** A plugin runs hooks and MCP servers with your user permissions and can update from a remote repository, so every marketplace you add widens your supply-chain attack surface. If you use it anyway, [docs/plugin.md](docs/plugin.md) shows how to pin a release, install at local scope and keep auto-update off.
 
 ---
 
@@ -74,7 +74,7 @@ Opt-in, because each needs a browser, a CLI or a workflow choice. Run `/setup-mc
 - **Surfpool** — Agent-driven local validator / mainnet-fork control (requires the `surfpool` CLI)
 - **context-mode** — Keeps large tool output out of the context window
 
-The kit pins no effort level, agent teams or LSP plugins; README's "Settings the kit leaves to you" shows how to turn them on.
+The kit pins no effort level, agent teams or LSP plugins; [docs/configuration.md](docs/configuration.md#settings-the-kit-leaves-to-you) shows how to turn them on.
 
 ---
 
@@ -100,7 +100,7 @@ The kit pins no effort level, agent teams or LSP plugins; README's "Settings the
 | **solana-guide** | Learning and tutorials |
 | **solana-researcher** | Ecosystem research |
 
-Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [README → Agents](README.md#agents) for the routing.
+Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [docs/agents-and-commands.md → Agents](docs/agents-and-commands.md#agents) for the routing.
 
 ### 32 Slash Commands
 
@@ -166,7 +166,7 @@ Knowledge loads on-demand:
 - PlaySolana/PSG1 integration
 - Security auditing
 
-Only the core skill packs (solana-dev, auditor-skill, colosseum) install by default. `colosseum` needs one sign-in per machine before it can answer anything: `npx @colosseum-org/copilot-connect login` (Node 20+); `/doctor` reports whether that is in place. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too (README: "Use with Codex, Grok Build and other agents").
+Only the core skill packs (solana-dev, auditor-skill, colosseum) install by default. `colosseum` needs one sign-in per machine before it can answer anything: `npx @colosseum-org/copilot-connect login` (Node 20+); `/doctor` reports whether that is in place. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too ([docs/other-agents.md](docs/other-agents.md)).
 
 Need a capability the kit doesn't bundle? See [`.claude/skills/skill-registry.json`](.claude/skills/skill-registry.json) — a curated catalog of opt-in skills/MCPs/repos the agent can install on request, at your own expense (not bundled by default).
 
@@ -293,7 +293,7 @@ Edit your `CLAUDE.md` to add:
 
 ### Adjust Permissions
 
-Run `/firewall` to switch tier. The permission and sandbox block in `.claude/settings.json` is generated from the tier and rewritten whole when it changes, so put your own rules in `.claude/settings.local.json`, which `/update` never touches — the kit's rewrite only replaces the rules it wrote itself. [README → Firewall tiers](README.md#firewall-tiers) covers what each tier opens and closes, and what the tiers cannot enforce.
+Run `/firewall` to switch tier. The permission and sandbox block in `.claude/settings.json` is generated from the tier and rewritten whole when it changes, so put your own rules in `.claude/settings.local.json`, which `/update` never touches — the kit's rewrite only replaces the rules it wrote itself. [README → Firewall tiers](README.md#firewall-tiers) covers what each tier opens and closes, and [docs/firewall.md](docs/firewall.md) what the tiers cannot enforce.
 
 ### Configure MCP Servers
 

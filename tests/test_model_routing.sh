@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-# Model routing policy (README.md "Agents"):
+# Model routing policy (docs/agents-and-commands.md "Agents"):
 #   model: opus    — deep reasoning where Opus is the right fit
 #   model: sonnet  — implementation-heavy, mechanical, docs or high-volume work
 #   no model: line — inherit the session model (a Fable session gets Fable)
@@ -16,7 +16,7 @@ AGENT_MODELS="opus sonnet haiku inherit"
 COMMAND_MODELS="sonnet haiku inherit"
 FABLE_VALUE_RE='fable|^best$'
 FABLE_HARDCODE_RE="claude-fable|model[\"']?[[:space:]]*[:=][[:space:]]*[\"']?fable([\"'[:space:],]|\$)|--model[[:space:]=]+[\"']?fable([\"'[:space:]]|\$)"
-README="$REPO_ROOT/README.md"
+AGENTS_DOC="$REPO_ROOT/docs/agents-and-commands.md"
 
 echo "[test_model_routing] Checking model: routing and Fable hardcoding..."
 echo ""
@@ -147,8 +147,8 @@ PY
 done
 echo ""
 
-echo "[README Agents table: Model column matches frontmatter]"
-AGENTS_SECTION="$(awk '/^## Agents$/{f=1; next} /^## /{f=0} f' "$README")"
+echo "[docs/agents-and-commands.md Agents table: Model column matches frontmatter]"
+AGENTS_SECTION="$(awk '/^## Agents$/{f=1; next} /^## /{f=0} f' "$AGENTS_DOC")"
 for f in "$REPO_ROOT"/.claude/agents/*.md; do
   name="$(basename "$f" .md)"
   case "$(fm_model "$f")" in
@@ -160,7 +160,7 @@ for f in "$REPO_ROOT"/.claude/agents/*.md; do
   esac
   row="$(printf '%s\n' "$AGENTS_SECTION" | grep -F "| **$name** |" | head -1 || true)"
   actual="$(printf '%s\n' "$row" | awk -F'|' 'NF > 2 { v = $(NF-1); gsub(/^[ \t]+|[ \t]+$/, "", v); print v }')"
-  assert_eq "$expected" "$actual" "README lists $name as $expected"
+  assert_eq "$expected" "$actual" "docs/agents-and-commands.md lists $name as $expected"
 done
 
 print_summary

@@ -25,6 +25,10 @@ assert_file_exists "$TEMP_DIR/CLAUDE.md" "CLAUDE.md exists"
 assert_eq "### Recurring Issues|### Fix Patterns|### Config Conventions" \
   "$(sed -n '/^## Project Learnings/,/^## [^#]/p' "$TEMP_DIR/CLAUDE.md" 2>/dev/null | grep '^### ' | paste -sd'|' - || true)" \
   "CLAUDE.md has the Project Learnings subsections /dream and /diff-review write to"
+# docs/ is the kit's own long-form spec. The copy loop takes named .claude/
+# subdirectories plus named root files, so a project must not receive it.
+assert_dir_not_exists "$TEMP_DIR/docs" "docs/ is not copied into a project"
+assert_file_not_exists "$TEMP_DIR/QUICK-START.md" "QUICK-START.md is not copied into a project"
 assert_dir_exists "$TEMP_DIR/.claude/agents" ".claude/agents/ directory exists"
 assert_dir_exists "$TEMP_DIR/.claude/commands" ".claude/commands/ directory exists"
 assert_file_exists "$TEMP_DIR/.claude/skills/SKILL.md" "SKILL.md exists"

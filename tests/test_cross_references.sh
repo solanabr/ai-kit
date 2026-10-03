@@ -9,6 +9,10 @@ source "$SCRIPT_DIR/helpers.sh"
 echo "[test_cross_references] Ripple Map enforcer — cross-reference validation"
 echo ""
 
+# The README keeps the counts; the per-agent and per-command tables live in
+# docs/agents-and-commands.md, which install.sh does not copy into a project.
+AGENTS_DOC="$REPO_ROOT/docs/agents-and-commands.md"
+
 # --- Agent count cross-references ---
 echo "[agents]"
 AGENT_COUNT=$(find "$REPO_ROOT/.claude/agents" -name "*.md" | wc -l | tr -d ' ')
@@ -48,12 +52,19 @@ while IFS= read -r key; do
   assert_file_contains "$REPO_ROOT/CLAUDE-solana.md" "$SEARCH_NAME" "CLAUDE-solana.md mentions MCP server: $SEARCH_NAME"
 done <<< "$MCP_KEYS"
 
-# --- Agent names appear in README.md ---
+# --- Agent names appear in the agents reference ---
 echo "[agent-names]"
 for agent_file in "$REPO_ROOT/.claude/agents/"*.md; do
   AGENT_NAME=$(awk '/^---$/{c++;next} c==1 && /^name:/{print $2; exit}' "$agent_file" 2>/dev/null | tr -d '"' | tr -d "'")
   [ -z "$AGENT_NAME" ] && continue
-  assert_file_contains "$REPO_ROOT/README.md" "$AGENT_NAME" "README.md contains agent: $AGENT_NAME"
+  assert_file_contains "$AGENTS_DOC" "$AGENT_NAME" "docs/agents-and-commands.md contains agent: $AGENT_NAME"
+done
+
+# --- Command names appear in the commands reference ---
+echo "[command-names-doc]"
+for cmd_file in "$REPO_ROOT/.claude/commands/"*.md; do
+  CMD_BASENAME=$(basename "$cmd_file" .md)
+  assert_file_contains "$AGENTS_DOC" "/$CMD_BASENAME" "docs/agents-and-commands.md contains command: /$CMD_BASENAME"
 done
 
 # --- Command names appear in QUICK-START.md ---
@@ -81,8 +92,9 @@ fi
 # repo rename silently breaks every step that reads `<dir>/...` after it: a `cp`, or
 # the installer run with SOLANA_AI_KIT_LOCAL_SRC=<dir>. The docs put one command per
 # fenced block, so a clone covers the rest of its section, not just its own block.
+# docs/install.md now carries the from-a-clone steps the README used to hold.
 echo "[install from clone]"
-CLONE_INSTALL="$(python3 - "$REPO_ROOT" README.md QUICK-START.md <<'PY'
+CLONE_INSTALL="$(python3 - "$REPO_ROOT" README.md QUICK-START.md docs/install.md <<'PY'
 import os, re, shlex, sys
 root = sys.argv[1]
 TAKES_VALUE = {"-b", "--branch", "-o", "--origin", "-c", "--config", "-j", "--jobs", "--depth"}
@@ -134,9 +146,9 @@ if not reads:
     print(", ".join(sys.argv[2:]) + ": no git clone followed by a step that reads from the clone")
 PY
 )"
-assert_eq "" "$CLONE_INSTALL" "README and QUICK-START installs from a clone read from the directory git clone creates"
+assert_eq "" "$CLONE_INSTALL" "Installs from a clone (README, QUICK-START, docs/install.md) read from the directory git clone creates"
 
-# --- README submodule table matches .gitmodules and the registry tiers ---
+# --- docs/skill-packs.md submodule table matches .gitmodules and the registry tiers ---
 echo "[submodule-table]"
 TABLE_DRIFT="$(python3 - "$REPO_ROOT" <<'PY'
 import json, os, re, sys
@@ -149,17 +161,54 @@ for e in registry["entries"]:
     path = e.get("path", "")
     if path.startswith(".claude/skills/ext/"):
         tiers[os.path.basename(path.rstrip("/"))] = e.get("tier", "")
-readme = open(os.path.join(root, "README.md"), encoding="utf-8").read()
-rows = dict(re.findall(r"^\| \x60ext/([^\x60]+)\x60 \| (\w+) \|", readme, re.M))  # \x60 is a backtick
+DOC = "docs/skill-packs.md"
+doc = open(os.path.join(root, DOC), encoding="utf-8").read()
+rows = dict(re.findall(r"^\| \x60ext/([^\x60]+)\x60 \| (\w+) \|", doc, re.M))  # \x60 is a backtick
 for name in sorted(packs - rows.keys()):
-    print(f"README submodule table lacks ext/{name}")
+    print(f"{DOC} submodule table lacks ext/{name}")
 for name in sorted(rows.keys() - packs):
-    print(f"README submodule table lists ext/{name}, which .gitmodules does not have")
+    print(f"{DOC} submodule table lists ext/{name}, which .gitmodules does not have")
 for name in sorted(packs & rows.keys()):
     if rows[name].lower() != tiers.get(name, "").lower():
-        print(f"README lists ext/{name} as {rows[name]}, the registry tier is {tiers.get(name) or 'missing'}")
+        print(f"{DOC} lists ext/{name} as {rows[name]}, the registry tier is {tiers.get(name) or 'missing'}")
 PY
 )"
-assert_eq "" "$TABLE_DRIFT" "README submodule table rows and tiers match .gitmodules and skill-registry.json"
+assert_eq "" "$TABLE_DRIFT" "docs/skill-packs.md submodule table rows and tiers match .gitmodules and skill-registry.json"
+
+# --- Relative links and anchors in the root docs resolve ---
+# validate.sh checks links under .claude/; the README now links out to docs/ for
+# everything it sheds, so a moved section or a renamed heading has to fail here.
+echo "[doc links]"
+LINK_DRIFT="$(python3 - "$REPO_ROOT" <<'PY'
+import glob, os, re, sys
+root = sys.argv[1]
+LINK = re.compile(r"\[[^\]]*\]\((?!https?:|mailto:|#)([^)\s]+)\)")
+ANCHOR = re.compile(r"^#{1,6}\s+(.*?)\s*$", re.M)
+
+def anchors(path):
+    out = set()
+    for title in ANCHOR.findall(open(path, encoding="utf-8").read()):
+        slug = re.sub(r"[^\w\- ]", "", title.replace("\x60", "").lower()).strip()  # \x60 is a backtick
+        out.add(slug.replace(" ", "-"))
+    return out
+
+cache = {}
+for src in ["README.md", "QUICK-START.md"] + sorted(glob.glob(os.path.join(root, "docs/*.md"))):
+    src = src if os.path.isabs(src) else os.path.join(root, src)
+    rel = os.path.relpath(src, root)
+    for target in LINK.findall(open(src, encoding="utf-8").read()):
+        path, _, frag = target.partition("#")
+        dest = os.path.normpath(os.path.join(os.path.dirname(src), path or rel))
+        if not os.path.exists(dest):
+            print(f"{rel}: broken link -> {target}")
+            continue
+        if frag and dest.endswith(".md"):
+            if dest not in cache:
+                cache[dest] = anchors(dest)
+            if frag not in cache[dest]:
+                print(f"{rel}: anchor not found -> {target}")
+PY
+)"
+assert_eq "" "$LINK_DRIFT" "Relative links and anchors in README, QUICK-START and docs/ resolve"
 
 print_summary

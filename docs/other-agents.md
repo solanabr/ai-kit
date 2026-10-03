@@ -1,0 +1,20 @@
+# Use with Codex, Grok Build and other agents
+
+The kit's skills are [Agent Skills](https://agentskills.io) folders, which most coding agents load. Pick the install by where your agent looks — and read the last column before you rely on a tier: only Claude Code enforces one.
+
+| Agent | Install | It reads | Enforces the [firewall tier](../README.md#firewall-tiers)? |
+|-------|---------|----------|-----------------------------|
+| Claude Code | `install.sh` (default) | `CLAUDE.md`, `.claude/` (skills, agents, commands, hooks), `.claude/security.json`, `.mcp.json` | **Yes.** Permission rules, sandbox and hooks all apply, so the tier is what it says it is |
+| Claude Code | plugin marketplace | the plugin's agents, commands, skills, `.mcp.json` and `hooks/hooks.json` | **No tier at all.** A plugin's `plugin.json` `settings` object honors only `agent` and `subagentStatusLine`; `permissions` and `sandbox` keys are dropped at load. You get the hooks — the mainnet, secrets and on-chain gates — and nothing else. There is no file fence, no sandbox, no egress denylist |
+| Grok Build | default (`--agents` works too) | Claude Code's files, plus `AGENTS.md` and `.agents/skills/`, once you trust the folder (`/hooks-trust` or `grok --trust`) | **Hooks only, and only partly.** It reads `.claude/settings.json` for hooks and maps Claude's tool names, but sends camelCase `toolInput` and is **fail-open on malformed hook output** — a hook written for Claude Code's payload silently permits there. The kit's hooks now read both shapes. Permission rules and the sandbox are Claude Code's and do not apply |
+| Codex | `--agents` | `AGENTS.md` and `.agents/skills/` | **No.** Even with hooks wired up, its PreToolUse coverage is `Bash`, `exec_command` and `apply_patch` — there is **no `Read` tool**, so file reads cannot be gated at all. Codex's own docs call hooks "a useful guardrail, not a complete enforcement boundary" |
+| Cursor, GitHub Copilot, Gemini CLI, opencode and other Agent Skills clients | `--agents` | `AGENTS.md` and `.agents/skills/` | **No.** Instructions only: no hooks, no permission rules, no sandbox. The house rules are a request, not a boundary |
+
+Grok Build caveats, per the [Grok Build docs](https://docs.x.ai/build/features/project-rules):
+
+- Grok skips instruction files that `.gitignore` lists, and the installer gitignores `CLAUDE.md` (or `AGENTS.md`) by default. Run `/commit-claude-config`, or take the file out of the kit's `.gitignore` block, so Grok loads the house rules. Skills and commands load either way.
+- Grok sends [hooks](https://docs.x.ai/build/features/hooks) camelCase JSON (`toolInput`) where Claude Code sends `tool_input`. The kit's hooks read both, so the secret-read, pre-commit and mainnet-deploy gates in `.claude/settings.json` do fire under Grok — but Grok is fail-open on malformed hook output, so a hook that errors permits rather than blocks, and no permission rule or sandbox entry applies at all. The project `CLAUDE.md` still tells agents on other runtimes to get an explicit go-ahead before any mainnet step.
+
+Gemini CLI reads `GEMINI.md` unless you add `AGENTS.md` to `context.fileName` in its `settings.json`.
+
+The `--agents` install command and what it rewrites are in [install.md](install.md#codex-opencode-and-other-agents).
