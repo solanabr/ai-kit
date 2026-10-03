@@ -23,7 +23,7 @@ set -euo pipefail
 #   skills.sh select <kit .claude dir> <project config dir> [ids]   # trim a kit checkout before install copies it
 #   skills.sh prune                                                 # after update.sh has copied every pack
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
-#   skills.sh pins [--write] [<kit repo root>]                       # registry pins vs the gitlinks (maintainers, CI)
+#   skills.sh pins [--write] [<kit repo root>]                      # registry pins vs the gitlinks (maintainers, CI)
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
 # those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
