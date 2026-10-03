@@ -80,6 +80,7 @@ The three cover different questions: `auditor-skill` the program's source, `sign
 - [backend-async.md](backend-async.md): Rust services and indexers that talk to Solana
 - MCP server for a program or API: Anthropic's `mcp-builder/SKILL.md` (install: `bash .claude/bin/skills.sh add anthropic-skills`); its evaluation script needs `ANTHROPIC_API_KEY`
 - [Cloudflare](ext/cloudflare/skills/) (install: `bash .claude/bin/skills.sh add cloudflare`): [workers-best-practices](ext/cloudflare/skills/workers-best-practices/), [agents-sdk](ext/cloudflare/skills/agents-sdk/), [sandbox-stable](ext/cloudflare/skills/sandbox-stable/), [durable-objects](ext/cloudflare/skills/durable-objects/), [wrangler](ext/cloudflare/skills/wrangler/)
+- [supabase](ext/supabase/skills/supabase/SKILL.md) (official; install: `bash .claude/bin/skills.sh add supabase`): the off-chain data layer — Postgres, Auth, Edge Functions, Realtime, Storage, the CLI, migrations and declarative schemas. For the database an indexer or webhook consumer writes into, [supabase-postgres-best-practices](ext/supabase/skills/supabase-postgres-best-practices/SKILL.md) is the one to open: query plans, connection pooling and exhaustion, partitioning, RLS policy performance, missing foreign-key indexes, `SKIP LOCKED` queues. Two things it does on its own: its SKILL.md fetches `https://supabase.com/changelog.md` whenever it loads, plus vendor docs at decision points, so a Supabase task always calls out to supabase.com; and [skill-feedback.md](ext/supabase/skills/supabase/references/skill-feedback.md) can open a public GitHub issue on `supabase/agent-skills` built from the conversation. That step asks permission first; let the user answer it, since the issue body is their session.
 
 ## Games and mobile
 
@@ -118,6 +119,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | solana-mobile | React Native, Expo, Mobile Wallet Adapter, Seeker, dApp Store | `bash .claude/bin/skills.sh add solana-mobile` |
 | cloudflare | Cloudflare Workers, wrangler, Durable Objects, Agents SDK | `bash .claude/bin/skills.sh add cloudflare` |
 | vercel | Vercel deploys, Next.js and React performance, web design review | `bash .claude/bin/skills.sh add vercel` |
+| supabase | Supabase as the off-chain layer: Postgres schema, migrations and RLS, Auth, Edge Functions, Realtime, Storage; or tuning the database an indexer writes into (fetches supabase.com docs whenever it loads) | `bash .claude/bin/skills.sh add supabase` |
 | solana-new | Go-to-market references: marketing video, brand design, tokenomics, DefiLlama research, ecosystem catalogs; idea-sprint, pitch-deck and hackathon link it | `bash .claude/bin/skills.sh add solana-new` |
 | sign-safe | Reviewing a transaction before it is signed: decode an opaque base64 tx, SIGN/HOLD/REJECT verdict, gating an agent's signing, Squads proposal review | `bash .claude/bin/skills.sh add sign-safe` |
 | counterparty-gate | Vetting who operates a program, oracle, keeper or multisig before integrating (sends the addresses you ask about to SolSentry's API) | `bash .claude/bin/skills.sh add counterparty-gate` |
