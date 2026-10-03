@@ -373,10 +373,12 @@ DENY_CREDENTIALS = [
     "Read(~/.pypirc)",
     "Read(~/.gem/credentials)",
     "Read(~/.claude/.credentials.json)",
-    "Read(~/Library/Keychains)",
-    "Read(~/Library/Keychains/**)",
-    "Read(//Library/Keychains)",
-    "Read(//Library/Keychains/**)",
+    # macOS keychains, 1Password's group container and Bitwarden's Application Support
+    # directory are deliberately NOT listed. Resolving them while building the sandbox
+    # profile raises the system "access data from other apps" prompt, and macOS already
+    # gates them against every process — broader than a rule binding only this tool. The
+    # cross-platform paths below are kept, because nothing gates those for us.
+    # The `security` CLI stays denied, which is the reachable way to read a keychain.
     "Read(~/.local/share/keyrings)",
     "Read(~/.local/share/keyrings/**)",
     "Read(~/.gnome2/keyrings)",
@@ -385,12 +387,8 @@ DENY_CREDENTIALS = [
     "Read(~/.password-store/**)",
     "Read(~/.config/1Password)",
     "Read(~/.config/1Password/**)",
-    "Read(~/Library/Group Containers/2BUA8C4S2C.com.1password)",
-    "Read(~/Library/Group Containers/2BUA8C4S2C.com.1password/**)",
     "Read(~/.config/Bitwarden)",
     "Read(~/.config/Bitwarden/**)",
-    "Read(~/Library/Application Support/Bitwarden)",
-    "Read(~/Library/Application Support/Bitwarden/**)",
     "Read(~/.config/keepassxc)",
     "Read(~/.config/keepassxc/**)",
 ]
