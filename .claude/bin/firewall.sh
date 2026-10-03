@@ -387,6 +387,11 @@ DENY_CREDENTIALS = [
     "Read(~/.password-store/**)",
     "Read(~/.config/1Password)",
     "Read(~/.config/1Password/**)",
+    # Bitwarden desktop is Electron and unsandboxed, so this is a plain Application
+    # Support directory, NOT a TCC-protected container like 1Password's group
+    # container. Nothing gates it for us, so the rule stays.
+    "Read(~/Library/Application Support/Bitwarden)",
+    "Read(~/Library/Application Support/Bitwarden/**)",
     "Read(~/.config/Bitwarden)",
     "Read(~/.config/Bitwarden/**)",
     "Read(~/.config/keepassxc)",

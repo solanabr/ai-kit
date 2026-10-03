@@ -16,7 +16,7 @@
     "tier": "relaxed",
     "ruleSetVersion": 1,
     "target": ".claude/settings.json",
-    "sha256": "47fea78f6c20b699a75a1c928a0585577a78b3f687d8061851e34e0be1c6abd1",
+    "sha256": "044d497ccbb5e2e47bea1be80eadd30e1dafb3753545f0e81af46faab5f8612f",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -220,6 +220,8 @@
       "Read(~/.password-store/**)",
       "Read(~/.config/1Password)",
       "Read(~/.config/1Password/**)",
+      "Read(~/Library/Application Support/Bitwarden)",
+      "Read(~/Library/Application Support/Bitwarden/**)",
       "Read(~/.config/Bitwarden)",
       "Read(~/.config/Bitwarden/**)",
       "Read(~/.config/keepassxc)",

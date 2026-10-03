@@ -476,6 +476,8 @@
       "Read(~/.password-store/**)",
       "Read(~/.config/1Password)",
       "Read(~/.config/1Password/**)",
+      "Read(~/Library/Application Support/Bitwarden)",
+      "Read(~/Library/Application Support/Bitwarden/**)",
       "Read(~/.config/Bitwarden)",
       "Read(~/.config/Bitwarden/**)",
       "Read(~/.config/keepassxc)",
