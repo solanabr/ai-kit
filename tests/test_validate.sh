@@ -32,6 +32,16 @@ OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "0" "$RC" "validate.sh exits 0 when the ext/ submodules are not checked out"
 assert_contains "$OUT" "checks skipped because submodules aren't initialized" "summary reports the skipped checks"
 
+# Links between kit files are checked too, in agents and commands as well as skills
+echo "[kit links]"
+printf '[gone](../skills/no-such-reference.md)\n' > "$TEMP_DIR/.claude/agents/zz-agent.md"
+printf '[gone](no-such-command.md)\n' > "$TEMP_DIR/.claude/commands/zz-command.md"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails on a broken link between kit files"
+assert_contains "$OUT" "FAIL: .claude/agents/zz-agent.md -> ../skills/no-such-reference.md" "a broken link in an agent is reported"
+assert_contains "$OUT" "FAIL: .claude/commands/zz-command.md -> no-such-command.md" "a broken link in a command is reported"
+rm "$TEMP_DIR/.claude/agents/zz-agent.md" "$TEMP_DIR/.claude/commands/zz-command.md"
+
 # Still checked: a link into a pack that is checked out, and a pack that doesn't exist
 echo "[links still checked]"
 touch "$TEMP_DIR/.claude/skills/ext/solana-dev/README.md"

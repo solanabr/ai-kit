@@ -136,4 +136,30 @@ PY
 )"
 assert_eq "" "$CLONE_INSTALL" "README and QUICK-START installs from a clone read from the directory git clone creates"
 
+# --- README submodule table matches .gitmodules and the registry tiers ---
+echo "[submodule-table]"
+TABLE_DRIFT="$(python3 - "$REPO_ROOT" <<'PY'
+import json, os, re, sys
+root = sys.argv[1]
+gitmodules = open(os.path.join(root, ".gitmodules"), encoding="utf-8").read()
+packs = set(re.findall(r"^\s*path\s*=\s*\.claude/skills/ext/(\S+)", gitmodules, re.M))
+registry = json.load(open(os.path.join(root, ".claude/skills/skill-registry.json"), encoding="utf-8"))
+tiers = {}
+for e in registry["entries"]:
+    path = e.get("path", "")
+    if path.startswith(".claude/skills/ext/"):
+        tiers[os.path.basename(path.rstrip("/"))] = e.get("tier", "")
+readme = open(os.path.join(root, "README.md"), encoding="utf-8").read()
+rows = dict(re.findall(r"^\| \x60ext/([^\x60]+)\x60 \| (\w+) \|", readme, re.M))  # \x60 is a backtick
+for name in sorted(packs - rows.keys()):
+    print(f"README submodule table lacks ext/{name}")
+for name in sorted(rows.keys() - packs):
+    print(f"README submodule table lists ext/{name}, which .gitmodules does not have")
+for name in sorted(packs & rows.keys()):
+    if rows[name].lower() != tiers.get(name, "").lower():
+        print(f"README lists ext/{name} as {rows[name]}, the registry tier is {tiers.get(name) or 'missing'}")
+PY
+)"
+assert_eq "" "$TABLE_DRIFT" "README submodule table rows and tiers match .gitmodules and skill-registry.json"
+
 print_summary

@@ -22,12 +22,13 @@ You are maintaining the **solana-ai-kit** repository - a template/library of Cla
 |------|-------------|-----------------|
 | `CLAUDE.md` | Session start and every subagent; user message (uncached) | Keep <200 lines; costs every turn |
 | `CLAUDE-solana.md` | Session start and every subagent (user projects) | Keep <60 lines; only what a strong model can't infer; HTML comments stripped (free) |
-| `MEMORY.md` | Session start | 200-line / 25KB cap; index pointers only |
+| `MEMORY.md` (user projects: Claude Code auto-memory; this repo has none) | Session start | 200-line / 25KB cap; index pointers only |
 | `.claude/rules/*.md` | `paths:` → when Claude reads a matching file; no `paths:` → every session and subagent | Kit ships none; `validate.sh` fails on an unscoped rule |
 | Agent `description` | Every session (Agent tool list) | Routing only, ≤250 chars (`validate.sh`) |
 | Command `description` | Every session (skill listing) unless `disable-model-invocation: true` | One line, ≤100 chars (`validate.sh`); user-only side-effect commands set `disable-model-invocation: true` |
 | `.claude/agents/*.md` body | On agent spawn | Only what the model wouldn't know; link ext/ skills |
 | `.claude/commands/*.md` body | On invocation | Terse steps with the exact non-obvious commands |
+| `.claude/skills/<name>/SKILL.md` `description` (token-extensions, hackathon, idea-sprint, pitch-deck) | Every session and every subagent (skill listing); body on invocation | Routing only, ≤1024 chars (`tests/test_local_skills.sh`); detail goes in `references/` |
 | `.claude/skills/SKILL.md` | When read (not auto-listed: not in a `<name>/` dir; CLAUDE.md points to it) | Routing table; HTML comments NOT stripped |
 | `.claude/skills/*.md` | On-demand via links | Can be detailed; don't duplicate ext/ |
 | Subdirectory `CLAUDE.md` | Lazy — when Claude reads files in that dir | Monorepo module configs |
@@ -63,12 +64,12 @@ When X changes, also update Y:
 
 | Changed | Also update |
 |---------|-------------|
-| Add/remove **agent** | README.md agent table + tree count, QUICK-START.md tree count, install.sh output, tests/test_agents.sh + test_install.sh assertions |
-| Add/remove **command** | README.md commands tables + tree count, QUICK-START.md tree count, tests/test_commands.sh + test_install.sh assertions |
+| Add/remove **agent** | README.md agent table + counts (intro, plugin section, tree), QUICK-START.md heading + tree count, tests/test_agents.sh + test_cross_references.sh counts |
+| Add/remove **command** | README.md commands tables + counts (intro, plugin section, tree), QUICK-START.md heading + tree count, tests/test_commands.sh + test_cross_references.sh counts |
 | Change an agent/command **`model:`** | README.md Agents table Model column + routing note (`tests/test_model_routing.sh` enforces allowed values, no Fable, README drift) |
-| Add/remove **MCP server** | README.md MCP table, CLAUDE-solana.md MCP list, QUICK-START.md MCP list, .env.example, .claude/commands/setup-mcp.md |
+| Add/remove **MCP server** | README.md MCP table + count, CLAUDE-solana.md MCP list, QUICK-START.md MCP list, .env.example, .claude/commands/setup-mcp.md, tests/test_mcp_config.sh server list + test_cross_references.sh count |
 | Add/remove **.env.example key** | `.claude/commands/setup-mcp.md` |
-| Add/remove **submodule** | .gitmodules, `.claude/skills/skill-registry.json` entry (`tier` core/extension, `path`, `triggers`, install command), README.md submodules table + tree, QUICK-START.md tree, .claude/skills/SKILL.md routing. For an extension, every line that links into it names `bash .claude/bin/skills.sh add <id>`, and the hub's Extensions table gets a row (`tests/test_skill_extensions.sh` enforces both) |
+| Add/remove **submodule** | .gitmodules, `.claude/skills/skill-registry.json` entry (`tier` core/extension, `path`, `triggers`, install command), README.md submodules table (`tests/test_cross_references.sh` checks its rows and tiers against `.gitmodules` and the registry), .claude/skills/SKILL.md routing. The README and QUICK-START trees list `ext/` as one line, so they don't change. For an extension, every line that links into it names `bash .claude/bin/skills.sh add <id>`, and the hub's Extensions table gets a row (`tests/test_skill_extensions.sh` enforces both) |
 | Re-pin or change **anthropic-skills** (pinned by `commit` in its registry entry, not a submodule) | Review the upstream diff of each folder in its `skills` list first; never list docx, pdf, pptx, xlsx or doc-coauthoring (`DENIED_SKILLS` in `.claude/bin/skills.sh` refuses them); README "Anthropic's skills in any agent"; hub rows; `tests/test_anthropic_skills.sh` re-checks licenses and frontmatter at the pin |
 | Re-pin or change **safe-ai-skill** (core plugin from its own repo, not a submodule) | `.claude-plugin/marketplace.json` entry `sha` (a commit whose `plugins/safe-ai-skill/bin/` has every platform binary), `plugin.json` `dependencies`, `.claude/settings.json` `enabledPlugins` + `extraKnownMarketplaces`, README "Security firewall" section, `tests/test_plugin.sh` + `tests/test_settings_deep.sh` |
 | Change a **firewall tier's rule set** (`.claude/bin/firewall.sh`) | The tier is **regenerated wholesale**, never layered — permission lists merge across settings files and a `deny` from any scope wins, so a looser tier cannot be written as a stricter one plus exceptions. Update: the `enforced.ruleIds` the tier writes into `.claude/security.json`, the tier migration in `.claude/bin/update.sh` (below line 93, or existing installs never receive it), `/doctor`'s declared-vs-enforced check, `.claude/commands/firewall.md`, the firewall assertions in `tests/` + `validate.sh`, and README's "Firewall tiers" tier table, honesty paragraphs and cross-harness table. Never express a tier with `defaultMode` (`validate.sh`'s retired-keys check rejects it; session mode is the user's call) or `disableBypassPermissionsMode` — a real schema key, but it restricts the *user's* mode choice, not the agent's reach, so it buys High nothing |
