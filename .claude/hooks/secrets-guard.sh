@@ -32,7 +32,7 @@ kit_parse
 
 # The regex travels in the environment, not through -v: awk processes escape
 # sequences in -v assignments, which mangles \. and \( differently per awk.
-VERDICT=$(printf '%s\n' "$KIT_CMD" | KIT_VAULT_RE="$(kit_vault_re)" awk '
+VERDICT=$(printf '%s\n' "$KIT_CMD" | KIT_VAULT_RE="$(kit_vault_re)" KIT_LANG="${KIT_LANG-}" awk '
 function is_benign(c) {
   # Metadata-only or prose-only commands: they never hand file CONTENT back.
   return (c == "ls" || c == "l" || c == "ll" || c == "la" || c == "stat" || c == "file" \
@@ -53,9 +53,19 @@ function is_shell(c) {
   return (c == "sh" || c == "bash" || c == "zsh" || c == "dash" || c == "ksh" || c == "fish")
 }
 function is_interp(c) {
+  # kit_mcp_code is not a binary: it is the marker lib-headless.sh puts in command
+  # position when an MCP tool carries code in a language that is not shell (see
+  # kit_mcp_normalize).  Inline-code treatment is exactly right for it — the
+  # payload is a program, not a command line.
   return (c == "python" || c == "python2" || c == "python3" || c == "node" || c == "deno" \
        || c == "bun" || c == "perl" || c == "ruby" || c == "php" || c == "osascript" \
-       || c == "Rscript" || c == "lua" || c == "tclsh")
+       || c == "Rscript" || c == "lua" || c == "tclsh" || c == "kit_mcp_code")
+}
+# How to name the interpreter in a message.  The marker word would read as a
+# binary nobody has, so the language named by the tool call is used instead.
+# (No apostrophes in here: the whole program is one single-quoted shell word.)
+function interp_name(c) {
+  return (c == "kit_mcp_code" && ENVIRON["KIT_LANG"] != "") ? ENVIRON["KIT_LANG"] : c
 }
 function is_pattern_tool(c) {
   # The first positional, and any quoted argument, is a pattern or a script.
@@ -279,7 +289,7 @@ END {
         if (a == "" || looks_remote(a)) continue
         if (interp) {
           t = code_hits(a)
-          if (t != "") { print "DENY inline " c0 " code reads a credential path: " t; exit }
+          if (t != "") { print "DENY inline " interp_name(c0) " code reads a credential path: " t; exit }
           continue
         }
         if (pat) {

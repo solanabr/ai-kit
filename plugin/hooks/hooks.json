@@ -13,7 +13,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__context-mode__.*",
         "hooks": [
           {
             "type": "command",
@@ -23,7 +23,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__context-mode__.*",
         "hooks": [
           {
             "type": "command",
@@ -33,7 +33,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__context-mode__.*",
         "hooks": [
           {
             "type": "command",
