@@ -599,6 +599,25 @@
       "tags": ["payments", "stripe", "checkout", "subscriptions", "billing", "fiat", "connect"]
     },
     {
+      "id": "duckdb",
+      "name": "DuckDB Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "data",
+      "path": ".claude/skills/ext/duckdb",
+      "commit": "7feda8e01e22bc0886c86123f3884947e36d8c69",
+      "description": "Query and report on data without standing up a database: nine skills over reading any data file (Parquet, CSV, JSON, Avro, Excel, Iceberg, Delta), running SQL, attaching DuckDB and DuckLake databases, converting between formats, exploring S3, R2, GCS and Azure buckets, geospatial work, and searching DuckDB's docs. The right tool for an indexer's Parquet exports, an airdrop snapshot or a one-off analysis over transaction dumps, where Postgres would be overkill.",
+      "triggers": ["analyze a CSV Parquet or JSON dump", "SQL over local or S3 files", "convert between data formats", "report or aggregate over exported onchain data", "attach and query a DuckDB or DuckLake database"],
+      "source": "https://github.com/duckdb/duckdb-skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add duckdb", "env": [] },
+      "license": "MIT",
+      "maintainer": "duckdb",
+      "signal": { "stars": 598, "last_commit": "2026-04-23", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Scanned at 7feda8e (2026-04-23): 17 files, no lines over 500 characters, no eval, atob, new Function or createRequire, no child_process, no bidi or invisible Unicode, no IP literals, no package.json and so no install lifecycle hook, no hooks.json, no .mcp.json and no .claude/settings.json; its 291 blobs across 61 commits add nothing the checkout lacks and nothing has been deleted. One executable, skills/install-duckdb/eval.sh, a developer eval harness that shells out to claude --print and duckdb and which no SKILL.md references. Two things to know before using it. First, install-duckdb/SKILL.md tells you to install DuckDB with curl -fsSL https://install.duckdb.org | sh: that is a pipe-to-shell it asks you to run, not one it runs itself, and the DuckDB CLI is also in Homebrew and the usual package managers if you would rather not. Second, the read-memories skill searches your past Claude session logs on disk, which is useful and also means it reads transcripts of other work. Its S3, GCS and Azure skills issue DuckDB CREATE SECRET statements with PROVIDER credential_chain, which hands authentication to the cloud SDK's own credential chain rather than reading a credential itself, but a query against a remote bucket does send your data request off the machine. MIT, Stichting DuckDB Foundation.",
+      "tags": ["data", "sql", "duckdb", "parquet", "analytics", "reporting", "csv"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
