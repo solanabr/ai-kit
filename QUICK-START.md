@@ -76,6 +76,7 @@ Opt-in, because each needs a browser, a CLI, a key or a workflow choice. Run `/s
 - **Chainstack** — Multi-chain RPC platform control (needs a key for most tools; 5 read-only ones answer without)
 - **Nansen** — Wallet and token intelligence (paid key required, free tier within credits; ~50 tool schemas per session)
 - **Supabase** — The Postgres backend behind an indexer or dApp. Add it in the hardened form only: `?read_only=true&project_ref=<ref>`. Unflagged it hands over 12 write tools, `execute_sql` among them — an unrestricted SQL channel into your database
+- **Cloudflare** — Operate the Workers, KV, R2, D1, DNS and Queues behind a dApp. Three tools for the whole Cloudflare API, and one of them, `execute`, reaches every one of its 2,594 endpoints — so scope the API token to the specific zone or account resources you want reachable
 
 Documented but deliberately not offered by `/setup-mcp`: **Phantom** (`claude mcp add phantom -- npx -y @phantom/mcp-server`) is a 29-tool wallet and trading surface — signing, transfers, payments and perps — that needs no key once logged in. Add it only if you want Claude able to move your funds.
 

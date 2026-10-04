@@ -10,7 +10,7 @@ This directory is the kit's full spec: everything the [README](../README.md) lin
 | [agents-and-commands.md](agents-and-commands.md) | All 15 agents with the model each runs on, all 32 commands, agent teams and team patterns |
 | [skill-packs.md](skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry, Anthropic's skills |
 | [other-agents.md](other-agents.md) | Codex, Grok Build, Cursor, Copilot, Gemini CLI, opencode: what each actually enforces |
-| [configuration.md](configuration.md) | MCP servers including the opt-in ones, and the settings the kit deliberately leaves to you |
+| [configuration.md](configuration.md) | MCP servers including the opt-in ones, the Claude Code plugins worth installing, and the settings the kit deliberately leaves to you |
 | [design.md](design.md) | Why the always-on context is small, how progressive loading works, the 2026 stack |
 | [repo-structure.md](repo-structure.md) | Repository layout, which parts reach a project, DX scripts, the GitHub Action, branch and review workflow |
 | [../FIREWALL-SPEC.md](../FIREWALL-SPEC.md) | The verified spec the firewall tiers were built from, with the evidence behind each rule |

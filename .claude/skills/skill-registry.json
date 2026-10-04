@@ -508,15 +508,15 @@
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
       "domain": "dev-workflow",
-      "description": "Anthropic-authored Claude Code plugins: code-review, pr-review-toolkit, feature-dev, security-guidance. Complementary to the kit's /diff-review + cso/audit-infra (note the overlap).",
-      "source": "https://github.com/anthropics/claude-code",
-      "install": { "method": "plugin-marketplace", "command": "/plugin marketplace add anthropics/claude-code", "env": [] },
-      "license": "Anthropic-commercial-ToS (not OSI)",
+      "description": "Anthropic's official marketplace, 315 plugins, registered by Claude Code itself. Which ones earn their keep in a Solana project and what each costs per session: docs/configuration.md. code-review, the three LSPs, session-report, skill-creator and mcp-server-dev ship no hooks.",
+      "source": "https://github.com/anthropics/claude-plugins-official",
+      "install": { "method": "plugin-install", "command": "/plugin install code-review@claude-plugins-official", "env": [] },
+      "license": "Apache-2.0 (claude-security is proprietary, Anthropic ToS)",
       "maintainer": "anthropics",
-      "signal": { "stars": 148934, "last_commit": "2026-10-01", "reputability": "official" },
+      "signal": { "stars": 37359, "last_commit": "2026-10-02", "reputability": "official" },
       "default_installed": false,
-      "safety": "clean (Anthropic-authored; security-guidance is itself a safety hook); overlaps the kit's /diff-review + cso/audit-infra",
-      "tags": ["code-review", "pr-review", "feature-dev", "security-guidance", "official"]
+      "safety": "clean (Anthropic-authored; every external entry SHA-pinned). Seven first-party plugins ship hooks: hookify collides with the kit's firewall (its PreToolUse/PostToolUse hooks gate the same tool calls), and security-guidance, claude-security and code-modernization overlap /diff-review and /audit-solana at a standing context cost — docs/configuration.md has the per-plugin numbers",
+      "tags": ["code-review", "lsp", "session-report", "skill-creator", "official"]
     },
     {
       "id": "wshobson-agents",

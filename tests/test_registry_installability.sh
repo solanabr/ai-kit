@@ -41,6 +41,10 @@ SHAPES = {
     "submodule":           r"^git submodule add https://\S+ \.claude/skills/ext/\S+$",
     "git-clone":           r"^git clone ",
     "plugin-marketplace":  r"^/plugin marketplace add \S+$",
+    # Claude Code registers the official Anthropic marketplace itself, so an entry there
+    # installs directly and a "marketplace add" step would be noise. (No apostrophes in
+    # this heredoc: bash 3.2 mis-parses one inside a $(...) command substitution.)
+    "plugin-install":      r"^/plugin install \S+@\S+$",
     "npx":                 r"(?:^|\s)(?:npx|dlx|bunx)\s",
     "remote-http-mcp":     r"--transport http\b.*\bhttps://",
 }
