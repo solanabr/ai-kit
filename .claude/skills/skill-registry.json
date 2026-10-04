@@ -77,16 +77,16 @@
       "path": ".claude/skills",
       "commit": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
       "skills": ["frontend-design", "webapp-testing"],
-      "description": "Anthropic's frontend-design (distinctive UI direction) and webapp-testing (Playwright tests of a local web app), installed as top-level skills: .claude/skills/<name>/ in a default install (Claude Code, Grok Build), or .agents/skills/<name>/ with install.sh --agents (Codex, Cursor, Copilot and other Agent Skills clients). One install serves one of the two families. The only core pack that is not a submodule: skills.sh fetches these three folders from anthropics/skills at the pinned commit and copies them unchanged, LICENSE.txt included, so a default install reaches a second host and a fetch that fails leaves the pack absent with a retry line rather than stopping the install.",
-      "triggers": ["UI design direction", "Playwright tests of a local web app", "building an MCP server"],
+      "description": "Anthropic's frontend-design (distinctive UI direction) and webapp-testing (Playwright tests of a local web app), installed as top-level skills: .claude/skills/<name>/ in a default install (Claude Code, Grok Build), or .agents/skills/<name>/ with install.sh --agents (Codex, Cursor, Copilot and other Agent Skills clients). One install serves one of the two families. The only core pack that is not a submodule: skills.sh fetches these two folders from anthropics/skills at the pinned commit and copies them unchanged, LICENSE.txt included, so a default install reaches a second host and a fetch that fails leaves the pack absent with a retry line rather than stopping the install.",
+      "triggers": ["UI design direction", "Playwright tests of a local web app"],
       "source": "https://github.com/anthropics/skills",
       "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add anthropic-skills", "env": [] },
-      "license": "Apache-2.0 (these three); the repo's docx, pdf, pptx and xlsx skills are proprietary and doc-coauthoring has no license, so skills.sh refuses them",
+      "license": "Apache-2.0 (these two); the repo's docx, pdf, pptx and xlsx skills are proprietary and doc-coauthoring has no license, so skills.sh refuses them",
       "maintainer": "anthropics",
       "signal": { "stars": 179151, "last_commit": "2026-09-28", "reputability": "official" },
       "default_installed": true,
-      "safety": "caution: webapp-testing's scripts/with_server.py runs the server commands it is given through a shell; the skills' guidance is agent-neutral. The one core pack with a standing session cost: it installs top-level, where Claude Code auto-discovers it, so its three descriptions (685 characters) are listed every session and every subagent — about 171 tokens, or 185 counting the listing's own name prefixes. The ext/ core packs cost nothing by comparison, since Claude Code does not auto-discover .claude/skills/ext/.",
-      "tags": ["frontend", "design", "playwright", "testing", "mcp", "cross-agent", "official"]
+      "safety": "caution: webapp-testing's scripts/with_server.py runs the server commands it is given through a shell; the skills' guidance is agent-neutral. The one core pack with a standing session cost: it installs top-level, where Claude Code auto-discovers it, so its two descriptions (408 characters) are listed every session and every subagent — about 102 tokens. The ext/ core packs cost nothing by comparison, since Claude Code does not auto-discover .claude/skills/ext/.",
+      "tags": ["frontend", "design", "playwright", "testing", "cross-agent", "official"]
     },
     {
       "id": "qedgen",

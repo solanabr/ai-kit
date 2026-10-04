@@ -26,7 +26,7 @@ The prompts in that table come from the PreToolUse hooks. The matching `permissi
 
 Text that merely *mentions* a gated command or a credential path is not a command. The secrets hook decides on a tokenized command — heredoc bodies, `echo`/`printf` arguments, `grep`/`rg` patterns and `git`/`gh` messages are data, and a metadata-only command (`ls`, `stat`, `shasum`) on a protected path is not a read of it. The on-chain hook anchors its match to the start of a statement, which is weaker: a heredoc body whose line begins with a gated verb still prompts.
 
-Plugin installs get the hooks only; the permission rules and sandbox come with `install.sh`. `/update` re-applies the tier's rules on every run, replacing only the rules the kit itself wrote — so existing installs do pick these up, and rules you added yourself survive.
+Plugin installs get the hooks only; the permission rules and sandbox come with `install.sh`. `/update` re-applies the tier's rules only when the rule set has been versioned forward: it compares `RULE_SET_VERSION` in the `firewall.sh` it just copied in against `enforced.ruleSetVersion` in your `security.json`, and re-applies only when yours is lower. That apply replaces just the rules the kit itself wrote, so rules you added survive — but a rule change shipped without bumping `RULE_SET_VERSION` never reaches an install that already has a `security.json`. An install predating the firewall is the separate case: `/update` adopts a tier for it once, and only while its policy is still byte-for-byte the kit's own.
 
 ## How a tier is expressed
 
