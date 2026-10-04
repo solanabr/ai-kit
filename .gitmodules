@@ -82,9 +82,6 @@
 [submodule ".claude/skills/ext/expo"]
 	path = .claude/skills/ext/expo
 	url = https://github.com/expo/skills
-[submodule ".claude/skills/ext/stripe"]
-	path = .claude/skills/ext/stripe
-	url = https://github.com/stripe/ai
 [submodule ".claude/skills/ext/duckdb"]
 	path = .claude/skills/ext/duckdb
 	url = https://github.com/duckdb/duckdb-skills

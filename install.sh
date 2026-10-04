@@ -102,9 +102,10 @@ LOCAL_SRC="${SOLANA_AI_KIT_LOCAL_SRC:-${SOLANA_CLAUDE_LOCAL_SRC:-}}"
 if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
   step "Using local source: $LOCAL_SRC"
   mkdir -p "$TEMP_DIR/repo"
-  # -R, not -r: -r follows source symlinks, so a pack that ships one (stripe has four
-  # self-referential LICENSE links) fails the copy with ELOOP, and a pack symlinking
-  # outside its tree would have its target's contents copied in. -R keeps links as links.
+  # -R, not -r: -r follows source symlinks, so a pack shipping a self-referential one
+  # fails the copy with ELOOP, and a pack symlinking outside its tree would have the
+  # target's contents copied in. -R keeps links as links. (stripe/ai, which the kit
+  # does not pin, has four such LICENSE loops and is how this was found.)
   cp -R "$LOCAL_SRC/.claude" "$TEMP_DIR/repo/.claude"
   cp "$LOCAL_SRC/CLAUDE-solana.md" "$TEMP_DIR/repo/CLAUDE-solana.md"
   [ -f "$LOCAL_SRC/.mcp.json" ] && cp "$LOCAL_SRC/.mcp.json" "$TEMP_DIR/repo/.mcp.json"
@@ -257,7 +258,7 @@ fi
 # instead of cp failing with "cannot overwrite non-directory". That is the src/.
 # form's job and -R does not change it: -R governs source links, not the
 # destination path. -R rather than -r so a pack's own symlink is copied as a link
-# (stripe ships four self-referential LICENSE links, which -r fails on with ELOOP).
+# instead of followed, which -r does and then fails on a self-referential one.
 for dir in agents skills commands bin hooks; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
     mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
