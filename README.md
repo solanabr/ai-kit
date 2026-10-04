@@ -8,7 +8,7 @@
 ![Solana](https://img.shields.io/badge/Solana-black?logo=solana)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-powered-orange)
 
-**Claude Code, set up to ship Solana.** One command installs 15 specialized agents, 32 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 4 MCP servers for on-chain data, live docs and context compression, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
+**Claude Code, set up to ship on Solana.** Not programs alone — the whole lifecycle: validating the idea, building the program and the app around it, shipping it, and the launch and growth work that follows. One command installs 15 specialized agents, 32 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 4 MCP servers for on-chain data, live docs and context compression, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
 
 ```bash
 curl -fsSL https://aikit.superteam.codes | bash
@@ -18,7 +18,7 @@ Run it from your project's root — it installs into the current directory. Ever
 
 ## What This Is
 
-A complete `.claude/` configuration that turns Claude into a Solana development expert with:
+A complete `.claude/` configuration that turns Claude into a Solana building partner across that whole lifecycle, not program code alone:
 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research) — [full table](docs/agents-and-commands.md#agents)
 - **32 workflow commands** for building, testing, deploying, profiling, migrating, and committing — [full table](docs/agents-and-commands.md#commands)
@@ -28,7 +28,7 @@ A complete `.claude/` configuration that turns Claude into a Solana development 
 - **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — three installed by default, the rest on demand ([skill-packs.md](docs/skill-packs.md))
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
-- **A small always-on CLAUDE.md** carrying only the program-code house rules and workflow; everything else is on demand
+- **A small always-on CLAUDE.md** carrying only the house rules and workflow a strong model would not infer; everything else is on demand
 
 ## Installer (recommended)
 

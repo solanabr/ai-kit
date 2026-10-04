@@ -69,4 +69,4 @@ From Q12 + the weakest scored dimension, draft the 8–10 hardest questions this
 - Self-score with the fixes applied
 - Objection Q&A sheet
 
-Need an actual rendered deck file (.pptx)? Hand the outline to the pptx skill if available.
+Need a rendered deck? Build it as HTML — one file, one section per slide, your own CSS. It renders anywhere, diffs in git, and Claude Code can design it directly, which a binary office file gives up. The `frontend-design` skill (core) carries the visual direction, and the same route covers any graphic or marketing asset the deck needs.

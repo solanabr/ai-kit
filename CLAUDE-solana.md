@@ -7,9 +7,9 @@
 
 Be direct: no filler, code before explanation, say so when unsure.
 
-## Before writing Solana code
+## Before building
 
-Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data.
+Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data — and, for work that is not program code, to the app, launch and growth packs the kit pins.
 
 Only the core skill packs ship installed. A link into a missing `.claude/skills/ext/<id>/` folder is an extension the kit pins: run the `bash .claude/bin/skills.sh add <id>` command given next to it, then read the link.
 
@@ -24,7 +24,7 @@ Only the core skill packs ship installed. A link into a missing `.claude/skills/
 
 - Branches: `<type>/<scope>-<description>-<DD-MM-YYYY>` (`/quick-commit` automates this).
 - Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. (Claude Code adds one: deploys, upgrades and authority changes stop for the user's approval on every cluster, and irreversible ones such as `--final` or a program close are left for the user to run. Other runtimes have no such gate.)
-- Before finishing a branch: build, `cargo fmt`, clippy and tests pass, `/diff-review` is clean, and docs that describe the change are updated. For program changes also run `/audit-solana` and `/profile-cu`, and deploy only the `.so` from `solana-verify build` (run after `anchor build`), the binary verification reproduces.
+- Before finishing a branch: the project's own build, format, lint and test commands pass, `/diff-review` is clean, and docs that describe the change are updated. For Rust program code that means `cargo fmt` and clippy, plus `/audit-solana` and `/profile-cu`, and deploy only the `.so` from `solana-verify build` (run after `anchor build`), the binary verification reproduces.
 - The firewall tier named in `.claude/security.json`, read at session start, sets this session's file, command and egress rules; it and `.claude/settings*.json` are the user's to change, so ask them to run `/firewall` instead of editing those files yourself.
 
 ## MCP
