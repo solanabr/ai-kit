@@ -73,3 +73,18 @@
 [submodule ".claude/skills/ext/get-shit-pretty"]
 	path = .claude/skills/ext/get-shit-pretty
 	url = https://github.com/jubscodes/get-shit-pretty
+[submodule ".claude/skills/ext/frontend-slides"]
+	path = .claude/skills/ext/frontend-slides
+	url = https://github.com/zarazhangrui/frontend-slides
+[submodule ".claude/skills/ext/superseo"]
+	path = .claude/skills/ext/superseo
+	url = https://github.com/inhouseseo/superseo-skills
+[submodule ".claude/skills/ext/expo"]
+	path = .claude/skills/ext/expo
+	url = https://github.com/expo/skills
+[submodule ".claude/skills/ext/duckdb"]
+	path = .claude/skills/ext/duckdb
+	url = https://github.com/duckdb/duckdb-skills
+[submodule ".claude/skills/ext/crypto-legal"]
+	path = .claude/skills/ext/crypto-legal
+	url = https://github.com/solanabr/crypto-legal-skill
