@@ -119,7 +119,11 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 # project that already has a security.json.
 #   1 -> 2: DENY_MCP_ARBITRARY_EXECUTION at Medium and High.
 #   2 -> 3: Edit(/.safe-ai-skill/**) in DENY_SELF_PROTECTION, every tier.
-RULE_SET_VERSION = 3
+#   3 -> 4: DENY_MCP_CLOUDFLARE_EXECUTION at High only; DENY_SELF_PROTECTION became
+#           High-only (Off/Relaxed/Medium now permit edits to the installation's own
+#           config), and its blanket Edit(~/.claude/**) was narrowed to the policy
+#           surface so agent memory and ~/.claude/CLAUDE.md are writable at High too.
+RULE_SET_VERSION = 4
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
@@ -323,12 +327,20 @@ ALLOW = [
 ]
 
 # ===========================================================================
-# permissions.deny — the never-allowed set, byte-identical at every tier
+# permissions.deny — the never-allowed set
 # ===========================================================================
-# Deny is the one axis where merge-monotonicity is harmless, because every tier
-# agrees. If it varied, descending a tier could not take the extra denies back out of
-# a user or managed settings file that had already merged them. Everything that does
-# vary by tier is a sandbox.filesystem path or a hook decision.
+# Every Bash rule below is byte-identical at every tier, and that is deliberate: deny
+# is merge-monotonic, so if a rule reaches a user or managed settings file, descending
+# a tier cannot take it back out. Most tier variation therefore lives in a
+# sandbox.filesystem path or a hook decision.
+#
+# Three groups are exceptions, and they are safe for the same reason: firewall.sh owns
+# one file and subtracts exactly the strings recorded in enforced.ruleIds, so a descent
+# does remove them. The relaxed -> high -> relaxed and high -> medium byte-identity
+# tests are the proof. The groups are DENY_SELF_PROTECTION (High only),
+# DENY_MCP_ARBITRARY_EXECUTION (Medium and High) and DENY_MCP_CLOUDFLARE_EXECUTION
+# (High only). The residual is unchanged: a block hand-copied into user or managed
+# scope stops tracking the tier, and those denies then cannot be lifted.
 #
 # Two matcher facts the patterns below are built around:
 #   * A mid-pattern `*` does not match the empty string: Bash(anchor * --final*) did
@@ -337,28 +349,88 @@ ALLOW = [
 #   * A trailing ` *` DOES match the bare command, but only when it is the rule's only
 #     wildcard, so Bash(gh auth token *) already covers bare `gh auth token`.
 
+DENY_POLICY_ESCAPE = [
+    # Unconditional at every tier, Off included. What these three have in common is that
+    # none of them is "the user customizing their own installation" — the distinction
+    # that makes DENY_SELF_PROTECTION below tier-varying.
+    #
+    # A nested `claude -p --dangerously-skip-permissions` re-rolls the whole policy in
+    # a child process, and npm/npx/node are allowed. That is not editing a config file,
+    # it is starting a second agent with no policy at all, so no tier hands it back.
+    # Residuals that cannot be closed from here: --settings, --permission-mode,
+    # --setting-sources, CLAUDE_CONFIG_DIR.
+    "Bash(claude *)",
+    "Bash(claude)",
+    # An organization's managed settings belong to the administrator, not to the user
+    # whose installation the tiers are about, and they are the one tier an agent cannot
+    # talk its way out of. Editing them needs root anyway; the rule costs nothing.
+    "Edit(//**/managed-settings.json)",
+    # safe-ai-skill deep-merges the whole file over its default policy, so an edit here
+    # could loosen any of its gates, spend caps included, not just supply_chain. It is a
+    # third-party security tool's policy rather than Claude Code's own configuration, so
+    # it is not part of the installation Medium and below hand back.
+    "Edit(/.safe-ai-skill/**)",
+]
+
+# High only. Every other tier lets the agent edit the installation's own configuration.
+#
+# The rationale is the same one that makes High the only tier to refuse Cloudflare's
+# `execute`: below High, the kit defers to a user who chose to customize their setup;
+# High is the locked-down tier, where "the agent cannot rewrite what constrains it" is
+# part of the proposition. At Off, Relaxed and Medium an agent may now edit
+# .claude/settings.json, .claude/hooks/** and the user-scope equivalents.
+#
+# State the consequence rather than burying it: Relaxed is the DEFAULT tier, and the
+# hooks under .claude/hooks/ are what gate mainnet deploys, value-moving actions and
+# secret reads. At the default tier an agent that hits the mainnet gate can now edit the
+# script that produced it. A user who wants the old behaviour has to choose High.
+#
+# Edit(...), not Read(...): a Read deny also blocks Edit and Write but leaves
+# NotebookEdit open, and would stop the kit's own tooling reading its config. At bypass,
+# protected-path writes are allowed and allow rules do not pre-approve them, so an
+# explicit deny is the only thing left that stops the rewrite.
 DENY_SELF_PROTECTION = [
-    # At bypass, protected-path writes are allowed and allow rules do not pre-approve
-    # them, so only an explicit deny stops the agent rewriting its own tier.
-    # Edit(...), not Read(...): a Read deny also blocks Edit and Write but leaves
-    # NotebookEdit open, and would stop the kit's own tooling reading its config.
     "Edit(/.claude/settings.json)",
     "Edit(/.claude/settings.local.json)",
     "Edit(/.claude/settings.*.json)",
     "Edit(/.claude/security.json)",
     "Edit(/.claude/hooks/**)",
     "Edit(/.mcp.json)",
-    # safe-ai-skill deep-merges the whole file over its default policy, so an edit
-    # here could loosen any of its gates, spend caps included, not just supply_chain.
-    "Edit(/.safe-ai-skill/**)",
+    # User scope. Deliberately NOT the blanket Edit(~/.claude/**) this list used to
+    # carry: that glob also denied ~/.claude/projects/**/memory/**, the harness's own
+    # file-based agent memory, and ~/.claude/CLAUDE.md, which CLAUDE-solana.md tells
+    # every user project to write cross-project preferences into. The kit was forbidding
+    # a documented feature and its own shipped instruction, and because deny wins over
+    # allow in every scope with no un-deny primitive, no allow rule could carve either
+    # one back out — the glob itself had to go.
+    #
+    # What stays denied is the policy surface: the files Claude Code LOADS as
+    # configuration or EXECUTES. Caches, logs, transcripts, session state, plans and
+    # keybindings are not policy and are left alone. Session transcripts are handled
+    # separately and still read-denied at Medium and High (sandbox.filesystem.denyRead
+    # carries ~/.claude/projects/**/*.jsonl and ~/.claude/history.jsonl), so the
+    # transcripts stay unreadable while the memory directory beside them is writable.
     "Edit(~/.claude/settings.json)",
-    "Edit(~/.claude/**)",
-    "Edit(//**/managed-settings.json)",
-    # A nested `claude -p --dangerously-skip-permissions` re-rolls the whole policy in
-    # a child process, and npm/npx/node are allowed. Residuals that cannot be closed
-    # from here: --settings, --permission-mode, --setting-sources, CLAUDE_CONFIG_DIR.
-    "Bash(claude *)",
-    "Bash(claude)",
+    "Edit(~/.claude/settings.local.json)",
+    "Edit(~/.claude/settings.*.json)",
+    "Edit(~/.claude/.credentials.json)",
+    "Edit(~/.claude/hooks/**)",
+    "Edit(~/.claude/agents/**)",
+    "Edit(~/.claude/commands/**)",
+    "Edit(~/.claude/skills/**)",
+    "Edit(~/.claude/rules/**)",
+    "Edit(~/.claude/output-styles/**)",
+    "Edit(~/.claude/plugins/**)",
+    "Edit(~/.claude/workflows/**)",
+    "Edit(~/.claude/routines/**)",
+    "Edit(~/.claude/scheduled_tasks.json)",
+    "Edit(~/.claude/daemon.json)",
+    "Edit(~/.claude/launch.json)",
+    # Sourced into every Bash invocation, so a write here is code execution on the next
+    # shell command — the same class as a hook, not a cache.
+    "Edit(~/.claude/shell-snapshots/**)",
+    # Where a local `claude` install lives; writing it replaces the binary.
+    "Edit(~/.claude/local/**)",
 ]
 
 DENY_CREDENTIALS = [
@@ -692,8 +764,36 @@ DENY_MCP_ARBITRARY_EXECUTION = [
     "mcp__context-mode__ctx_index",
 ]
 
+# High only — the one place the MCP deny set differs between Medium and High.
+#
+# cloudflare/mcp exposes three tools, verified against its README: `docs` searches the
+# developer documentation, `search` runs JavaScript against `spec.paths` to find an
+# endpoint, and `execute` runs JavaScript calling `cloudflare.request()`. Only the last
+# one mutates, and what it reaches is the whole Cloudflare write API — 2,594 endpoints,
+# so deploying a Worker, editing a zone's DNS records and purging a Queue are all in
+# scope. `docs` and `search` stay callable at every tier: documentation lookup is the
+# main reason to attach the server at all.
+#
+# Why this is High-only while context-mode's executor is denied at Medium too.
+# context-mode ships ON BY DEFAULT, so the user never chose it and both gated tiers have
+# to speak for them. Cloudflare is opt-in and needs an API token the user creates with
+# scopes they pick, so attaching it is itself a decision — which makes Medium's job
+# "respect an explicit choice" rather than "protect from a default". High is the
+# locked-down interactive tier, and an ungated arbitrary executor contradicts that
+# proposition however it arrived.
+#
+# Two residuals, same as every MCP rule. The `mcp__cloudflare__` prefix is the local
+# server NAME, which is what /setup-mcp's documented `claude mcp add ... cloudflare`
+# command produces; a server added under another name is not matched. And the
+# `?codemode=false` form of the URL registers ~2,500 per-endpoint tools instead of these
+# three, none of which this rule names — /setup-mcp tells the user not to use it, and
+# the token's scopes remain the only boundary there.
+DENY_MCP_CLOUDFLARE_EXECUTION = [
+    "mcp__cloudflare__execute",
+]
+
 DENY = [
-    DENY_SELF_PROTECTION,
+    DENY_POLICY_ESCAPE,
     DENY_CREDENTIALS,
     DENY_BROWSER_STORES,
     DENY_CODE_ON_NEXT_BUILD,
@@ -1010,8 +1110,10 @@ def plan(tier):
         # permissionDecision "ask"; every hard block is a deny rule or hook exit 2.
         # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
         "permissions.ask": [],
-        # DENY_MCP_ARBITRARY_EXECUTION is appended below, at Medium and High only.
-        "permissions.deny": DENY,
+        # Tier-varying deny groups are appended below: DENY_SELF_PROTECTION at High,
+        # DENY_MCP_ARBITRARY_EXECUTION at Medium and High, and
+        # DENY_MCP_CLOUDFLARE_EXECUTION at High.
+        "permissions.deny": DENY + ([DENY_SELF_PROTECTION] if high else []),
         "sandbox.excludedCommands": [] if off else [EXCLUDED_COMMANDS],
         "sandbox.network.deniedDomains": [],
         "sandbox.filesystem.denyRead": [],
@@ -1031,15 +1133,23 @@ def plan(tier):
 
     if off:
         # Off disables the OS sandbox and generates no path or egress fencing. The
-        # never-allowed deny set above still applies: it is unconditional, and it is
-        # what stops the agent rewriting its own tier.
+        # never-allowed deny set above still applies, DENY_POLICY_ESCAPE included, so a
+        # nested `claude --dangerously-skip-permissions` is refused even here. What Off
+        # does NOT carry is DENY_SELF_PROTECTION: like Relaxed and Medium, it lets the
+        # agent edit the installation's own config files.
         return lists, scalars
 
     # Medium and High both state that an arbitrary executor is not reachable, and a
     # default-on MCP server with one makes that false unless the tool itself is refused.
     # Relaxed keeps every context-mode tool and relies on the hooks; see the group above.
+    # High additionally refuses the one opt-in executor, which is the only place the two
+    # gated tiers differ: Medium respects an explicitly attached server, High does not.
     if medium_up:
-        lists["permissions.deny"] = DENY + [DENY_MCP_ARBITRARY_EXECUTION]
+        extra = [DENY_SELF_PROTECTION] if high else []
+        extra.append(DENY_MCP_ARBITRARY_EXECUTION)
+        if high:
+            extra.append(DENY_MCP_CLOUDFLARE_EXECUTION)
+        lists["permissions.deny"] = DENY + extra
 
     domains = [DOMAINS_EXFIL_SINKS, DOMAINS_TUNNELS, DOMAINS_PASTE_AND_DROPS]
     if medium_up:

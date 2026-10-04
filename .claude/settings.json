@@ -438,18 +438,10 @@
       "WebSearch(*)"
     ],
     "deny": [
-      "Edit(/.claude/settings.json)",
-      "Edit(/.claude/settings.local.json)",
-      "Edit(/.claude/settings.*.json)",
-      "Edit(/.claude/security.json)",
-      "Edit(/.claude/hooks/**)",
-      "Edit(/.mcp.json)",
-      "Edit(/.safe-ai-skill/**)",
-      "Edit(~/.claude/settings.json)",
-      "Edit(~/.claude/**)",
-      "Edit(//**/managed-settings.json)",
       "Bash(claude *)",
       "Bash(claude)",
+      "Edit(//**/managed-settings.json)",
+      "Edit(/.safe-ai-skill/**)",
 
       "Read(~/.ssh)",
       "Read(~/.ssh/**)",
