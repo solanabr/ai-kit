@@ -1,6 +1,6 @@
 {
   "version": "1.2",
-  "updated": "2026-10-03",
+  "updated": "2026-10-04",
   "tiers": {
     "core": "Pinned by the kit as a git submodule under .claude/skills/ext/ and installed by default.",
     "extension": "Pinned by the kit the same way and installed on demand: bash .claude/bin/skills.sh add <id>. An entry with a skills list is not a submodule: skills.sh fetches those folders from its source into .claude/skills/<name>/.",
@@ -371,6 +371,25 @@
       "tags": ["frontend", "nextjs", "react", "deploy", "official"]
     },
     {
+      "id": "get-shit-pretty",
+      "name": "Get Shit Pretty (GSP)",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "frontend-design",
+      "path": ".claude/skills/ext/get-shit-pretty",
+      "commit": "5754ce8c44cd9cc9d9207e25955a1a89cf875bb8",
+      "description": "Design engineering for a dApp's surface: a brand pipeline (strategy, identity, guidelines) and a project pipeline (brief, research, design, critique, build, review) across 45 skills and 13 scoped sub-agents, emitting shadcn registry themes, Tailwind tokens, a STYLE.md and WCAG 2.2 audits. 35 style presets. Not Solana-specific — it designs the client, not the program.",
+      "triggers": ["brand identity or a design system for the app", "shadcn theme or design tokens", "make the UI less generic", "accessibility audit of a screen", "design critique before building"],
+      "source": "https://github.com/jubscodes/get-shit-pretty",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add get-shit-pretty", "env": [] },
+      "license": "MIT",
+      "maintainer": "jubscodes",
+      "signal": { "stars": 55, "last_commit": "2026-06-06", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "clean at this pin on every checklist item, verified across all 1,657 blobs in its history and not just the checkout: no eval, atob, new Function or createRequire; no install lifecycle hook in package.json, ever; zero occurrences of keypair, wallet, private-key, mnemonic or credential terms anywhere in the repo; no invisible or bidi Unicode; no whitespace-padded line; no base64 payload; every long line is prose or a Tailwind class string. Zero production dependencies. child_process appears in two statusline scripts only, argv-form with fixed arguments, and bin/install.js uses none. Its only egress is `npm view get-shit-pretty version` once per 24h, and the only IP literal is 127.0.0.1 in a loopback preset server that self-exits after 60s. Pinning it is inert: the kit copies ext/ packs as plain files, fetches no pack submodules and never reads a pack's .mcp.json or hooks.json, so neither takes effect in a session. Three things to know before wiring any of it by hand. (1) Its root .mcp.json declares a local stdio MCP server, `npx -y @anthropic/mcp-figma` carrying FIGMA_ACCESS_TOKEN, and that package does not exist: the whole @anthropic npm scope is unclaimed (Anthropic's is @anthropic-ai), so the name is squattable and a local MCP server runs outside the OS sandbox. Do not copy that file to a project root. (2) gsp/hooks/hooks.json wires PreToolUse on every Edit/Write, SessionStart on compact and twelve SubagentStop matchers to bash scripts/*.sh; those scripts are local, read-only over .design/ and parse stdin with jq, but they run unattended once wired. (3) dev/scripts/token-proxy.py is a mitmproxy addon that intercepts api.anthropic.com to count tokens; it records only usage counters to a local jsonl, transmits nothing, and needs both mitmproxy and an HTTPS_PROXY you set yourself. Correcting the earlier add-on note: bin/install.js does not merge hooks into settings.json — it writes settings.statusLine only and never references hooks.json or .mcp.json, so the pack's own installer does not wire its hooks either, despite its README advertising them. Its install.sh is stale (it copies commands/ and agents/ paths that no longer exist, under set -e) and targets ~/.claude globally; nothing in the kit runs it. A pin vendors the author's whole monorepo, ~4.6 MB over 571 files, of which the gsp/ payload is 1.6 MB and the rest is their marketing site, their own .design artifacts, dev tooling and nine commercial Pangram Pangram woff2 fonts. In --agents installs Codex and opencode load all 45 nested SKILL.md files.",
+      "tags": ["design", "branding", "design-systems", "ui-polish", "frontend", "accessibility", "shadcn", "hooks"]
+    },
+    {
       "id": "supabase",
       "name": "Supabase Agent Skills",
       "type": "skill",
@@ -547,21 +566,6 @@
       "default_installed": false,
       "safety": "archived: the repository is read-only and its README points to open-gsd/gsd-core, which the kit has not reviewed; don't install this one",
       "tags": ["spec-driven", "meta-prompting", "workflow", "agents", "commands"]
-    },
-    {
-      "id": "get-shit-pretty",
-      "name": "Get Shit Pretty (GSP)",
-      "type": "template-repo",
-      "domain": "frontend-design",
-      "description": "Design-engineering system for AI coding agents (the design counterpart to GSD): 45+ skills + 13 sub-agents covering brand strategy, identity, design systems, UI build, accessibility, and critique via a dual-diamond pipeline, with 35 style presets. Not Solana-specific.",
-      "source": "https://github.com/jubscodes/get-shit-pretty",
-      "install": { "method": "npx", "command": "npx -y get-shit-pretty", "env": ["FIGMA_ACCESS_TOKEN (optional, for the bundled Figma MCP)"] },
-      "license": "MIT",
-      "maintainer": "jubscodes",
-      "signal": { "stars": 43, "last_commit": "2026-06-07", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "caution: ships auto-running Claude Code hooks (gsp/hooks/hooks.json) + bin/install.js merges hooks+statusline into settings.json — review before installing; otherwise MIT, no telemetry/curl|sh",
-      "tags": ["design", "branding", "design-systems", "ui-polish", "frontend", "accessibility", "claude-code", "hooks"]
     },
     {
       "id": "dev-browser",

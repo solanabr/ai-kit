@@ -18,7 +18,7 @@ Four packs ship installed — solana-dev, auditor-skill, colosseum and anthropic
 | Kept by `/update` | yes | no |
 | Who runs it | the user, on a yes | the user, and only after `safe-ai-skill add skill\|mcp <source>` returns `proceed: true` |
 
-An add-on entry's `license` and `safety` lines are load-bearing, so read them out before the user installs: several packs carry no license (usable, not redistributable), a few have been stale for a year, and `get-shit-pretty` merges hooks and a statusline into `settings.json`.
+An add-on entry's `license` and `safety` lines are load-bearing, so read them out before the user installs: several packs carry no license (usable, not redistributable), a few have been stale for a year, and some write hooks or a statusline into `settings.json` when run through their own installer.
 
 ## Work to packs
 
@@ -28,7 +28,7 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 |------|-------------------|---------|
 | Any program work: Anchor, Pinocchio, native | `qedgen` (Lean 4 proof that the invariant you just wrote holds), `quicknode-anchor` (fixed-point and financial math) | — |
 | Porting a Solidity or EVM contract | — | `eth-to-sol` (the Solana Foundation's type, pattern and stdlib mappings; it carries no licence file, so read it where it lands rather than vendoring it) |
-| Landing page, marketing site, any UI surface | `vercel` (web design review, Next.js and React performance), `solana-new` (brand design, design taste, frontend design guidelines, number formatting) | `anydesign` (an image, URL or Figma frame into design tokens), `design-skills` (design critique, accessibility audit, journey mapping), `ux-writing-skill` (onboarding, error and empty-state copy), `get-shit-pretty` (45 design skills; writes hooks into settings.json) |
+| Landing page, marketing site, any UI surface | `vercel` (web design review, Next.js and React performance), `get-shit-pretty` (brand identity and a design system: shadcn theme, design tokens, UI critique, WCAG audit — 45 skills, 13 sub-agents), `solana-new` (brand design, design taste, frontend design guidelines, number formatting) | `anydesign` (an image, URL or Figma frame into design tokens), `design-skills` (design critique, accessibility audit, journey mapping), `ux-writing-skill` (onboarding, error and empty-state copy) |
 | Animation, motion, transitions, page-load choreography | `solana-new` (page-load animation and video-craft references) | `emilkowalski-skill` (animate, review-animations, apple-design; markdown only), `animation-principles` (motion principles as prose; unmaintained since December 2025) |
 | NFTs, collections, compressed NFTs | `metaplex` | — |
 | Swaps, lending, perps, oracles, bridges | `jupiter`, `sendai` | `meteora-invent` (Meteora's own skill, deeper than the sendai folder) |
@@ -50,7 +50,6 @@ Name the key when offering the pack, and check whether it is set with `bash .cla
 
 - `qedgen` — `MISTRAL_API_KEY` for fill-sorry and generate, `ARISTOTLE_API_KEY` for the aristotle commands. Without either, its Lean references still read but nothing generates, so the pack is worth installing only alongside a key.
 - `alchemy` — `ALCHEMY_API_KEY` for the alchemy-api skill; its agentic-gateway skill is keyless (x402), so the pack still earns its place without a key.
-- `get-shit-pretty` — `FIGMA_ACCESS_TOKEN`, optional.
 
 A pack that is inert without a key the user has not set is a question, not an install: say which key it needs and what it would do once set.
 
