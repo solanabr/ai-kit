@@ -83,7 +83,7 @@ Featured add-ons by domain:
 
 - **Claude-official:** the 315 plugins in [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official), which Claude Code registers for you — which ones earn their keep here, and what each costs per session, is [configuration.md → plugins worth installing](configuration.md#claude-code-plugins-worth-installing). Anthropic's Apache-2.0 skills are the `anthropic-skills` core pack above
 - **Dev-workflow:** [wshobson/agents](https://github.com/wshobson/agents)
-- **Frontend/Design:** [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles) — `frontend-slides` left this list when it became a pinned extension above
+- **Frontend/Design:** [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
 - **Testing:** [SawyerHood/dev-browser](https://github.com/SawyerHood/dev-browser) · [conorluddy/ios-simulator-skill](https://github.com/conorluddy/ios-simulator-skill)
 - **Data:** [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills)
