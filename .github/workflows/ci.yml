@@ -102,7 +102,9 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/proj"
           timeout 300 opencode debug skill > "$RUNNER_TEMP/opencode-skills.json"
-          for s in idea-sprint pitch-deck hackathon; do
+          # skill-packs is listed too: pack routing rests on its description being
+          # discovered, so an --agents install can surface a pack at all.
+          for s in idea-sprint pitch-deck hackathon skill-packs; do
             grep -q "/\.agents/skills/$s/SKILL\.md" "$RUNNER_TEMP/opencode-skills.json" \
               || { echo "::error::opencode did not discover $s"; head -c 3000 "$RUNNER_TEMP/opencode-skills.json"; exit 1; }
           done

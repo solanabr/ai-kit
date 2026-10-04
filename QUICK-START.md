@@ -226,6 +226,7 @@ your-project/
 │   │   │   │                      # position-manager-skill, content-gen-skill, writer-style-skill
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
+│   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
