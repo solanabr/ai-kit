@@ -851,21 +851,6 @@
       "tags": ["memory", "agent", "watchlist", "solana"]
     },
     {
-      "id": "snap-protocol",
-      "name": "Snap Protocol",
-      "type": "skill",
-      "domain": "solana-infra",
-      "description": "Snapshot/state protocol skill (watchlist — young/unverified).",
-      "source": "https://github.com/agentzeny/snap-public",
-      "install": null,
-      "license": "unverified",
-      "maintainer": "agentzeny",
-      "signal": { "stars": null, "last_commit": null, "reputability": "emerging — verify before install" },
-      "default_installed": false,
-      "safety": "caution: early — verify reachability + traction before any use",
-      "tags": ["snapshot", "state", "protocol", "watchlist", "solana"]
-    },
-    {
       "id": "seeker-skills",
       "name": "Seeker Skills",
       "type": "skill",
@@ -879,21 +864,6 @@
       "default_installed": false,
       "safety": "caution: niche mobile, unverified — cross-check vs ext/solana-mobile before adding",
       "tags": ["seeker", "mobile", "watchlist", "solana"]
-    },
-    {
-      "id": "sati",
-      "name": "SATI (SAID/SATI/AIP)",
-      "type": "skill",
-      "domain": "identity",
-      "description": "Agent-identity standards (SAID/SATI/AIP). Not a skill yet — emerging standard (watchlist). Net-new vs solana-new.",
-      "source": "https://github.com/cascade-protocol/sati",
-      "install": null,
-      "license": "unverified",
-      "maintainer": "cascade-protocol",
-      "signal": { "stars": null, "last_commit": null, "reputability": "emerging — verify before install" },
-      "default_installed": false,
-      "safety": "caution: emerging standard, not a skill yet — monitor for adoption",
-      "tags": ["agent-identity", "standard", "watchlist", "solana"]
     },
     {
       "id": "composio-awesome-claude-skills",
