@@ -523,6 +523,25 @@
       "tags": ["community", "moderation", "telegram", "discord", "support"]
     },
     {
+      "id": "frontend-slides",
+      "name": "Frontend Slides",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "frontend-design",
+      "path": ".claude/skills/ext/frontend-slides",
+      "commit": "9906a34d640d2111f724544cbc50f7f130569ae1",
+      "description": "Animation-rich HTML slide decks, and the house format for decks, graphics and marketing material. 36 designed templates with per-template design.md and preview.md, a selection index that maps a deck's intent to a template, a shared deck-stage.js runtime, and scripts to render a deck to PDF or publish it. HTML in, no PowerPoint: the kit's pitch-deck and content-gen skills hand it the content.",
+      "triggers": ["slide deck or presentation in HTML", "pitch deck or demo-day slides", "marketing graphic or social image", "export a deck to PDF", "publish a deck to a URL"],
+      "source": "https://github.com/zarazhangrui/frontend-slides",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add frontend-slides", "env": [] },
+      "license": "MIT",
+      "maintainer": "zarazhangrui",
+      "signal": { "stars": 30126, "last_commit": "2026-06-23", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "Scanned at 9906a34 (2026-06-23): no lines over 500 characters, no eval, atob, new Function or createRequire, no bidi or invisible Unicode, no IP literals, no package.json and so no install lifecycle hook, no hooks.json, no .mcp.json and no .claude/settings.json; all 291 blobs across its 31 commits hold nothing the checkout does not, and nothing has ever been deleted from it. Two executables sit inside the skill directory, each also duplicated at the repo root, and neither runs unless you ask for an export or a deploy. scripts/export-pdf.sh writes a Node script into a temp dir, runs npm install playwright and npx playwright install chromium there, renders the deck headless and rm -rf's the temp dir after. scripts/deploy.sh publishes a deck through the Vercel CLI and will npm install -g vercel if neither a global vercel nor npx can provide it, so a deploy both installs a global package and puts your slides on a public URL under your own Vercel account. Decks fetch webfonts at render time from fonts.googleapis.com, fonts.gstatic.com, api.fontshare.com and chinese-fonts-cdn.deno.dev, and templates reference raw.githubusercontent.com and cdn.jsdelivr.net assets, so a deck is not offline-clean. Personal-account repo, vetted in the provenance table.",
+      "tags": ["slides", "presentation", "html", "animation", "frontend", "marketing"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
@@ -596,21 +615,6 @@
       "default_installed": false,
       "safety": "clean",
       "tags": ["ios", "simulator", "xcode", "mobile", "testing"]
-    },
-    {
-      "id": "frontend-slides",
-      "name": "Frontend Slides",
-      "type": "skill",
-      "domain": "frontend-design",
-      "description": "Build animation-rich HTML slide decks (synergy with the kit's pitch-deck).",
-      "source": "https://github.com/zarazhangrui/frontend-slides",
-      "install": { "method": "submodule", "command": "git submodule add https://github.com/zarazhangrui/frontend-slides .claude/skills/ext/frontend-slides", "env": [] },
-      "license": "MIT",
-      "maintainer": "zarazhangrui",
-      "signal": { "stars": 21785, "last_commit": "2026-06-13", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "clean",
-      "tags": ["slides", "presentation", "html", "animation", "frontend"]
     },
     {
       "id": "anydesign",

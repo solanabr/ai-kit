@@ -73,3 +73,6 @@
 [submodule ".claude/skills/ext/get-shit-pretty"]
 	path = .claude/skills/ext/get-shit-pretty
 	url = https://github.com/jubscodes/get-shit-pretty
+[submodule ".claude/skills/ext/frontend-slides"]
+	path = .claude/skills/ext/frontend-slides
+	url = https://github.com/zarazhangrui/frontend-slides
