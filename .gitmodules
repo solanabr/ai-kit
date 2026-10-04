@@ -73,3 +73,6 @@
 [submodule ".claude/skills/ext/get-shit-pretty"]
 	path = .claude/skills/ext/get-shit-pretty
 	url = https://github.com/jubscodes/get-shit-pretty
+[submodule ".claude/skills/ext/obsidian-skills"]
+	path = .claude/skills/ext/obsidian-skills
+	url = https://github.com/kepano/obsidian-skills

@@ -390,6 +390,25 @@
       "tags": ["design", "branding", "design-systems", "ui-polish", "frontend", "accessibility", "shadcn", "hooks"]
     },
     {
+      "id": "obsidian-skills",
+      "name": "Obsidian Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "knowledge-management",
+      "path": ".claude/skills/ext/obsidian-skills",
+      "commit": "3ccff5338ea700537839b21900aa5358a0402c98",
+      "description": "Reading and writing an Obsidian vault as the project's notes layer: Obsidian-flavored Markdown (callouts, embeds, properties), Bases (.base query views plus their function reference), JSON Canvas (.canvas), Knap, the `obsidian` CLI for vault operations and plugin development, and Defuddle for turning a web page into clean Markdown. Not Solana-specific — it manages notes and research, not programs.",
+      "triggers": ["an Obsidian vault or .base/.canvas files in one", "research notes or a knowledge base for the project", "Obsidian-flavored Markdown with callouts or embeds or properties", "a Bases query view or a JSON Canvas board", "extracting a web page to clean Markdown"],
+      "source": "https://github.com/kepano/obsidian-skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add obsidian-skills", "env": [] },
+      "license": "MIT",
+      "maintainer": "kepano",
+      "signal": { "stars": 49153, "last_commit": "2026-09-15", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "clean at this pin on every checklist item, verified across the full history (49 commits, 50 blobs, largest blob 17.9 KB) and not just the checkout: zero symlinks, zero submodules, zero executables; no eval, atob, new Function or createRequire; no child_process, subprocess or os.system; no invisible or bidi Unicode; no line over 500 characters and no whitespace padding; no raw IP; no credential-shaped string. The pack ships no executable code at all — 15 tracked files, 12 Markdown plus two .claude-plugin manifests and a license — and every path that has ever existed in its history ended in .md or .json, so there is no package.json (hence no preinstall/postinstall/prepare hook, ever), no hooks.json, no .mcp.json and no .claude/settings.json. Its plugin manifests declare no hooks and no MCP servers. Hardcoded hosts are obsidian.md, github.com, jsoncanvas.org, agentskills.io, stephango.com and example.com placeholders. Two behaviours the skills instruct an agent to perform — both documented first-party features, not hidden payloads, and neither triggered by pinning: (1) obsidian-cli/SKILL.md drives the `obsidian` CLI against a running Obsidian instance and documents `obsidian eval code=\"...\"`, which executes arbitrary JavaScript in the app context, alongside dev:dom, dev:screenshot, dev:console and CDP/debugger controls — note that a grep for `eval(` does not catch this form, and it reaches the user's live vault; (2) defuddle/SKILL.md tells the agent to `npm install -g defuddle` (the package does exist on npm) and then fetch arbitrary URLs through it. Pinning is inert — the kit copies ext/ packs as plain files and never reads a pack's manifests — but both run if an agent follows the skill, so treat this pack as vault-write and local-exec capable once installed.",
+      "tags": ["obsidian", "notes", "knowledge-management", "markdown", "canvas", "research", "pkm"]
+    },
+    {
       "id": "supabase",
       "name": "Supabase Agent Skills",
       "type": "skill",

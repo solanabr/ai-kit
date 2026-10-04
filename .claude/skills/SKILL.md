@@ -101,6 +101,7 @@ The three cover different questions: `auditor-skill` the program's source, `sign
 
 - [content-gen](ext/content-gen-skill/skills/content-gen/SKILL.md) (install: `bash .claude/bin/skills.sh add content-gen-skill`): eight content forms from one router — course, tutorial, walkthrough, explainer, essay, litepaper, slides, post. Route the form first ([forms/FORMS.md](ext/content-gen-skill/skills/content-gen/forms/FORMS.md)), then follow the fixed pipeline: backward design ([design-spine.md](ext/content-gen-skill/skills/content-gen/design-spine.md)), the [Solana prerequisite DAG](ext/content-gen-skill/skills/content-gen/references/solana-syllabus-dag.md), grounding against live sources, draft, voice pass, visual placeholders, validators. Skipping a stage is a defect, not a shortcut.
 - [writer-style](ext/writer-style-skill/skills/writer-style/SKILL.md) (install: `bash .claude/bin/skills.sh add writer-style-skill`): prose in a named author's voice, facts verified before styling. Ships the `kaue` and `david` [packs](ext/writer-style-skill/skills/writer-style/profiles/); content-gen hands it a brief tagged with `dominant_job` when both are installed, and writes the prose itself when it is absent.
+- [obsidian-skills](ext/obsidian-skills/skills/) (install: `bash .claude/bin/skills.sh add obsidian-skills`): an Obsidian vault as the project's notes and research layer — Obsidian-flavored Markdown, Bases (`.base`) query views, JSON Canvas (`.canvas`), and Defuddle for a web page into clean Markdown. Two of its skills act outside the repo: the `obsidian` CLI writes to a running vault and its documented `obsidian eval code="..."` runs arbitrary JavaScript in the app, and Defuddle wants a global npm install (see its registry `safety`).
 
 ## Extensions
 
@@ -130,6 +131,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | community-moderation | Moderating a Telegram or Discord community and running member support: spam and drainer links, raids, impersonation, ticket triage | `bash .claude/bin/skills.sh add community-moderation` |
 | content-gen-skill | Writing educational content: a course or curriculum, tutorial, explainer, essay, litepaper, slide spec or thread | `bash .claude/bin/skills.sh add content-gen-skill` |
 | writer-style-skill | Writing prose in a named author's voice, or building a voice pack; content-gen hands it the brief | `bash .claude/bin/skills.sh add writer-style-skill` |
+| obsidian-skills | An Obsidian vault as the notes layer: Obsidian Markdown, Bases query views, JSON Canvas, the `obsidian` CLI, Defuddle web-to-Markdown (writes to a live vault and can run JS in the app — see its registry `safety`) | `bash .claude/bin/skills.sh add obsidian-skills` |
 
 ## Add-ons
 
