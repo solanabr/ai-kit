@@ -52,12 +52,7 @@ Pick one backbone and state why — PAS (obvious pain, hackathons), 6-Part Inves
 
 ### 4. Build slides + speaking notes
 
-For each slide: headline (a claim, not a label), 3–5 supporting points, visual suggestion, and 30–60s speaking notes. Use:
-
-- [slide-templates.md](../ext/solana-new/skills/launch/create-pitch-deck/references/slide-templates.md) — per-slide-type templates (install first: `bash .claude/bin/skills.sh add solana-new`)
-- [deck-design-system.md](../ext/solana-new/skills/launch/create-pitch-deck/references/deck-design-system.md) — typography, layout, color rules (`bash .claude/bin/skills.sh add solana-new`)
-- [crypto-pitch-examples.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-examples.md) — real decks that worked (`bash .claude/bin/skills.sh add solana-new`)
-- [pitch-reference-sources.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-reference-sources.md) — primary sources (`bash .claude/bin/skills.sh add solana-new`)
+For each slide: headline (a claim, not a label), 3–5 supporting points, visual suggestion, and 30–60s speaking notes. Draw on [slide-templates.md](../ext/solana-new/skills/launch/create-pitch-deck/references/slide-templates.md) (per-slide-type templates), [deck-design-system.md](../ext/solana-new/skills/launch/create-pitch-deck/references/deck-design-system.md) (typography, layout, color), [crypto-pitch-examples.md](../ext/solana-new/skills/launch/create-pitch-deck/references/crypto-pitch-examples.md) (real decks that worked) and [pitch-reference-sources.md](../ext/solana-new/skills/launch/create-pitch-deck/references/pitch-reference-sources.md) (primary sources) — install first: `bash .claude/bin/skills.sh add solana-new`
 
 ### 5. Self-score vs audience rubric
 
