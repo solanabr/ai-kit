@@ -46,3 +46,13 @@ Only the Solana-specific parts; Axum, Tokio and SQLx are used as usual. Helius A
 - Send with `skip_preflight: true` (already simulated) and `max_retries: Some(0)`; rebroadcast the same signed bytes every ~2 s while polling `get_signature_statuses`, until confirmed or the block height passes `last_valid_block_height`.
 - Re-sign with a fresh blockhash only after the old one expired, or both can land. Durable nonces for slow or multi-party signing.
 - Landing services (Helius Sender, Jito) add tip and preflight rules: [sender.md](ext/helius/helius-skills/helius/references/sender.md) (install first: `bash .claude/bin/skills.sh add helius`).
+
+### Sending from a queue
+
+A job queue retries by re-running the job, which is the one thing a send cannot do naively: the first copy may still land.
+
+- Key the job on the **signature**, not a job id. Sign once, persist the signed bytes and the signature, then have a retry resume polling `get_signature_statuses` for that signature rather than build a second transaction.
+- A worker that restarts mid-flight re-reads the persisted signature and keeps polling. Re-signing is correct only once the block height passes `last_valid_block_height` — the same point at which the job may be failed and requeued.
+- A fee bump is a new transaction, not a retry of the same bytes: it needs a fresh blockhash, so the previous copy has to be expired first or both can land.
+- Release the job on `finalized`. `confirmed` is enough to stop rebroadcasting but not to drop an idempotency key, since a confirmed slot can still be dropped.
+- Put side-effect idempotency at the destination (crediting a balance, sending a mail), keyed on the signature: at-least-once delivery means a completion handler can run twice for one transaction.
