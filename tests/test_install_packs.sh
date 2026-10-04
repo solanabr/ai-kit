@@ -37,8 +37,21 @@ for id in $CORE jupiter sendai; do new_pack "$id"; done
 # The kit: its real .claude/ (no ext/ checkouts), with four packs as submodules.
 KIT="$TEMP_DIR/kit"
 mkdir -p "$KIT/.claude/skills"
-for f in "$REPO_ROOT"/.claude/*; do [ "$(basename "$f")" = skills ] || cp -R "$f" "$KIT/.claude/"; done
-for f in "$REPO_ROOT"/.claude/skills/*; do [ "$(basename "$f")" = ext ] || cp -R "$f" "$KIT/.claude/skills/"; done
+# Copy only what git tracks. A gitignored directory under .claude/ is transient --
+# agent worktrees land in .claude/worktrees/ -- and the `git add -A` below would stage
+# it as an embedded gitlink, after which every `git submodule` call in the fixture
+# fatals with "No url found for submodule path". Skipping ignored paths also covers
+# whatever transient directory shows up next.
+for f in "$REPO_ROOT"/.claude/*; do
+  [ "$(basename "$f")" = skills ] && continue
+  git -C "$REPO_ROOT" check-ignore -q "$f" && continue
+  cp -R "$f" "$KIT/.claude/"
+done
+for f in "$REPO_ROOT"/.claude/skills/*; do
+  [ "$(basename "$f")" = ext ] && continue
+  git -C "$REPO_ROOT" check-ignore -q "$f" && continue
+  cp -R "$f" "$KIT/.claude/skills/"
+done
 cp "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.mcp.json" "$REPO_ROOT/.env.example" "$KIT/"
 G -C "$TEMP_DIR" init -q kit
 for id in $CORE jupiter sendai; do
