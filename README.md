@@ -96,7 +96,7 @@ After installation, configure the MCP servers from inside Claude Code in your pr
 /setup-mcp
 ```
 
-This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers). Memory across sessions is a separate plugin, not an MCP server — [memsearch](docs/configuration.md#persistent-memory-memsearch) takes three steps and a ~558 MB first-run model download.
+This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers). Memory across sessions is a separate plugin, not an MCP server — [memsearch](docs/configuration.md#persistent-memory-memsearch) takes three steps and a ~558 MB first-run model download. Anthropic's marketplace has plugins worth adding too, and some that collide with the firewall: [which ones, and what each costs per session](docs/configuration.md#claude-code-plugins-worth-installing).
 
 ### Security firewall: safe-ai-skill
 
@@ -138,7 +138,7 @@ Which gate stops what, how a tier is generated, and — at length — **what the
 | [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 32 commands, agent teams |
 | [skill-packs.md](docs/skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry |
 | [other-agents.md](docs/other-agents.md) | Codex, Grok Build, Cursor, Gemini CLI, opencode: what each one actually enforces |
-| [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, and the settings the kit leaves to you |
+| [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, the Claude Code plugins worth installing and what each costs per session, and the settings the kit leaves to you |
 | [plugin.md](docs/plugin.md) | The plugin route and why it is not recommended |
 | [design.md](docs/design.md) | Why the always-on context is small, and the 2026 stack |
 | [repo-structure.md](docs/repo-structure.md) | Repository layout, DX scripts, the GitHub Action, branch and review workflow |

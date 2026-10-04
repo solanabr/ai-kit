@@ -1,6 +1,6 @@
 # Configuration
 
-What the kit configures for you, what it leaves to you, and the MCP servers that are not on by default.
+What the kit configures for you, what it leaves to you, the MCP servers that are not on by default, and the Claude Code plugins worth adding alongside them.
 
 ## MCP servers
 
@@ -26,6 +26,7 @@ These need a browser, a CLI, a key or a workflow choice, so they are not started
 | **Chainstack**: multi-chain RPC platform control | `claude mcp add --transport http chainstack https://mcp.chainstack.com/mcp` | Nothing for 5 read-only tools; a key for the rest |
 | **Nansen**: wallet and token intelligence | `claude mcp add --transport http nansen https://mcp.nansen.ai/ra/mcp --header "NANSEN-API-KEY: <key>"` | A paid Nansen API key (free tier within credits); ~50 tool schemas per session |
 | **Supabase**: the Postgres backend behind an indexer or dApp | `claude mcp add --transport http supabase "https://mcp.supabase.com/mcp?read_only=true&project_ref=<ref>"` | A Supabase account (the server starts its own auth flow; nothing answers unauthenticated) |
+| **Cloudflare**: operate the Workers, KV, R2, D1, DNS and Queues behind a dApp | `claude mcp add --transport http cloudflare https://mcp.cloudflare.com/mcp --header "Authorization: Bearer <token>"` | A narrowly scoped [Cloudflare API token](https://dash.cloudflare.com/profile/api-tokens), or OAuth if you drop the `--header` |
 
 Two caveats on Chainstack and Nansen. **Chainstack lists every tool whether or not a key is configured**, so a keyless install looks complete and fails at the call; node deployment, project management and testnet funding all need `--header "Authorization: Bearer <key>"`. **Nansen answers nothing without a key**, and it loads roughly 50 tool schemas into every session it is attached to — a standing context cost for something most projects never call, so attach it for analytics work and detach it after.
 
@@ -37,9 +38,55 @@ Two caveats on Chainstack and Nansen. **Chainstack lists every tool whether or n
 
 Unlike Chainstack there is no keyless half to mis-describe: `POST initialize` answers 401 even with `?features=docs`, so the server tells you nothing until you have signed in. And for the clinching detail on defaults — **Supabase's own repository pins `?features=docs` in its `.mcp.json`.** The vendor does not run its own default either. The `supabase` skill pack ([skill-packs.md](skill-packs.md)) covers the same ground as documentation, with no credentials and no write tools, and is the cheaper starting point.
 
-**Playwright is the opt-in server with no gating at all.** `browser_network_request` is an arbitrary HTTP client, and no firewall tier touches it — unlike `context-mode`, it has no hook matcher and no tier deny. Attaching it voids the egress guarantee at every tier.
+**Cloudflare's selling point is its context cost, and that is also what hides its reach.** `cloudflare/mcp` (Apache-2.0) exposes the entire Cloudflare API — 2,594 endpoints — through **three** tools, because the OpenAPI spec stays on the server and the agent writes JavaScript against it: `docs` searches Cloudflare's developer documentation, `search` runs code against `spec.paths` to find endpoints, and `execute` runs code calling `cloudflare.request()`. Three tools cost about 1,100 tokens. The same server with `?codemode=false` registers a tool per endpoint and costs ~244,000, so code mode is the form to use — but it means **one of the three tools is the whole write API**, and a tool count tells you nothing about it. The README's own first examples are creating a KV namespace and adding a DNS A record; `execute` will equally deploy a Worker, edit a zone's records or purge a Queue.
+
+So the lever is the credential, which is why it is offered rather than only documented: **`execute` can reach exactly what the token can reach, and you choose the token's scopes.** Create one scoped to the specific zone or account resources you want reachable rather than reusing a broad token — for an account token, add `Account Resources : Read` so the server can auto-detect the account ID (the README recommends it; nothing enforces it, and nothing stops a token that is wider). The OAuth path instead asks you to pick permissions on Cloudflare's consent screen, which is fine interactively but leaves no artifact to review later. Two smaller notes: tokens with Client IP Address Filtering enabled are not supported, and each tool result is capped at ~6,000 tokens unless you pass `?truncateToolResult=false`. Nothing answers unauthenticated — `POST initialize` returns 401 — so there is no keyless half to try first.
+
+Two more things. **Like Playwright, `execute` is a code executor the firewall does not reach**: the tier denies `context-mode`'s executor by exact tool name (`mcp__context-mode__ctx_execute` and four siblings), and nothing matches another server's. Attaching Cloudflare puts a second ungated executor in the session at every tier, and the token's scopes are the only boundary — which is the whole reason the hardening above is the credential.
+
+And the kit already pins a `cloudflare` **skill** pack ([skill-packs.md](skill-packs.md)), which is a different thing, not a lesser one: 16 skills and 52 reference folders — Workers, Durable Objects, Wrangler, the Agents SDK, ten files on Queues and Workflows alone — with no credential and no reach into an account. Reach for the pack to write Worker code, the server to change what is deployed.
+
+**Playwright is the other opt-in server with no gating at all.** `browser_network_request` is an arbitrary HTTP client, and no firewall tier touches it — unlike `context-mode`, it has no hook matcher and no tier deny. Attaching it voids the egress guarantee at every tier.
 
 **Phantom is documented here but deliberately not offered by `/setup-mcp`.** It is 29 tools and not a wallet reader: `solana_sign`/`solana_send` and `evm_sign`/`evm_send` land signed transactions, and `buy`, `pay`, `transfer`, `wallet_rebalance`, `withdraw_from_hyperliquid_spot` and nine `perps_*` tools move real funds. It needs no key once `phantom_login` has run — the session lives on disk — so nothing stands between an attached server and a trade. If you want it, you add it yourself: `claude mcp add phantom -- npx -y @phantom/mcp-server`.
+
+## Claude Code plugins worth installing
+
+Skill packs are not the only thing you can attach. Claude Code has its own plugin system, and Anthropic's official marketplace lists **315 plugins**: 39 Anthropic-authored under `plugins/`, 14 thin MCP wrappers under `external_plugins/`, and 262 external repositories. Claude Code registers that marketplace itself the first time you start an interactive session, so there is no `marketplace add` step — install by name:
+
+```text
+/plugin install rust-analyzer-lsp@claude-plugins-official
+```
+
+A plugin is not a skill pack. It can carry hooks, MCP servers, agents, commands, skills and language servers at once, all running with your user permissions and outside the OS sandbox, so [plugin.md](plugin.md)'s caveats apply to any plugin — that page is about installing *this kit* as one, which is a different question from whether to install someone else's. On licensing: the marketplace repository and every first-party plugin folder but one carry the Apache-2.0 text; `claude-security` is the exception, proprietary under Anthropic's terms of service.
+
+**The first thing to check is whether a plugin ships a hook**, because a `SessionStart` hook is a cost you pay every session whether or not you use the plugin. Seven of the 39 first-party plugins have a `hooks/` directory: `claude-security`, `code-modernization`, `explanatory-output-style`, `hookify`, `learning-output-style`, `ralph-loop` and `security-guidance`. The second thing is the standing cost of what it registers — skill, command and agent descriptions all load into every session — which is why a hook-free plugin can still be the expensive one. Both numbers are below, measured as characters over four.
+
+| Plugin | What it gives a Solana project | Standing cost per session |
+|--------|-------------------------------|---------------------------|
+| `rust-analyzer-lsp`, `typescript-lsp`, `csharp-lsp` | Code intelligence for programs, the frontend, and the Unity/PSG1 track. Install the language server first; Claude Code then offers the matching plugin | No hook, nothing registered: ~0 |
+| `code-review` | A second pass over the diff with confidence-scored findings. It reads for generic correctness where `/diff-review` and `/audit-solana` read for PDA, CPI and arithmetic classes, so they stack | No hook, 1 command: ~6 tokens |
+| `session-report` | An HTML report of tokens, cache efficiency, subagents and skills from your local transcripts. The kit budgets context deliberately; this is how you check the budget held | No hook, 1 skill: ~38 tokens |
+| `skill-creator` | Authoring, evaluating and benchmarking skills — useful if you write a local skill or a pack of your own | No hook, 1 skill: ~80 tokens |
+| `mcp-server-dev` | Designing an MCP server (deployment models, tool design, auth) for your own indexer or RPC | No hook, 3 skills: ~336 tokens |
+| `superpowers` | TDD, systematic debugging, brainstorming and plan-execution discipline, as 15 skills | `SessionStart` hook: **~1,450 tokens** (below) |
+| `plugin-dev` | Hooks, MCP, commands and agents for authoring plugins — relevant to this repository's own `plugin/` subtree | No hook, but 7 skills + 3 agents: **~1,676 tokens**, the priciest here. Install while authoring, remove after |
+
+**On `superpowers`, which is the one people ask about.** Its `SessionStart` hook — matching `startup|clear|compact`, so it fires again on every `/clear` and every compaction — injects the full 3,192 characters of its `using-superpowers/SKILL.md` wrapped in `<EXTREMELY_IMPORTANT>`, about 798 tokens, and its 15 skill descriptions add ~2,617 characters, so budget roughly **1,450 tokens per session, unconditionally**. The content is clear and compact for what it does. Three things to know anyway: it is authored by Jesse Vincent (`obra`), MIT, not Anthropic — every `./plugins/*` entry in the marketplace carries `author: Anthropic` and this one carries no `author` field at all, so it has none of the first-party standing that `code-review` or `code-simplifier` do. Its `<EXTREMELY_IMPORTANT>` framing also runs against this repository's house style of stating rules calmly and giving the reason, so expect a tonal clash with `CLAUDE.md`. And **`npm install superpowers` is not it**: that package is an unrelated 2022 stub, version 0.0.2, maintainer `01studio`, with the literal description `> TODO: description`. The plugin is the only correct route.
+
+**Install external plugins from `claude-plugins-official`, not from the author's own marketplace, and this is the reason.** Every one of the 262 remote entries there is pinned to a specific commit — 262 of 262 carry a `sha` — so you get the commit Anthropic listed. Add the upstream marketplace instead and you get whatever its own entry resolves to, which is usually the default branch. `superpowers` is the worked example: Anthropic pins `5bf4e78`, while `obra/superpowers`' own marketplace (named `superpowers-dev`) declares `"source": "./"`, so installing from there follows HEAD — `8ca22db` at the time of writing, declaring 6.4.2 where the pin resolves to 6.4.1. Same plugin, same author, different and moving code. The property generalises to all 262.
+
+Name confusion is the other reason. Anthropic also publishes a community marketplace, `claude-community`, with 2,283 entries that Claude Code does **not** add on its own; alongside the real `obra/superpowers` it lists eight more entries whose names contain "superpowers" — `superpowers-optimized`, `decibel-superpowers`, `sdd-superpowers`, `superpowers-beads`, `ux-superpowers`, `zsl-superpowers`, `ai-craftsman-superpowers`, `superpower-builder` — plus `ultrapowers`, all from accounts with no track record in this space, and two of them pointing at repositories literally named `superpowers` under a different owner. Read the `@marketplace` suffix, not the plugin name.
+
+### Left out, and why
+
+- **`hookify` conflicts rather than overlaps.** It installs its own `PreToolUse`, `PostToolUse`, `Stop` and `UserPromptSubmit` hooks that gate tool calls from rules in markdown files — which is the job of this kit's [firewall](firewall.md) and of `safe-ai-skill`. Two independent hook layers deciding on the same events is not defence in depth; it is two policies with no defined precedence, and a `deny` you cannot attribute.
+- **`security-guidance` duplicates the review for the wrong bug classes.** Its hooks fire on `SessionStart` — with a 180-second budget, because on first run it builds a venv under `~/.claude/security/` and pip-installs the Agent SDK into it — then on *every* `UserPromptSubmit`, and on every `Edit`/`Write` plus `git commit` and `git push`. What it looks for is injection, XSS, SSRF and hardcoded secrets: real, but not the classes that break a Solana program, which `/audit-solana`, the `auditor-skill` pack and the kit's own secrets gate already cover.
+- **`claude-security`** has no unconditional hook (its `PostToolUse` entries are `if`-guarded to its own scripts, `git push` and `gh pr create`), but it registers 9 agents for ~570 tokens a session to cover ground `/audit-solana` and the `cso` skill already hold. It is also the one first-party plugin that is not Apache-2.0.
+- **`code-modernization`** is for legacy estates, not this audience, and carries a `SessionStart` telemetry hook plus ~860 tokens of command and agent descriptions.
+- **`explanatory-output-style` and `learning-output-style`** inject 1,018 and 3,034 characters of instructions at `SessionStart` — ~254 and ~758 tokens, every session, unconditionally. `solana-guide` and the `virtual-solana-incubator` skill teach on demand instead, at no standing cost.
+- **`pr-review-toolkit`** (~1,583 tokens of agent descriptions), **`commit-commands`**, **`claude-md-management`** and **`frontend-design`** each restate something the kit ships: `/diff-review` plus `code-review`, `/quick-commit`, the `CLAUDE.md` learning protocol with `/dream`, and, exactly, the `frontend-design` skill: the plugin's `SKILL.md` is byte-identical to the one the `anthropic-skills` extension already pins from `anthropics/skills`, so installing it gets you a second copy of a file the kit fetches at a commit it records.
+- **The 14 `external_plugins/` entries are MCP servers in plugin clothing**, mostly a `.mcp.json` and a `plugin.json`. `claude mcp add` gets you the same server without adding a publisher. Two are worth naming: the `context7` wrapper points at the remote `mcp.context7.com/mcp` where the kit pins the local `@upstash/context7-mcp`, and the `playwright` wrapper runs `@playwright/mcp@latest` unpinned — attach either knowingly rather than ending up with two of one server.
 
 ## Persistent memory: memsearch
 
@@ -79,7 +126,7 @@ Optional, and not part of the install: Zilliz Cloud (managed, free tier) if you 
 
 - **Effort**: `/effort` (the kit no longer forces `max`)
 - **Agent teams**: `{"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}}`, see [Agent Teams](agents-and-commands.md#agent-teams)
-- **Code intelligence**: install the language server, then `/plugin install rust-analyzer-lsp@claude-plugins-official` (or `typescript-lsp`, `csharp-lsp`). Claude Code offers the matching plugin once the server is on your `PATH`
+- **Code intelligence**: install the language server, then `/plugin install rust-analyzer-lsp@claude-plugins-official` (or `typescript-lsp`, `csharp-lsp`). Claude Code offers the matching plugin once the server is on your `PATH`. These are the cheapest picks in [plugins worth installing](#claude-code-plugins-worth-installing)
 - **MCP auto-approval**: `"enableAllProjectMcpServers": true` skips the approval prompt for every server in `.mcp.json`
 
 `/update` removes these keys and the retired MCP servers from files written by kit 2.1.0 or earlier, but only where they still hold the kit's value.

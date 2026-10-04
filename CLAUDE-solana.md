@@ -29,7 +29,7 @@ Only the core skill packs ship installed. A link into a missing `.claude/skills/
 
 ## MCP
 
-Helius, solana-dev, Context7 and context-mode are configured in `.mcp.json`; Playwright, Surfpool, Chainstack, Nansen and Supabase are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers. Supabase is only ever added as `?read_only=true&project_ref=<ref>`: unflagged, its `execute_sql` is an unrestricted SQL channel into the project's database.
+Helius, solana-dev, Context7 and context-mode are configured in `.mcp.json`; Playwright, Surfpool, Chainstack, Nansen, Supabase and Cloudflare are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers. Supabase is only ever added as `?read_only=true&project_ref=<ref>`: unflagged, its `execute_sql` is an unrestricted SQL channel into the project's database. Cloudflare's `execute` tool reaches every endpoint its API token does, so ask the user for a token scoped to the zone or account resources in question rather than a broad one.
 
 ## Project Learnings
 

@@ -65,7 +65,7 @@ Beyond the bundled submodules above, the kit ships a curated catalog of **opt-in
 
 Featured add-ons by domain:
 
-- **Claude-official:** [anthropics/claude-code](https://github.com/anthropics/claude-code) plugins (non-OSI license; overlaps `/diff-review` + `cso`). Anthropic's Apache-2.0 skills are the `anthropic-skills` extension above
+- **Claude-official:** the 315 plugins in [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official), which Claude Code registers for you — which ones earn their keep here, and what each costs per session, is [configuration.md → plugins worth installing](configuration.md#claude-code-plugins-worth-installing). Anthropic's Apache-2.0 skills are the `anthropic-skills` extension above
 - **Dev-workflow:** [wshobson/agents](https://github.com/wshobson/agents)
 - **Frontend/Design:** [zarazhangrui/frontend-slides](https://github.com/zarazhangrui/frontend-slides) · [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
