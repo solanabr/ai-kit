@@ -79,3 +79,6 @@
 [submodule ".claude/skills/ext/superseo"]
 	path = .claude/skills/ext/superseo
 	url = https://github.com/inhouseseo/superseo-skills
+[submodule ".claude/skills/ext/expo"]
+	path = .claude/skills/ext/expo
+	url = https://github.com/expo/skills

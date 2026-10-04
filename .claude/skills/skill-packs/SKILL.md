@@ -33,7 +33,7 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 | NFTs, collections, compressed NFTs | `metaplex` | — |
 | Swaps, lending, perps, oracles, bridges | `jupiter`, `sendai` | `meteora-invent` (Meteora's own skill, deeper than the sendai folder) |
 | Unity, C#, PSG1, real-time games | `solana-game`, `magicblock` (ephemeral rollups for real-time state) | — |
-| React Native, Expo, Seeker, dApp Store | `solana-mobile` | `ios-simulator-skill`, `swiftui-design-skill` |
+| React Native, Expo, Seeker, dApp Store | `solana-mobile` (MWA, Seeker, Genesis Token), `expo` (the other half: EAS Build/Update/Workflows CI, store submission, OTA, config plugins and native modules, SDK upgrades — offer both when the app is Expo) | `ios-simulator-skill`, `swiftui-design-skill` |
 | RPC, DAS, webhooks, indexing, edge hosting | `helius`, `alchemy`, `cloudflare` | — |
 | Browser QA of a dApp that is already running | — | `playwright-skill`, `dev-browser` |
 | An MCP server for your program or API | `cloudflare` (Agents SDK, MCP servers on Workers) | `anthropic-claude-code-plugins` (its mcp-server-dev plugin: deployment models, tool design, auth) |

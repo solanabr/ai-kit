@@ -561,6 +561,25 @@
       "tags": ["seo", "content", "marketing", "copywriting", "eeat", "link-building"]
     },
     {
+      "id": "expo",
+      "name": "Expo Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "mobile",
+      "path": ".claude/skills/ext/expo",
+      "commit": "13ad8e05874195633b5c185f6947bb6400e228fc",
+      "description": "Expo's own 23 skills for the mobile half of a Solana project, and the part solana-mobile does not cover: EAS Build, Update and Workflows CI, app-store submission, OTA updates and rollouts, dev clients, config plugins and native modules, expo-router, expo-ui and the design system, brownfield embedding into an existing native app, SDK upgrades, and EAS Hosting and Observe. Pair it with solana-mobile for Mobile Wallet Adapter and Seeker; this one is the build, release and CI side.",
+      "triggers": ["EAS build or submit to the app stores", "over-the-air update or rollout", "Expo config plugin or native module", "expo-router navigation or expo-ui", "upgrade the Expo SDK"],
+      "source": "https://github.com/expo/skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add expo", "env": [] },
+      "license": "MIT",
+      "maintainer": "expo",
+      "signal": { "stars": 2655, "last_commit": "2026-10-03", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Scanned at 13ad8e0 (2026-10-03): no lines over 500 characters, no bidi or invisible Unicode, no install lifecycle hook in any of its 4 package.json files, no .claude/settings.json, and its 3,517 blobs across 268 commits hold no keys, no binaries and no deleted hook config. The eval and atob grep hits are inert: one atob in a React Native sample in expo-native-ui/references/media.md, and the rest are Swift and Kotlin Function and AsyncFunction declarations from the Expo Modules API in documentation. It ships two things that fire only if you install it as a Claude Code plugin, never at this ext/ pin: hooks/hooks.json runs node skills/expo-skill-feedback/scripts/skill-event.cjs on PostToolUse with matcher Skill and on UserPromptExpansion, and .mcp.json declares a remote HTTP MCP server at https://mcp.expo.dev/mcp, which names no npm package and so carries no dependency-confusion surface, though enabling it does send your Expo and EAS queries to Expo. Telemetry verified by reading telemetry_common.cjs and skill-event.cjs rather than taking the README's word: it is opt-in with DEFAULT_ON set to false and sends nothing until you create the marker file at ~/.expo-skills/opt-in or set EXPO_SKILLS_TELEMETRY=1; DO_NOT_TRACK=1 forces it off with the highest precedence; CI detection forces it off too, covering CI plus GITHUB_ACTIONS, GITLAB_CI, CIRCLECI, TRAVIS, BUILDKITE, JENKINS_URL, TEAMCITY_VERSION and TF_BUILD. When it is on, the event carries only the skill name, initiator, OS, arch and a truncated SHA-256 of a random per-install UUID stored 0600 at ~/.expo-skills/installation-id, POSTed to us.i.posthog.com with a 3-second timeout and $process_person_profile false. No prompt text, no file paths, no project or repository names. The phc_ PostHog key committed in that file is a write-only public ingestion key, documented as such in place. Ten executables, none of them reached by a published skill: eight are its own eval harness under .claude/skills/expo-skill-eval/scripts/, which boot simulators and run bunx expo, and scripts/ci.sh plus ci.py are its CI, where EVAL_HARNESS_ACCESS_TOKEN clones a private harness. One note for --agents installs: the kit prunes skills/ext from its own registration walk, but Codex and opencode discover nested SKILL.md files themselves, and this pack carries its own .claude/skills/expo-skill-eval/SKILL.md at 48 KB.",
+      "tags": ["mobile", "expo", "react-native", "eas", "ci", "app-store", "ota"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
