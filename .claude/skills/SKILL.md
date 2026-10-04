@@ -6,7 +6,7 @@ user-invocable: true
 
 # Solana skill hub
 
-Find the task, read the linked file, and follow further links only as needed. Paths are relative to this file.
+Follow further links only as needed. Paths are relative to this file.
 
 Every install carries the core packs: solana-dev, auditor-skill, colosseum and anthropic-skills. The first three sit under `ext/`, which Claude Code does not auto-discover, so they cost nothing until a row here sends you into one; anthropic-skills installs top-level in `skills/<name>/` and is listed every session, for about 102 tokens. The other `ext/` packs are extensions: the kit pins them, and a project installs one when a task needs it. A row that links into an extension gives its install command; run it when the linked folder is missing (`/update` keeps what you install). The Extensions table at the end lists each one with when to use it.
 
