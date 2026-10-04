@@ -165,3 +165,15 @@ Which gate stops what, how a tier is generated, and — at length — **what the
 ## License
 
 MIT - See [LICENSE](LICENSE)
+
+## Disclaimer
+
+**No warranty, and no liability.** This software is provided "as is", without warranty of any kind, express or implied, including without limitation the warranties of merchantability, fitness for a particular purpose and non-infringement. To the fullest extent permitted by applicable law, Superteam Brazil, its members and the contributors to this repository accept no liability for any claim, loss or damage — direct, indirect, incidental, special, consequential or exemplary, including loss of funds, keys, data, profits or goodwill — arising from or in connection with this software or its use, whether in contract, tort, negligence or otherwise, and whether or not advised of the possibility of such damage. You install and run it on your own systems, against your own keys, accounts and funds, and every action it helps you take remains your decision and your responsibility. Review what it does before you run it, especially anything that touches mainnet or moves value.
+
+**What this repository contains, and what it does not.** This is a configuration layer and an index. It contains Superteam Brazil's own work — the agents, commands, skills, rules, hooks and settings written here — together with references to third-party projects. Those third-party projects are identified by their canonical repository URL and a recorded commit, and they are retrieved directly from their own publishers at install time, by the same public mechanisms any user would use unaided: `git submodule`, `git clone`, `npx`, or a first-party plugin marketplace. Third-party code is not rehosted, mirrored, bundled, modified or redistributed by this repository, and none of it is served from here. Removing a reference removes nothing but the reference.
+
+**Ownership, attribution and independence.** Every referenced project remains the property of its own authors and is governed exclusively by the terms its authors attach to it, which travel with the project when it is retrieved. Nothing here asserts ownership of, or claims credit for, any third-party work, and no part of the wider stack is presented as this project's own. Inclusion is not endorsement in either direction: no affiliation with, sponsorship by, or approval from any referenced project, protocol, company or foundation is claimed or implied. Product names, trademarks and logos belong to their respective owners and appear only to identify the software they refer to, as nominative reference.
+
+**No charge.** This repository is distributed free of charge. Nothing in it is sold, rented, licensed for a fee or placed behind a paywall, no payment is solicited or accepted for access to it, and no revenue is derived from the third-party projects it references.
+
+**Maintainer requests.** If you maintain a project referenced here and would like the reference amended, attributed differently, or removed, open an issue in this repository and it will be actioned.
