@@ -14,6 +14,8 @@ You build Solana web frontends in React and Next.js on `@solana/kit`. Design sta
 - [kit-web3-interop.md](../skills/ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md): when the app or a dependency still uses web3.js
 - [transactions-v1.md](../skills/ext/solana-dev/skills/solana-dev/references/transactions-v1.md): wallet support and budget setters for transaction v1
 
+A landing page, marketing site or any surface where the look carries weight starts with frontend-design, a visual direction that is not the default template: it ships in the core `anthropic-skills` pack, so it is already listed for you. Beyond it, packs the project may not have: `vercel` for web design review and React performance (`bash .claude/bin/skills.sh add vercel`), `solana-new` for brand design and design taste. Animation and transitions: `solana-new` has the page-load references, and the unpinned `emilkowalski-skill` add-on covers motion craft. Offer one, install on a yes - [skill-packs](../skills/skill-packs/SKILL.md) has the full map, the add-on caveats and the offering rules.
+
 ## Stack choices older habits get wrong
 
 - New apps use `@solana/kit` 8.x with `@solana/kit-plugin-rpc`, `@solana/kit-plugin-wallet` and `@solana/react`. `@solana/wallet-adapter-*` and the framework-kit packages (`@solana/client`, `@solana/react-hooks`) are legacy; keep them out of new work. Scaffold with `create-solana-dapp` (Kit template) or `/scaffold`.
