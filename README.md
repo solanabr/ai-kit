@@ -96,7 +96,22 @@ After installation, configure the MCP servers from inside Claude Code in your pr
 /setup-mcp
 ```
 
-This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers). Memory across sessions is a separate plugin, not an MCP server — [memsearch](docs/configuration.md#persistent-memory-memsearch) takes three steps and a ~558 MB first-run model download. Anthropic's marketplace has plugins worth adding too, and some that collide with the firewall: [which ones, and what each costs per session](docs/configuration.md#claude-code-plugins-worth-installing).
+This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers). Anthropic's marketplace has plugins worth adding too, and some that collide with the firewall: [which ones, and what each costs per session](docs/configuration.md#claude-code-plugins-worth-installing).
+
+### Persistent memory: memsearch
+
+Of everything optional here, this is the one that changes how the kit feels day to day. A Solana project accumulates context that is expensive to rediscover: which program ID is live on which cluster, the account layout you settled on and the reason you rejected the other one, the approach that failed, the protocol quirk that cost you an afternoon. Without persistent memory every session starts cold — the agent re-derives it, re-asks you, or quietly re-makes a decision you already threw out.
+
+[memsearch](docs/configuration.md#persistent-memory-memsearch) gives it semantic recall over markdown you own, so the store can grow without the always-on context budget growing with it. That is the opposite trade from putting more in `CLAUDE.md`, which every session and every subagent pays for whether it is relevant or not. Markdown stays the source of truth, so your memory stays diffable, reviewable and portable.
+
+Nothing leaves your machine: a local Milvus Lite store and an ONNX `bge-m3` embedder on CPU, no key and no account. The cost is a ~558 MB model download on first launch and one restart.
+
+```text
+/plugin marketplace add zilliztech/memsearch
+/plugin install memsearch
+```
+
+It is a plugin, not an MCP server. `memsearch-mcp` was never published to npm, so an `.mcp.json` entry for it silently never starts — `/doctor` flags that entry if an older install still carries one, and `/update` removes it.
 
 ### Security firewall: safe-ai-skill
 

@@ -836,21 +836,6 @@
       "tags": ["airdrop", "merkle", "distribution", "claim", "keccak"]
     },
     {
-      "id": "gmem",
-      "name": "gmem",
-      "type": "skill",
-      "domain": "solana-infra",
-      "description": "Agent memory layer (watchlist — young/unverified).",
-      "source": "https://github.com/yksanjo/gmem",
-      "install": null,
-      "license": "unverified",
-      "maintainer": "yksanjo",
-      "signal": { "stars": null, "last_commit": null, "reputability": "emerging — verify before install" },
-      "default_installed": false,
-      "safety": "caution: unverified — confirm maintenance + license before any use",
-      "tags": ["memory", "agent", "watchlist", "solana"]
-    },
-    {
       "id": "snap-protocol",
       "name": "Snap Protocol",
       "type": "skill",
