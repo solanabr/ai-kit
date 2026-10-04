@@ -32,6 +32,7 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 | Animation, motion, transitions, page-load choreography | `solana-new` (page-load animation and video-craft references) | `emilkowalski-skill` (animate, review-animations, apple-design; markdown only), `animation-principles` (motion principles as prose; unmaintained since December 2025) |
 | NFTs, collections, compressed NFTs | `metaplex` | — |
 | Swaps, lending, perps, oracles, bridges | `jupiter`, `sendai` | `meteora-invent` (Meteora's own skill, deeper than the sendai folder) |
+| Card payments, checkout, subscriptions, invoices, a fiat on-ramp beside the onchain flow | `stripe` (official; offer it read-only — its hooks, its usage reporting and its live-account MCP are the user's call, never wired for them) | — |
 | Unity, C#, PSG1, real-time games | `solana-game`, `magicblock` (ephemeral rollups for real-time state) | — |
 | React Native, Expo, Seeker, dApp Store | `solana-mobile` (MWA, Seeker, Genesis Token), `expo` (the other half: EAS Build/Update/Workflows CI, store submission, OTA, config plugins and native modules, SDK upgrades — offer both when the app is Expo) | `ios-simulator-skill`, `swiftui-design-skill` |
 | RPC, DAS, webhooks, indexing, edge hosting | `helius`, `alchemy`, `cloudflare` | — |

@@ -580,6 +580,25 @@
       "tags": ["mobile", "expo", "react-native", "eas", "ci", "app-store", "ota"]
     },
     {
+      "id": "stripe",
+      "name": "Stripe AI Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "payments",
+      "path": ".claude/skills/ext/stripe",
+      "commit": "1b5f55651a559db8e6d818f4a7139ed216b777a6",
+      "description": "Fiat payments, the kit's biggest coverage gap: a Solana project still has to charge in cards for subscriptions, invoices and on-ramps. Stripe's own skills cover checkout and payment flows, subscriptions and billing, Connect onboarding and verification requirements, Stripe Apps, SDK upgrades across languages, metered and usage-based billing, and its API best practices. Also carries the Stripe Agent Toolkit for Python and TypeScript, an LLM token meter, and nine Dockerised benchmark scenarios.",
+      "triggers": ["take card payments or build a checkout", "subscriptions invoices or billing", "Stripe Connect onboarding or payouts", "fiat on-ramp beside the onchain flow", "upgrade a Stripe SDK"],
+      "source": "https://github.com/stripe/ai",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add stripe", "env": [] },
+      "license": "MIT",
+      "maintainer": "stripe",
+      "signal": { "stars": 1853, "last_commit": "2026-10-04", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Scanned at 1b5f556 (2026-10-04): no lines over 500 characters, no eval, atob, new Function or createRequire, no bidi or invisible Unicode, no install lifecycle hook in any of its 14 package.json files, no .claude/settings.json (the settings.json in the tree is .vscode/, an editor formatter config), and 7,502 blobs across 670 commits hold no keys, no binaries and no deleted hook config. Its 38 executables all live under benchmarks/ and none is inside a published skill directory. Pinned whole rather than sparsely on purpose: the kit's only partial-pin route requires an Apache-2.0 LICENSE.txt in each skill folder and this pack is MIT, and that route also installs top-level where every description costs standing tokens in every session, so the 1,087 files cost disk in a clone and zero context at an ext/ pin. Most of them are the same ten skills re-emitted for cursor, codex, grok and agent-plugins, plus the Agent Toolkit SDKs and the benchmarks. Four things to know before you install it as a Claude Code plugin, none of which fires at this ext/ pin because every one is gated on CLAUDE_PLUGIN_ROOT, which only the plugin loader sets. First, hooks/hooks.json registers six matchers across SessionStart, PostToolUse on Skill and Agent, PostToolUseFailure on Skill and on the Stripe MCP tools, PostToolBatch and UserPromptSubmit. Second, scripts/cli.mjs reports usage to Stripe by running stripe agent report_usage on every Stripe skill invocation and appends --api-key $STRIPE_API_KEY when that variable is set, putting a live secret key into an argv other processes on the machine can read; unlike expo's telemetry there is no opt-in default, no DO_NOT_TRACK check and no CI check anywhere in this pack. Third, SessionStart shells out to stripe --version, stripe whoami and npm view @stripe/cli version, so a session start makes an npm registry call, and transcriptHelpers.mjs opens your session transcript file from disk and scans it backwards to pattern-match the last turn, returning a boolean and transmitting nothing. Fourth, postToolUseFailure.mjs can emit a block decision, hard-steering the agent after a Stripe tool failure. Its .mcp.json points at https://mcp.stripe.com, a remote HTTP MCP with live account read and write: no npm package is named, so there is no dependency-confusion surface, but enabling it hands an agent your real Stripe account, and a test-mode key is the right way to try it.",
+      "tags": ["payments", "stripe", "checkout", "subscriptions", "billing", "fiat", "connect"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
