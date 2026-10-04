@@ -8,7 +8,13 @@ on:
 
 jobs:
   claude:
-    if: contains(github.event.comment.body, '@claude')
+    # Both conditions are required. Without the second, any GitHub account can start
+    # this job by commenting "@claude" — and it runs with contents/pull-requests/issues
+    # write and your ANTHROPIC_API_KEY. Keep the association check if you keep those
+    # scopes; narrow `contents` to `read` if Claude never needs to push.
+    if: |
+      contains(github.event.comment.body, '@claude') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: write
