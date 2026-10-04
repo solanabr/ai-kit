@@ -221,9 +221,10 @@ your-project/
 │   │   │   │                      # anthropic-skills is core too, but installs top-level (below)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
 │   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, solana-fuzz,
-│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new,
-│   │   │   │                      # sign-safe, counterparty-gate, community-moderation,
-│   │   │   │                      # position-manager-skill, content-gen-skill, writer-style-skill
+│   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, supabase,
+│   │   │   │                      # solana-new, sign-safe, counterparty-gate, get-shit-pretty,
+│   │   │   │                      # community-moderation, position-manager-skill,
+│   │   │   │                      # content-gen-skill, writer-style-skill
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer

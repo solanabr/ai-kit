@@ -44,6 +44,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md) |
 | Official doc links | [resources.md](ext/solana-dev/skills/solana-dev/references/resources.md) |
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) (install: `bash .claude/bin/skills.sh add vercel`) |
+| Brand identity and a design system for the client: shadcn theme, design tokens, UI critique, WCAG audit | [get-shit-pretty](ext/get-shit-pretty/gsp/skills/) (install: `bash .claude/bin/skills.sh add get-shit-pretty`) — designs the client, not the program; wire none of its own `hooks.json` or `.mcp.json` (see its registry `safety`) |
 | UI design direction; Playwright tests of a local dApp | Anthropic's `frontend-design/SKILL.md` and `webapp-testing/SKILL.md`, core, so every install has them and loads them by description |
 
 ## Tokens and NFTs
@@ -121,6 +122,7 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | solana-mobile | React Native, Expo, Mobile Wallet Adapter, Seeker, dApp Store | `bash .claude/bin/skills.sh add solana-mobile` |
 | cloudflare | Cloudflare Workers, wrangler, Durable Objects, Agents SDK | `bash .claude/bin/skills.sh add cloudflare` |
 | vercel | Vercel deploys, Next.js and React performance, web design review | `bash .claude/bin/skills.sh add vercel` |
+| get-shit-pretty | Brand identity, a design system, shadcn themes and design tokens, UI polish, accessibility audits (designs the client, not the program; don't wire its `hooks.json` or `.mcp.json`) | `bash .claude/bin/skills.sh add get-shit-pretty` |
 | supabase | Supabase as the off-chain layer: Postgres schema, migrations and RLS, Auth, Edge Functions, Realtime, Storage; or tuning the database an indexer writes into (fetches supabase.com docs whenever it loads) | `bash .claude/bin/skills.sh add supabase` |
 | solana-new | Go-to-market references: marketing video, brand design, tokenomics, DefiLlama research, ecosystem catalogs; idea-sprint, pitch-deck and hackathon link it | `bash .claude/bin/skills.sh add solana-new` |
 | sign-safe | Reviewing a transaction before it is signed: decode an opaque base64 tx, SIGN/HOLD/REJECT verdict, gating an agent's signing, Squads proposal review | `bash .claude/bin/skills.sh add sign-safe` |
