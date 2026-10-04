@@ -99,6 +99,18 @@ upstream_ids() {
   ' "$1"
 }
 
+# The upstream packs an install should carry: every core one, plus the extensions in
+# <keep>. A core pack that is a submodule arrives with the kit clone; a core pack with
+# a skills list is not in that clone at all, so it has to be fetched from its own
+# source the way an extension is, whether or not anyone asked for it.
+wanted_upstream() {  # wanted_upstream <registry> <keep>
+  local core id
+  core="$(tier_ids "$1" core)"
+  for id in $(upstream_ids "$1"); do
+    if has_line "$core" "$id" || has_line "$2" "$id"; then echo "$id"; fi
+  done
+}
+
 # The commit a kit checkout has pack <path> pinned at: the gitlink in its index. Empty
 # when <root> is not a git repo or <path> is not a submodule there — a vendored copy,
 # where there is nothing to compare against.
@@ -433,16 +445,19 @@ summary() {
 }
 
 cmd_select() {
-  local src="$1" dst="$2" reg="$1/skills/skill-registry.json" recorded keep id
+  local src="$1" dst="$2" reg="$1/skills/skill-registry.json" recorded keep extensions id
   shift 2
   check_registry "$reg"
   recorded="$(recorded_extensions "$dst" "$reg")"
-  keep="$( { printf '%s\n' "$recorded"; expand_ids "$reg" "$@"; } | awk 'NF && !seen[$0]++')"
+  # keep is the project's extension list, so --with naming a core pack is a no-op rather
+  # than a line in extensions.txt that the next prune would warn about and drop.
+  extensions="$(tier_ids "$reg" extension)"
+  keep="$( { printf '%s\n' "$recorded"; expand_ids "$reg" "$@"; } | awk 'NF && !seen[$0]++' \
+    | while IFS= read -r id; do if has_line "$extensions" "$id"; then echo "$id"; fi; done)"
   drop_others "$src" "$reg" "$keep"
   prune_orphans "$dst" "$reg"
-  # Upstream packs are not in the kit checkout: fetch the kept ones into the project.
-  for id in $(upstream_ids "$reg"); do
-    has_line "$keep" "$id" || continue
+  # Upstream packs are not in the kit checkout: fetch the wanted ones into the project.
+  for id in $(wanted_upstream "$reg" "$keep"); do
     ensure_upstream "$reg" "$dst" "$id" && continue
     echo "! $id was not installed; retry with: bash $(basename "$dst")/bin/skills.sh add $id" >&2
     has_line "$recorded" "$id" || keep="$(printf '%s\n' "$keep" | grep -vxF -- "$id" || true)"
@@ -460,8 +475,8 @@ cmd_prune() {
   drop_others "$CONFIG_DIR" "$reg" "$keep"
   prune_orphans "$CONFIG_DIR" "$reg"
   # Installed upstream packs move to the commit this kit version pins.
-  for id in $(upstream_ids "$reg"); do
-    if has_line "$keep" "$id" && ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
+  for id in $(wanted_upstream "$reg" "$keep"); do
+    if ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
       echo "! $id was not updated; retry with: bash $CONFIG_NAME/bin/skills.sh add $id" >&2
     fi
   done

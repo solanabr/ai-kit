@@ -172,7 +172,7 @@ Knowledge loads on-demand:
 - PlaySolana/PSG1 integration
 - Security auditing
 
-Only the core skill packs (solana-dev, auditor-skill, colosseum) install by default. `colosseum` needs one sign-in per machine before it can answer anything: `npx @colosseum-org/copilot-connect login` (Node 20+); `/doctor` reports whether that is in place. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack. The `anthropic-skills` extension adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills, which Codex, Grok Build and other agents load too ([docs/other-agents.md](docs/other-agents.md)).
+Only the core skill packs (solana-dev, auditor-skill, colosseum, anthropic-skills) install by default. `colosseum` needs one sign-in per machine before it can answer anything: `npx @colosseum-org/copilot-connect login` (Node 20+); `/doctor` reports whether that is in place. `anthropic-skills` adds Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder as top-level skills in `.claude/skills/<name>/`, which Codex, Grok Build and other agents load too ([docs/other-agents.md](docs/other-agents.md)). It is the one pack that costs you context just by being installed: top-level skills are listed at session start, so budget **~171 tokens per session** for its three descriptions. The three `ext/` core packs cost nothing standing, because Claude Code does not auto-discover `.claude/skills/ext/`. The rest of `.claude/skills/ext/` are extensions the kit pins and installs on demand: `bash install.sh --with <ids>` at install time, or `/add-skill <id>` later. The hub gives each one's install command, and agents run it when a task needs the pack.
 
 Need a capability the kit doesn't bundle? See [`.claude/skills/skill-registry.json`](.claude/skills/skill-registry.json) — a curated catalog of opt-in skills/MCPs/repos the agent can install on request, at your own expense (not bundled by default).
 
@@ -218,6 +218,7 @@ your-project/
 │   │   │   ├── solana-dev/        # Core Solana (Foundation) (core)
 │   │   │   ├── auditor-skill/     # Security audit checklists + vectors (core)
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
+│   │   │   │                      # anthropic-skills is core too, but installs top-level (below)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
 │   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, solana-fuzz,
 │   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, solana-new,
@@ -228,7 +229,7 @@ your-project/
 │   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
 │   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
 │   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
-│   │   ├── frontend-design/  # With the anthropic-skills extension, also webapp-testing/, mcp-builder/
+│   │   ├── frontend-design/  # anthropic-skills (core), with webapp-testing/ and mcp-builder/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   └── deployment.md     # Deploy workflows

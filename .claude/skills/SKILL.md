@@ -8,7 +8,7 @@ user-invocable: true
 
 Find the task, read the linked file, and follow further links only as needed. Paths are relative to this file.
 
-Every install carries the core packs: solana-dev, auditor-skill and colosseum. The other `ext/` packs are extensions: the kit pins them, and a project installs one when a task needs it. A row that links into an extension gives its install command; run it when the linked folder is missing (`/update` keeps what you install). The Extensions table at the end lists each one with when to use it.
+Every install carries the core packs: solana-dev, auditor-skill, colosseum and anthropic-skills. The first three sit under `ext/`, which Claude Code does not auto-discover, so they cost nothing until a row here sends you into one; anthropic-skills installs top-level in `skills/<name>/` and is listed every session, for about 171 tokens. The other `ext/` packs are extensions: the kit pins them, and a project installs one when a task needs it. A row that links into an extension gives its install command; run it when the linked folder is missing (`/update` keeps what you install). The Extensions table at the end lists each one with when to use it.
 
 When sources overlap: the program-code house rules in the project instruction file (`CLAUDE.md`, or `AGENTS.md` in `--agents` installs) win; a protocol's official skill wins for its own SDK (Jupiter, Metaplex, Helius, MagicBlock, Alchemy); [ext/solana-dev](ext/solana-dev/skills/solana-dev/SKILL.md) wins for general Solana work; sendai and community skills fill gaps only.
 
@@ -42,7 +42,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md) |
 | Official doc links | [resources.md](ext/solana-dev/skills/solana-dev/references/resources.md) |
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) (install: `bash .claude/bin/skills.sh add vercel`) |
-| UI design direction; Playwright tests of a local dApp | Anthropic's `frontend-design/SKILL.md` and `webapp-testing/SKILL.md` (install: `bash .claude/bin/skills.sh add anthropic-skills`; later sessions load them by description) |
+| UI design direction; Playwright tests of a local dApp | Anthropic's `frontend-design/SKILL.md` and `webapp-testing/SKILL.md`, core, so every install has them and loads them by description |
 
 ## Tokens and NFTs
 
@@ -78,7 +78,7 @@ The three cover different questions: `auditor-skill` the program's source, `sign
 
 - [deployment.md](deployment.md): devnet and mainnet flow, verifiable builds, Squads multisig upgrades, rollback
 - [backend-async.md](backend-async.md): Rust services and indexers that talk to Solana
-- MCP server for a program or API: Anthropic's `mcp-builder/SKILL.md` (install: `bash .claude/bin/skills.sh add anthropic-skills`); its evaluation script needs `ANTHROPIC_API_KEY`
+- MCP server for a program or API: Anthropic's `mcp-builder/SKILL.md`, core; its evaluation script needs `ANTHROPIC_API_KEY`
 - [Cloudflare](ext/cloudflare/skills/) (install: `bash .claude/bin/skills.sh add cloudflare`): [workers-best-practices](ext/cloudflare/skills/workers-best-practices/), [agents-sdk](ext/cloudflare/skills/agents-sdk/), [sandbox-stable](ext/cloudflare/skills/sandbox-stable/), [durable-objects](ext/cloudflare/skills/durable-objects/), [wrangler](ext/cloudflare/skills/wrangler/)
 - [supabase](ext/supabase/skills/supabase/SKILL.md) (official; install: `bash .claude/bin/skills.sh add supabase`): the off-chain data layer — Postgres, Auth, Edge Functions, Realtime, Storage, the CLI, migrations and declarative schemas. For the database an indexer or webhook consumer writes into, [supabase-postgres-best-practices](ext/supabase/skills/supabase-postgres-best-practices/SKILL.md) is the one to open: query plans, connection pooling and exhaustion, partitioning, RLS policy performance, missing foreign-key indexes, `SKIP LOCKED` queues. Two things it does on its own: its SKILL.md fetches `https://supabase.com/changelog.md` whenever it loads, plus vendor docs at decision points, so a Supabase task always calls out to supabase.com; and [skill-feedback.md](ext/supabase/skills/supabase/references/skill-feedback.md) can open a public GitHub issue on `supabase/agent-skills` built from the conversation. That step asks permission first; let the user answer it, since the issue body is their session.
 
@@ -126,7 +126,6 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | community-moderation | Moderating a Telegram or Discord community and running member support: spam and drainer links, raids, impersonation, ticket triage | `bash .claude/bin/skills.sh add community-moderation` |
 | content-gen-skill | Writing educational content: a course or curriculum, tutorial, explainer, essay, litepaper, slide spec or thread | `bash .claude/bin/skills.sh add content-gen-skill` |
 | writer-style-skill | Writing prose in a named author's voice, or building a voice pack; content-gen hands it the brief | `bash .claude/bin/skills.sh add writer-style-skill` |
-| anthropic-skills | UI design direction, Playwright tests of a local web app, building an MCP server (Anthropic's Apache-2.0 frontend-design, webapp-testing and mcp-builder, installed as top-level skills in `skills/<name>/`) | `bash .claude/bin/skills.sh add anthropic-skills` |
 
 ## Add-ons
 

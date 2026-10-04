@@ -13,6 +13,11 @@ SKILLS_SH="$REPO_ROOT/.claude/bin/skills.sh"
 TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
+# One core pack (anthropic-skills) is fetched from its own upstream rather than vendored
+# from a kit submodule. helpers.sh points its source at a path that does not exist, so the
+# install must warn and carry on, which is asserted below. The success path for that pack
+# lives in tests/test_anthropic_skills.sh, which builds a real mirror.
+
 echo "[test_skill_extensions] Core and extension skill packs"
 echo ""
 
@@ -29,6 +34,14 @@ sorted() { printf '%s\n' "$@" | awk 'NF' | sort | tr '\n' ' ' | sed 's/ $//'; }
 
 CORE="$(tier_ids core)"
 EXTENSIONS="$(tier_ids extension)"
+# Core packs that land in ext/. A core pack with a "skills" list installs top-level
+# instead (skills/<name>/), so comparisons against ext/ must not expect it there.
+KIT_CORE="$(python3 - "$REGISTRY" <<'PY2'
+import json, sys
+reg = json.load(open(sys.argv[1]))
+print(" ".join(sorted(e["id"] for e in reg["entries"] if e.get("tier") == "core" and "skills" not in e)))
+PY2
+)"
 # Extensions vendored from a kit submodule into ext/. A pack with a "skills" list is
 # fetched from its upstream repo into top-level skill folders instead
 # (tests/test_anthropic_skills.sh). Every pack, both kinds, carries a "commit".
@@ -55,13 +68,18 @@ for e in kit:
     i = e["id"]
     if e["tier"] not in ("core", "extension"):
         out.append(f"{i}: tier must be core or extension")
+    # Two statements of one fact: installers read the tier, humans read the flag.
+    if e.get("default_installed") is not (e["tier"] == "core"):
+        out.append(f"{i}: default_installed must agree with tier {e['tier']}")
     # The pin a user project carries. validate.sh checks a submodule's against the gitlink;
     # skills.sh asserts an upstream pack's against FETCH_HEAD.
     if not re.fullmatch(r"[0-9a-f]{40}", e.get("commit", "")):
         out.append(f"{i}: needs a 40-character commit")
     if "skills" in e:
-        if e["tier"] != "extension" or e.get("path") != ".claude/skills":
-            out.append(f"{i}: a pack with a skills list must be an extension with path .claude/skills")
+        # Either tier may be an upstream pack; skills.sh fetches core ones through
+        # wanted_upstream(), since only extensions reach it through "keep".
+        if e.get("path") != ".claude/skills":
+            out.append(f"{i}: a pack with a skills list must have path .claude/skills")
     elif e.get("path") != f".claude/skills/ext/{i}":
         out.append(f"{i}: path must be .claude/skills/ext/{i}")
     for sub, sha in (e.get("vendored") or {}).items():
@@ -141,10 +159,12 @@ echo "[default install]"
 P1="$TEMP_DIR/core-only"
 mkdir -p "$P1" && (cd "$P1" && git init -q)
 OUT="$(SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$P1" 2>&1)"
-assert_eq "$CORE" "$(ext_dirs "$P1/.claude/skills/ext")" "Default install carries only the core packs"
+assert_eq "$KIT_CORE" "$(ext_dirs "$P1/.claude/skills/ext")" "Default install carries only the core packs"
 assert_file_exists "$P1/.claude/skills/extensions.txt" "Install writes the project's extension list"
 assert_eq "" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" || true)" "No extensions recorded by default"
 assert_contains "$OUT" "skills.sh add <id>" "Install output says how to add an extension"
+assert_contains "$OUT" "anthropic-skills was not installed" "An unreachable core upstream pack warns..."
+assert_contains "$OUT" "Installation complete!" "...and the install still finishes, unlike a core submodule pack that fails to fetch"
 
 # A core-only install must not leave dead references: every ext/ link in the installed
 # kit markdown resolves, or its line gives the install command for that pack.
@@ -230,14 +250,14 @@ grep -vx sendai "$P1/.claude/skills/extensions.txt" > "$TEMP_DIR/ext.txt" && mv 
 # --- update.sh keeps what the project has, adds no other extensions ---
 echo "[update]"
 (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
-assert_eq "$(sorted $CORE solana-game)" "$(ext_dirs "$P1/.claude/skills/ext")" "update.sh keeps core packs and installed extensions, adds none"
+assert_eq "$(sorted $KIT_CORE solana-game)" "$(ext_dirs "$P1/.claude/skills/ext")" "update.sh keeps core packs and installed extensions, adds none"
 
 # An install from before the split has every pack and no list: update keeps them all
 echo "[legacy install]"
 cp -R "$REPO_ROOT/.claude/skills/ext/." "$P1/.claude/skills/ext/"
 rm -f "$P1/.claude/skills/extensions.txt"
 (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
-assert_eq "$(sorted $CORE $KIT_EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
+assert_eq "$(sorted $KIT_CORE $KIT_EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
 assert_eq "$(sorted $KIT_EXTENSIONS)" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" | sort | tr '\n' ' ' | sed 's/ $//')" "...and records them as its extensions"
 
 # --- install.sh --with ---
@@ -245,7 +265,7 @@ echo "[--with]"
 P2="$TEMP_DIR/with"
 mkdir -p "$P2" && (cd "$P2" && git init -q)
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --with sendai,jupiter "$P2" >/dev/null 2>&1
-assert_eq "$(sorted $CORE sendai jupiter)" "$(ext_dirs "$P2/.claude/skills/ext")" "install.sh --with a,b adds those extensions"
+assert_eq "$(sorted $KIT_CORE sendai jupiter)" "$(ext_dirs "$P2/.claude/skills/ext")" "install.sh --with a,b adds those extensions"
 TOTAL=$((TOTAL + 1))
 if SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --with no-such-pack "$TEMP_DIR/bad" >/dev/null 2>&1; then
   echo "  FAIL: install.sh accepted an unknown --with pack"
@@ -274,7 +294,7 @@ assert_dir_not_exists "$P2/.claude/skills/old-skill" "prune removes an upstream 
 assert_file_not_exists "$P2/.claude/skills/old-up.lock" "...and its lock"
 assert_dir_exists "$P2/.claude/skills/my-skill" "prune leaves a .lock the kit did not write alone"
 assert_contains "$PRUNE_OUT" "Removed old-core" "prune says which packs it removed"
-assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "prune keeps the core packs and recorded extensions"
+assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "prune keeps the core packs and recorded extensions"
 
 # --- A hand-edited extensions.txt is cleaned, not glob-expanded or propagated ---
 echo "[extensions.txt]"
@@ -287,10 +307,10 @@ HOSTILE_OUT="$(cd "$P2" && bash .claude/bin/skills.sh prune 2>&1)"
 assert_eq "jupiter sendai" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" | tr '\n' ' ' | sed 's/ $//')" "prune trims, lowercases and dedupes extensions.txt, and drops '*' and unknown ids"
 assert_contains "$HOSTILE_OUT" "ignoring 'no-such-pack'" "prune warns about an id that is not an extension"
 assert_contains "$HOSTILE_OUT" "ignoring '*'" "prune warns about a glob line instead of expanding it"
-assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "A glob in extensions.txt adds no pack, even with a project folder named like one"
+assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "A glob in extensions.txt adds no pack, even with a project folder named like one"
 cp -R "$REPO_ROOT/.claude/skills/ext/." "$P2/.claude/skills/ext/"
 (cd "$P2" && bash .claude/bin/skills.sh prune) >/dev/null 2>&1
-assert_eq "$(sorted $CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "...and the next update keeps the same subset"
+assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "...and the next update keeps the same subset"
 printf 'jupiter\n*\n' > "$P2/.claude/skills/extensions.txt"
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$P2" >/dev/null 2>&1
 assert_eq "jupiter" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" | tr '\n' ' ' | sed 's/ $//')" "install.sh re-run (select) drops a glob line too"
@@ -335,7 +355,7 @@ echo "[--agents]"
 P3="$TEMP_DIR/agents"
 mkdir -p "$P3" && (cd "$P3" && git init -q)
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents --with=solana-mobile "$P3" >/dev/null 2>&1
-assert_eq "$(sorted $CORE solana-mobile)" "$(ext_dirs "$P3/.agents/skills/ext")" "--agents install carries core packs plus --with"
+assert_eq "$(sorted $KIT_CORE solana-mobile)" "$(ext_dirs "$P3/.agents/skills/ext")" "--agents install carries core packs plus --with"
 (cd "$P3" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/skills.sh add metaplex) >/dev/null 2>&1
 assert_dir_exists "$P3/.agents/skills/ext/metaplex" ".agents/bin/skills.sh add installs into .agents/skills/ext"
 assert_dir_not_exists "$P3/.claude" "--agents skills.sh writes nothing under .claude/"

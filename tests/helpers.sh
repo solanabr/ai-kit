@@ -7,6 +7,15 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+# anthropic-skills is a core pack fetched from its own upstream, not vendored from a kit
+# submodule, so every install.sh and update.sh run in these suites would otherwise reach
+# github.com. Default its source to a path that does not exist: the fetch fails offline
+# and deterministically, the install warns and carries on (asserted in
+# tests/test_skill_extensions.sh), and no suite depends on the network for it. A test that
+# needs the pack actually installed exports its own mirror over this, as
+# tests/test_anthropic_skills.sh does.
+export SOLANA_AI_KIT_PACK_MIRROR="${SOLANA_AI_KIT_PACK_MIRROR:-${TMPDIR:-/tmp}/sak-no-pack-mirror.$$}"
+
 # new_tmp — a writable temp dir, or exit 1 having said why.
 #
 # `mktemp -d` is itself denied under the Bash sandbox on some machines ("mkdtemp failed

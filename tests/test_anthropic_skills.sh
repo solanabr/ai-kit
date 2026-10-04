@@ -16,7 +16,7 @@ DENIED="docx pdf pptx xlsx doc-coauthoring"
 TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-echo "[test_anthropic_skills] Anthropic's Apache-2.0 skills as a cross-agent extension"
+echo "[test_anthropic_skills] Anthropic's Apache-2.0 skills as a cross-agent core pack"
 echo ""
 
 check() {  # check <message> <command...>: passes when the command succeeds
@@ -66,7 +66,7 @@ COMMIT="$(field "$REGISTRY" commit)"
 
 # --- The registry entry: opt-in, pinned, allowlisted ---
 echo "[registry]"
-assert_eq "extension" "$(field "$REGISTRY" tier)" "$PACK is an extension, installed only on request"
+assert_eq "core" "$(field "$REGISTRY" tier)" "$PACK is a core pack, installed by default"
 check "$PACK is pinned to a full 40-character commit ($COMMIT)" is_sha "$COMMIT"
 assert_eq "https://github.com/anthropics/skills" "$(field "$REGISTRY" source)" "$PACK comes from anthropics/skills"
 assert_eq ".claude/skills" "$(field "$REGISTRY" path)" "$PACK installs top-level skills (.claude/skills/<name>/)"
@@ -126,7 +126,9 @@ KIT="$TEMP_DIR/kit"
 mkdir -p "$KIT/.claude/skills/ext"
 for f in "$REPO_ROOT"/.claude/*; do [ "$(basename "$f")" = skills ] || cp -R "$f" "$KIT/.claude/"; done
 for f in "$REPO_ROOT"/.claude/skills/*; do [ "$(basename "$f")" = ext ] || cp -R "$f" "$KIT/.claude/skills/"; done
-CORE="$(python3 -c 'import json, sys; print(" ".join(e["id"] for e in json.load(open(sys.argv[1]))["entries"] if e.get("tier") == "core"))' "$REGISTRY")"
+# Core packs that exist as ext/ directories to copy. A core pack with a "skills" list
+# (this one) is fetched from its own upstream instead, so there is nothing to copy.
+CORE="$(python3 -c 'import json, sys; print(" ".join(e["id"] for e in json.load(open(sys.argv[1]))["entries"] if e.get("tier") == "core" and "skills" not in e))' "$REGISTRY")"
 for id in $CORE; do cp -R "$REPO_ROOT/.claude/skills/ext/$id" "$KIT/.claude/skills/ext/"; done
 cp "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.mcp.json" "$REPO_ROOT/.env.example" "$REPO_ROOT/.gitmodules" "$KIT/"
 set_field "$KIT/.claude/skills/skill-registry.json" commit "\"$PIN\""
@@ -148,30 +150,30 @@ for name in theme-factory mit-skill renamed; do
   assert_dir_not_exists "$P1/.claude/skills/$name" "$name is not on the allowlist, so it is not installed"
 done
 assert_dir_not_exists "$P1/.claude/skills/ext/$PACK" "$PACK is not vendored under ext/"
-assert_file_contains "$P1/.claude/skills/extensions.txt" "$PACK" "$PACK is recorded, so /update keeps it"
+assert_file_contains "$P1/.claude/skills/kit-packs.txt" "$PACK" "$PACK is recorded as a pack the kit installed"
+assert_file_not_contains "$P1/.claude/skills/extensions.txt" "$PACK" "...and not as an extension: /update keeps it because it is core"
 assert_file_contains "$P1/.claude/skills/$PACK.lock" "commit $PIN" "The lock records the pinned commit"
 assert_contains "$(bash "$P1/.claude/bin/skills.sh" list | grep "^$PACK ")" "installed" "skills.sh list shows $PACK installed"
 assert_contains "$(bash "$P1/.claude/bin/skills.sh" add "$PACK" 2>&1)" "already installed" "skills.sh add skips $PACK when it is at the pin"
 
 # --- --agents: .agents/skills/<name>/ for Codex and the other Agent Skills clients ---
-echo "[install --agents --with $PACK]"
+echo "[install --agents]"
 P2="$(new_project agents)"
-install_kit --agents --with="$PACK" "$P2"
+install_kit --agents "$P2"
 for name in $ALLOW; do
-  check "$name is installed in .agents/skills/" test -f "$P2/.agents/skills/$name/SKILL.md"
+  check "$name is installed in .agents/skills/ by a default --agents install" test -f "$P2/.agents/skills/$name/SKILL.md"
   check "$name is unchanged in --agents mode (no .claude/ path rewrite)" diff -r "$FIX/skills/$name" "$P2/.agents/skills/$name"
 done
 assert_dir_not_exists "$P2/.claude" "--agents install writes nothing under .claude/"
 
 # --- On demand, then through update.sh ---
-echo "[skills.sh add + update.sh]"
-P3="$(new_project on-demand)"
+echo "[default install + update.sh]"
+P3="$(new_project default-core)"
 install_kit "$P3"
-assert_dir_not_exists "$P3/.claude/skills/$FIRST" "A default install carries no $PACK skill"
-bash "$P3/.claude/bin/skills.sh" add "$PACK" >/dev/null 2>&1
 for name in $ALLOW; do
-  check "skills.sh add installs $name" test -f "$P3/.claude/skills/$name/SKILL.md"
+  check "A default install carries $name, with no --with and nothing to add" test -f "$P3/.claude/skills/$name/SKILL.md"
 done
+assert_contains "$(bash "$P3/.claude/bin/skills.sh" add "$PACK" 2>&1)" "already installed" "skills.sh add is a no-op once the install has it"
 SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
 check "update.sh keeps $PACK" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
 printf '\nRevised upstream.\n' >> "$FIX/skills/$FIRST/SKILL.md"
@@ -180,16 +182,21 @@ set_field "$KIT/.claude/skills/skill-registry.json" commit "\"$PIN2\""
 SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
 check "update.sh moves $PACK to the commit the new kit pins" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
 assert_file_contains "$P3/.claude/skills/$PACK.lock" "commit $PIN2" "...and records it in the lock"
-grep -vx "$PACK" "$P3/.claude/skills/extensions.txt" > "$TEMP_DIR/extensions.txt" || true
-cp "$TEMP_DIR/extensions.txt" "$P3/.claude/skills/extensions.txt"
+# A core pack is not held by extensions.txt, so editing that file cannot drop it, and
+# deleting its folders by hand lasts only until the next update: there is no opt-out.
+printf '# no extensions\n' > "$P3/.claude/skills/extensions.txt"
+rm -rf "${P3:?}/.claude/skills/${FIRST:?}"
 SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
-assert_dir_not_exists "$P3/.claude/skills/$FIRST" "update.sh removes $PACK's skills once the project drops it from extensions.txt"
-assert_file_not_exists "$P3/.claude/skills/$PACK.lock" "...and its lock"
+check "update.sh re-fetches $PACK after its folder is deleted, because it is core" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
+assert_file_contains "$P3/.claude/skills/$PACK.lock" "commit $PIN2" "...and its lock is back at the pinned commit"
 
 # --- Refusals: the denylist lives in code, and licenses and names are checked ---
 echo "[refusals]"
 P4="$(new_project refusals)"
 install_kit "$P4"
+# The install put the pack in (it is core); these cases need it absent, so take it out.
+for name in $ALLOW; do rm -rf "${P4:?}/.claude/skills/${name:?}"; done
+rm -f "$P4/.claude/skills/$PACK.lock"
 REG4="$P4/.claude/skills/skill-registry.json"
 try_add() {  # try_add <key> <JSON value>: set that registry field in P4, then add the pack
   set_field "$REG4" "$1" "$2"
@@ -226,8 +233,6 @@ refused "skills.sh add refuses a nested license file that is not Apache-2.0" "li
 check "skills.sh add accepts the Apache-2.0 text with its copyright line filled in" try_add skills '["apache-copyright"]'
 check "...and installs it" test -f "$P4/.claude/skills/apache-copyright/SKILL.md"
 rm -rf "${P4:?}/.claude/skills/apache-copyright" "$P4/.claude/skills/$PACK.lock"
-grep -vx "$PACK" "$P4/.claude/skills/extensions.txt" > "$TEMP_DIR/extensions.txt" || true
-cp "$TEMP_DIR/extensions.txt" "$P4/.claude/skills/extensions.txt"
 refused "skills.sh add refuses a folder whose SKILL.md carries another name" "is named 'other-name'" skills '["renamed"]'
 refused "skills.sh add refuses a name that is not a plain skill name" "invalid skill name" skills '["../escape"]'
 mkdir -p "$P4/.claude/skills/$FIRST" && printf 'mine\n' > "$P4/.claude/skills/$FIRST/SKILL.md"
@@ -237,7 +242,8 @@ rm -rf "${P4:?}/.claude/skills/$FIRST"
 refused "skills.sh add needs a full commit SHA" "full 40-character SHA" commit '"8a1541c"'
 refused "skills.sh add fails cleanly when the pinned commit is not upstream" "could not fetch" commit '"0000000000000000000000000000000000000000"'
 assert_dir_not_exists "$P4/.claude/skills/$FIRST" "...and installs nothing"
-check "No refused attempt is recorded as installed" test -z "$(grep -x "$PACK" "$P4/.claude/skills/extensions.txt" || true)"
+# extensions.txt never names a core pack, so the lock is what says whether one installed.
+assert_file_not_exists "$P4/.claude/skills/$PACK.lock" "No refused attempt is recorded as installed"
 
 # --- Lock state: an unfinished copy, and a denied skill the lock claims ---
 echo "[lock state]"
