@@ -224,8 +224,9 @@ your-project/
 │   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, supabase,
 │   │   │   │                      # solana-new, sign-safe, counterparty-gate, get-shit-pretty,
 │   │   │   │                      # community-moderation, position-manager-skill,
-│   │   │   │                      # content-gen-skill, writer-style-skill,
-│   │   │   │                      # obsidian-skills, huggingface-skills
+│   │   │   │                      # content-gen-skill, writer-style-skill, frontend-slides,
+│   │   │   │                      # superseo, expo, duckdb, crypto-legal, obsidian-skills,
+│   │   │   │                      # huggingface-skills
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer

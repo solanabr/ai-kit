@@ -31,14 +31,18 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 | Landing page, marketing site, any UI surface | `vercel` (web design review, Next.js and React performance), `get-shit-pretty` (brand identity and a design system: shadcn theme, design tokens, UI critique, WCAG audit — 45 skills, 13 sub-agents), `solana-new` (brand design, design taste, frontend design guidelines, number formatting) | `anydesign` (an image, URL or Figma frame into design tokens), `design-skills` (design critique, accessibility audit, journey mapping), `ux-writing-skill` (onboarding, error and empty-state copy) |
 | Animation, motion, transitions, page-load choreography | `solana-new` (page-load animation and video-craft references) | `emilkowalski-skill` (animate, review-animations, apple-design; markdown only), `animation-principles` (motion principles as prose; unmaintained since December 2025) |
 | NFTs, collections, compressed NFTs | `metaplex` | — |
+| A token launch, airdrop, ToS or privacy policy, licensing or sanctions question | `crypto-legal` (statutory citations across US, EU/MiCA and Brazil — informational only, never legal advice, and its review is pinned at 2026-06, so say both when you offer it) | — |
 | Swaps, lending, perps, oracles, bridges | `jupiter`, `sendai` | `meteora-invent` (Meteora's own skill, deeper than the sendai folder) |
 | Unity, C#, PSG1, real-time games | `solana-game`, `magicblock` (ephemeral rollups for real-time state) | — |
-| React Native, Expo, Seeker, dApp Store | `solana-mobile` | `ios-simulator-skill`, `swiftui-design-skill` |
+| React Native, Expo, Seeker, dApp Store | `solana-mobile` (MWA, Seeker, Genesis Token), `expo` (the other half: EAS Build/Update/Workflows CI, store submission, OTA, config plugins and native modules, SDK upgrades — offer both when the app is Expo) | `ios-simulator-skill`, `swiftui-design-skill` |
 | RPC, DAS, webhooks, indexing, edge hosting | `helius`, `alchemy`, `cloudflare` | — |
 | Browser QA of a dApp that is already running | — | `playwright-skill`, `dev-browser` |
 | An MCP server for your program or API | `cloudflare` (Agents SDK, MCP servers on Workers) | `anthropic-claude-code-plugins` (its mcp-server-dev plugin: deployment models, tool design, auth) |
-| Pitch deck, demo day, hackathon, competitive research | `solana-new` | `frontend-slides` (animation-rich HTML decks) |
+| Pitch deck, demo day, hackathon, competitive research | `frontend-slides` (the deck itself: 36 HTML templates, an intent→template selection index, PDF export and Vercel publish), `solana-new` | — |
+| Any slide deck, marketing graphic or social image | `frontend-slides` (HTML is the house format for these; pitch-deck and content-gen hand it the content) | — |
+| Getting a landing page, docs page or post found: SEO, keywords, search intent, ranking | `superseo` (page audit, content brief, E-E-A-T scoring, topic clusters, link building — markdown only, and it uses your own search tools rather than a paid SEO API) | — |
 | Charts, dashboards, on-chain data visualization | — | `claude-d3js-skill` (no license, so read it, don't vendor it), `scientific-agent-skills` |
+| Analysing or reporting on exported data: a Parquet or CSV dump, an airdrop snapshot, indexer output | `duckdb` (SQL over files with no database to stand up; `supabase` instead when the data has to live somewhere) | — |
 | Research notes, a knowledge base, an Obsidian vault | `obsidian-skills` (Obsidian Markdown, Bases query views, JSON Canvas, the Obsidian CLI, Defuddle web-to-Markdown — it writes to a live vault and can run JS in the app, so offer it for a vault the user already keeps, not as a place to put project docs) | — |
 | An AI or LLM feature: a model, inference endpoint, fine-tune or Gradio demo | `huggingface-skills` (the hf CLI and Hub, Gradio and Spaces, ZeroGPU, fine-tuning, evals, transformers.js, SageMaker — the one machinery pack: it runs a pipe-to-shell installer and its SageMaker skills create AWS IAM roles, so name that when offering it) | — |
 
