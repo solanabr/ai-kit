@@ -729,6 +729,17 @@ fi
 
 # Older --agents installs listed CLAUDE.md in the .gitignore config block; add AGENTS.md
 GITIGNORE="$TARGET_DIR/.gitignore"
+
+# Ignores added after an install may already exist: install.sh writes them for fresh
+# installs, so without this an existing project never gets them. Appended outside the
+# kit config block, since a user may have removed that block with /commit-claude-config.
+if [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ]; then
+  for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/"; do
+    grep -qxF "$ignore" "$GITIGNORE" && continue
+    printf '%s\n' "$ignore" >> "$GITIGNORE"
+    CHANGES="$CHANGES  [updated] .gitignore — $ignore added\n"
+  done
+fi
 if [ "$INSTR_FILE" = "AGENTS.md" ] && [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ] \
   && grep -qF ">>> solana-ai-kit config" "$GITIGNORE" \
   && ! sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | grep -qxF "$INSTR_FILE"; then

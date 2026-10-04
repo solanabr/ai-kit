@@ -509,6 +509,11 @@ append_ignore "CLAUDE.local.md"
 append_ignore "$CONFIG_DIR/context/"
 append_ignore ".env"
 append_ignore ".env.local"
+# memsearch's local store: a Milvus Lite DB plus a ~558 MB ONNX model, rebuilt from the
+# markdown it indexes. Agent worktrees: transient checkouts that `git add -A` would
+# otherwise stage as embedded gitlinks, which then breaks every `git submodule` call.
+append_ignore ".memsearch/"
+append_ignore "$CONFIG_DIR/worktrees/"
 
 # Merge .env.example (append-only — preserves user edits on reinstall)
 # shellcheck source=.claude/bin/_env_merge.sh
