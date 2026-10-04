@@ -1,154 +1,104 @@
-# Solana AI Kit - Meta Configuration
-<!-- This is the config-repo maintainer file (NOT shipped to user projects).
-     CLAUDE-solana.md is the one that ships as CLAUDE.md to target projects. -->
+# solana-ai-kit — maintainer instructions
+<!-- This file is the config repo's own instructions and never ships.
+     CLAUDE-solana.md is what install.sh writes as a project's CLAUDE.md. -->
 
-This repository contains Claude Code configuration for Solana development projects. The actual Solana builder configuration lives in `CLAUDE-solana.md` and should be copied to target projects as their `CLAUDE.md`.
+You maintain the agents, commands, skills, hooks, permissions and install/update scripts that ship into users' Solana projects. A defect here reaches every installed project, and some of it guards mainnet deploys and keypairs.
 
-**Install docs**: See README.md (install + orientation), QUICK-START.md and `docs/` (the full spec; `install.sh` does not copy it into a project).
+Two audiences, never conflated: **this file** is maintainer-only; **`CLAUDE-solana.md`** ships as the project `CLAUDE.md`, held to 60 lines because it loads in every user session and subagent. The full spec is in `docs/` (index: `docs/README.md`), which `install.sh` never copies into a project — so `docs/` is where length is affordable, and whatever it explains better belongs there behind a pointer.
 
----
+Be direct: no filler, code before explanation, say so when unsure. Write for a strong model — add only what it wouldn't know or would get wrong, link `ext/` references instead of pasting patterns, and state rules calmly with the reason, since an unexplained rule gets ignored or cargo-culted.
 
-## This Repo's Purpose
-
-You are maintaining the **solana-ai-kit** repository - a template/library of Claude Code configurations for Solana development. Your role is to improve, test, and maintain the agents, skills, commands, and MCP servers that other projects will use.
+Commits and PR bodies carry no Claude attribution and no co-author trailers. Author with an email registered on the author's GitHub account (`git -c user.name=... -c user.email=...`) — the one in session context often is not, and GitHub links such commits to no profile.
 
 ## Token Loading Model
-<!-- WHY: Understanding when each file loads determines your token budget.
-     CLAUDE.md is a user message (not system prompt) — shorter = better adherence.
-     Claude Code reads only `paths:` from a rule; `globs:` is ignored, so such a rule
-     loads at session start and in every subagent (the kit's former rules did: ~17K tokens). -->
+<!-- CLAUDE.md arrives as a user message, not a system prompt, so shorter buys adherence
+     as well as tokens. Claude Code strips HTML comments like this one from instruction
+     files before the model sees them, which is why maintainer notes live in comments;
+     install.sh --agents strips them itself, since Codex and opencode do not. -->
 
 | File | When loaded | Budget guidance |
 |------|-------------|-----------------|
-| `CLAUDE.md` | Session start and every subagent; user message (uncached) | Keep <200 lines; costs every turn |
-| `CLAUDE-solana.md` | Session start and every subagent (user projects) | Keep <60 lines; only what a strong model can't infer; HTML comments stripped (free) |
-| `MEMORY.md` (user projects: Claude Code auto-memory; this repo has none) | Session start | 200-line / 25KB cap; index pointers only |
-| `.claude/rules/*.md` | `paths:` → when Claude reads a matching file; no `paths:` → every session and subagent | Kit ships none; `validate.sh` fails on an unscoped rule |
-| Agent `description` | Every session (Agent tool list) | Routing only, ≤250 chars (`validate.sh`) |
-| Command `description` | Every session (skill listing) unless `disable-model-invocation: true` | One line, ≤100 chars (`validate.sh`); user-only side-effect commands set `disable-model-invocation: true` |
-| `.claude/agents/*.md` body | On agent spawn | Only what the model wouldn't know; link ext/ skills |
-| `.claude/commands/*.md` body | On invocation | Terse steps with the exact non-obvious commands |
-| `.claude/skills/<name>/SKILL.md` `description` (token-extensions, hackathon, idea-sprint, pitch-deck) | Every session and every subagent (skill listing); body on invocation | Routing only, ≤1024 chars (`tests/test_local_skills.sh`); detail goes in `references/` |
-| `.claude/skills/SKILL.md` | When read (not auto-listed: not in a `<name>/` dir; CLAUDE.md points to it) | Routing table; HTML comments NOT stripped |
-| `.claude/skills/*.md` | On-demand via links | Can be detailed; don't duplicate ext/ |
-| Subdirectory `CLAUDE.md` | Lazy — when Claude reads files in that dir | Monorepo module configs |
-
-## Communication Style
-
-- No filler phrases ("I get it", "Awesome, here's what I'll do", "Great question")
-- Direct, efficient responses — code/config first, explanations when needed
-- Admit uncertainty rather than guess
-- Consider token efficiency in all additions
+| `CLAUDE.md` (this file) | Session start and every subagent | Under 200 lines; costs every turn |
+| `CLAUDE-solana.md` | Session start and every subagent, in user projects | Under 60 lines |
+| `.claude/rules/*.md` | With `paths:`, when a matching file is read; without it, every session and subagent | The kit ships none; `validate.sh` fails on an unscoped rule |
+| Agent `description` | Every session, in the Agent tool list | Routing only, ≤250 chars (`validate.sh`) |
+| Command `description` | Every session, in the skill listing, unless `disable-model-invocation: true` | One line, ≤100 chars (`validate.sh`); user-only side-effect commands set that flag |
+| `.claude/skills/<name>/SKILL.md` `description` | Every session and every subagent | Routing only, ≤1024 chars (`tests/test_local_skills.sh`); detail goes in `references/`. Four ship in-repo (token-extensions, hackathon, idea-sprint, pitch-deck); a core *upstream* pack installs more beside them, each description joining this listing |
+| `.claude/skills/ext/**` | Only when a file is read | Claude Code does not auto-discover these, so pinned submodule packs cost nothing standing — the point of `ext/` |
+| `.claude/skills/SKILL.md` (24 KB hub), `.claude/skills/*.md` | When read; not auto-listed, as the hub is not inside a `<name>/` directory | Routing table; detail belongs in the packs it routes to. A comment here is **not** stripped the way an instruction file's is, so keep maintainer notes out of it — a constraint on editing, not a cost today (it carries none) |
+| Agent, command and skill bodies | On spawn, invocation or read | Terse; the non-obvious commands verbatim |
+| `MEMORY.md` + `memory/` | Session start | Claude Code's own auto-memory under `~/.claude/projects/<slug>/`, created organically — the kit ships no template and install/update never overwrite one. `/dream` holds it to 200 lines / 25 KB of index pointers (a kit convention, not a platform cap) |
 
 ## Common Mistakes
 
-**DON'T**:
-- Edit CLAUDE-solana.md without considering it ships to user projects (different audience than this repo)
-- Add agent/skill content that duplicates what's already in external submodules
-- Reference files by line number in CLAUDE.md — line numbers shift constantly
-- Forget .env.example when adding/removing MCP servers
-- Leave stale counts (e.g., "15 agents", "22 commands") — grep to verify before committing
-
-**DO**:
-- Run `bash validate.sh && bash tests/run_all.sh` before every commit
-- Check README.md, QUICK-START.md and `docs/` after any structural change
-- Test install.sh in a temp dir after modifying it
-- Keep CLAUDE-solana.md under 60 lines — it loads in every user session and subagent
-- Write for a strong model: add only what it wouldn't know or would get wrong, link ext/ references instead of pasting patterns, and state rules calmly (no NEVER/ALWAYS/CRITICAL; give the reason)
+- **`.claude/bin/update.sh` lines 1-93 are frozen byte-identical to tag `v2.1.0`.** Bash reads a running script by byte offset, and the copy loop at the end of that region overwrites `update.sh` itself mid-run, so an older copy resumes in the new code at line 94. Any edit above 94 breaks the next `/update` for every existing install. These are the only line numbers worth citing in this file, precisely because they cannot shift; cite everything else by name.
+- **`.claude/settings.json` is effectively write-once** (issue #91, open). `install.sh` copies it only when absent, and the only in-place edits `/update` makes are the retired-defaults strip, the context-mode PreToolUse matcher patch, and the `RULE_SET_VERSION`-gated tier re-apply. New `permissions`, `hooks`, `extraKnownMarketplaces` or `enabledPlugins` reach fresh installs only — so never ship a security feature whose sole enforcement is a `settings.json` entry; it produces confident false security. Label such a change fresh-install-only in the changelog and give `/doctor` a row that tells "off because chosen" from "config present, gate not wired". Plugin installs are stricter still: `plugin.json` cannot carry `permissions` or `sandbox` at all, so hooks are the only enforcement there. What the kit does ship in that file is security policy (sandbox, permissions, hooks), attribution and the `stbr` marketplace; session behavior is the user's — `validate.sh` rejects the retired keys, and retiring one needs an `update.sh` migration entry.
+- **Permission lists merge across settings files and `deny` wins from any scope.** `allow` cannot carve an exception out of a broad `deny`, and no project or local file can loosen one. That is why a firewall tier is regenerated wholesale rather than layered.
+- Leaving a stale count. Grep before committing: `tests/test_cross_references.sh` asserts only that *some* line carries the right number, so a second stale copy passes CI.
+- Deleting an HTML comment under `.claude/` while trimming context. Nine of them are MIT/Apache attribution for adapted upstream material — a licence obligation, not waste.
 
 ## Ripple Map
-<!-- CRITICAL: This is the #1 cause of stale docs. When adding/removing
-     any component, walk through every row before committing. -->
 
-When X changes, also update Y:
+When X changes, also update Y. A row that is wrong is worse than absent, because it is trusted — correct it when you find it.
 
 | Changed | Also update |
 |---------|-------------|
-| Add/remove **agent** | `docs/agents-and-commands.md` agent table, README.md count in "What This Is", `docs/plugin.md` + `docs/repo-structure.md` tree counts, QUICK-START.md heading + tree count, tests/test_agents.sh + test_cross_references.sh counts (its per-agent check reads `docs/agents-and-commands.md`) |
-| Add/remove **command** | `docs/agents-and-commands.md` commands tables, README.md count in "What This Is", `docs/plugin.md` + `docs/repo-structure.md` tree counts, QUICK-START.md heading + tree count, tests/test_commands.sh + test_cross_references.sh counts (its per-command check reads `docs/agents-and-commands.md`) |
-| Change an agent/command **`model:`** | `docs/agents-and-commands.md` Agents table Model column + routing note (`tests/test_model_routing.sh` enforces allowed values, no Fable, and drift against that doc's `## Agents` section) |
-| Add/remove **MCP server** | `docs/configuration.md` MCP tables, README.md count in "What This Is", CLAUDE-solana.md MCP list, QUICK-START.md MCP list, .env.example, .claude/commands/setup-mcp.md, tests/test_mcp_config.sh server list + test_cross_references.sh count |
-| Bump a default **MCP server** (`.mcp.json` pins `npx` packages to exact versions; `validate.sh` rejects `@latest` and ranges) | `npm view <pkg> version`, read the release notes or diff since the pinned version, then edit the version in `.mcp.json`. Nothing bumps these automatically |
-| Add/remove **.env.example key** | `.claude/commands/setup-mcp.md` |
-| Add/remove **submodule** | **Scan the repo at the commit you are pinning first** (`docs/skill-packs.md` carries the checklist); a pack that fails it is not pinned, and what the scan found goes in the entry's `safety`. Then: .gitmodules, `.claude/skills/skill-registry.json` entry (`tier` core/extension, `path`, `commit`, `triggers`, install command), `docs/skill-packs.md` submodules table (`tests/test_cross_references.sh` checks its rows and tiers against `.gitmodules` and the registry), .claude/skills/SKILL.md routing. The `docs/repo-structure.md` and QUICK-START trees list `ext/` as one line, so they don't change. For an extension, every line that links into it names `bash .claude/bin/skills.sh add <id>`, and the hub's Extensions table gets a row (`tests/test_skill_extensions.sh` enforces both). Add the pin with `bash .claude/bin/skills.sh pins --write`, never by hand |
-| Move a pack between **core and extension** | `tier` + `default_installed` in the registry (they must agree), the hub's intro sentence and its Extensions table (core packs are not in it), the `docs/skill-packs.md` submodules table Tier column, the QUICK-START core list and tree, `CORE=` in `tests/test_install_packs.sh`. A pack leaving core keeps working only if every line that links into it also gains its install command. **A pack with a `skills` list** (an upstream pack, not a submodule) has two extra consequences when it becomes core: `wanted_upstream()` in `skills.sh` is what makes `select` and `prune` fetch it at all, since `keep` holds only extensions; and it installs top-level, so it is not in `ext/` and not in `extensions.txt` — compare it against `kit-packs.txt`, and keep `ext/` assertions on the submodule core packs alone (`KIT_CORE` in `tests/test_skill_extensions.sh`). It is also the only core pack fetched from a host other than this repo, so its failure warns instead of stopping the install |
-| Change a pack's **pinned commit** | The gitlink and the registry `commit` move together, or `validate.sh` fails: `bash .claude/bin/skills.sh pins --write` after the bump. Dependabot's weekly PR gets that push from `.github/workflows/sync-skill-pins.yml`. A pack's *own* submodules are recorded in `vendored` and are deliberately not auto-synced — a third party moving a pin inside a pack we ship should fail CI until someone reads the diff. The installers do not fetch them (`--recursive` is off for pack paths), so nothing nested reaches a user project. A bump is a new commit range, so it gets the same scan a new pack gets — read the diff, don't just move the sha |
-| Link an agent, command or bundled skill into **`ext/`** | Plugin installs have no `ext/` or `.claude/bin/`, so the plugin hub's "When a link into an `ext` pack is missing" section is their next step. Keep that section, and give the linked pack a `source` in its registry entry (`tests/test_plugin.sh` enforces both) |
-| Re-pin or change **anthropic-skills** (pinned by `commit` in its registry entry, not a submodule) | Scan and review the upstream diff of each folder in its `skills` list first; never list docx, pdf, pptx, xlsx or doc-coauthoring (`DENIED_SKILLS` in `.claude/bin/skills.sh` refuses them); `docs/skill-packs.md` "Anthropic's skills in any agent"; hub rows; `tests/test_anthropic_skills.sh` re-checks licenses and frontmatter at the pin |
-| Re-pin or change **safe-ai-skill** (core plugin from its own repo, not a submodule) | `.claude-plugin/marketplace.json` entry `sha` (a commit whose `plugins/safe-ai-skill/bin/` has every platform binary), `plugin.json` `dependencies`, `.claude/settings.json` `enabledPlugins` + `extraKnownMarketplaces`, README "Security firewall" section, `tests/test_plugin.sh` + `tests/test_settings_deep.sh` |
-| Change a **firewall tier's rule set** (`.claude/bin/firewall.sh`) | The tier is **regenerated wholesale**, never layered — permission lists merge across settings files and a `deny` from any scope wins, so a looser tier cannot be written as a stricter one plus exceptions. **Bump `RULE_SET_VERSION`**: `update.sh` compares it against `enforced.ruleSetVersion` and re-applies the declared tier when it is behind, and that is the ONLY route by which a rule change reaches a project that already has a `security.json` (the pre-firewall migration exits early on those). Then re-apply so the repo's own `security.json` records the new version and sha — and do it from a **clean non-worktree copy**, or `git_common_write()` writes this machine's absolute `.git` path into the committed `settings.json`. Update: the `enforced.ruleIds` the tier writes into `.claude/security.json`, the tier migration in `.claude/bin/update.sh` (below line 93, or existing installs never receive it), `/doctor`'s declared-vs-enforced check, `.claude/commands/firewall.md`, the firewall assertions in `tests/` + `validate.sh`, README's "Firewall tiers" tier table, `docs/firewall.md`'s gate table and honesty paragraphs, and `docs/other-agents.md`'s cross-harness table. Never express a tier with `defaultMode` (`validate.sh`'s retired-keys check rejects it; session mode is the user's call) or `disableBypassPermissionsMode` — a real schema key, but it restricts the *user's* mode choice, not the agent's reach, so it buys High nothing |
-| Modify **install.sh** | Test: `bash tests/test_install.sh` in temp dir. It also asserts that `docs/` and `QUICK-START.md` stay out of a project: the copy loop takes named `.claude/` subdirectories plus named root files, so kit-only documentation is excluded by construction |
-| Move a section between **README.md and `docs/`** | The README is for getting installed and oriented; everything else lives in `docs/` behind a link. Update the `docs/README.md` index, both link tables in README.md, any QUICK-START.md pointer, and the test that reads the moved text — `tests/test_cross_references.sh` targets `docs/agents-and-commands.md` (agent + command names), `docs/skill-packs.md` (submodule rows), `docs/install.md` (the from-a-clone steps) and checks every relative link and anchor in README, QUICK-START and `docs/`; `tests/test_model_routing.sh` reads `docs/agents-and-commands.md`. Retarget an assertion, never drop it. `docs/` is also on `/cleanup`'s removal list |
-| Change the **repo URL** | Update everywhere EXCEPT `.claude/bin/update.sh:16` — that line is inside the frozen 1-93 region (see the NOTE at line 94) and editing it breaks self-update for every existing install. GitHub's rename redirect covers it. |
-| Bump the **pinned agent CLIs** (`opencode-ai`, `@openai/codex` in `.github/workflows/ci.yml`) | Re-check that `opencode debug skill` and `codex debug prompt-input` still emit the shape the `agents-mode-clients` job greps — both subcommands are undocumented |
-| Add a **Claude-Code-only** command (describes the kit repo, `/plugin`, or anything `--agents` installs can't do) | Add it to `AGENTS_SKIP_FILES` in `install.sh` + `.claude/bin/update.sh` so it isn't installed there; `tests/test_install_agents_only.sh` asserts the two lists match |
-| Modify **CLAUDE-solana.md** | This ships to ALL user projects — different audience than this repo |
-| Bump **`.claude/VERSION`** | Also bump `plugin/.claude-plugin/plugin.json` `version` and `.claude-plugin/marketplace.json` `metadata.version` (both must match VERSION semver — `tests/test_plugin.sh` enforces), and the README.md version badge (`tests/test_cross_references.sh` enforces). Leave the new version out of `update.sh`'s retired-defaults `case` (`validate.sh` fails if the shipped version matches it). The plugin is pinned by `plugin.json` `version` + the semver `vX.Y.Z` git tag; do NOT run `claude plugin tag` (it creates a redundant `{name}--vX.Y.Z` tag that duplicates the semver tag). |
+| Add/remove an **agent**, **command** or **MCP server** | The count sits in nine places: README.md's intro line, "What This Is" bullet and documentation table; `docs/README.md`'s index; `docs/agents-and-commands.md`'s intro; `docs/plugin.md`'s "ships the core kit" sentence (prose, not a tree); QUICK-START.md's section heading and tree; `docs/repo-structure.md`'s tree. Then the reference table (`docs/agents-and-commands.md`, or `docs/configuration.md` for MCP) and the hardcoded numbers in `tests/test_agents.sh`, `test_commands.sh`, `test_cross_references.sh`. An MCP server also needs `.mcp.json`, CLAUDE-solana.md's and QUICK-START.md's MCP lists, `.env.example`, `/setup-mcp` and `tests/test_mcp_config.sh`'s server list |
+| Add/remove an **.env.example key** | `.claude/commands/setup-mcp.md` (`tests/test_env_keys.sh` checks the pair) |
+| Change an agent/command **`model:`** | `docs/agents-and-commands.md`'s Model column and routing note. `tests/test_model_routing.sh` allows `opus sonnet haiku inherit` for agents and `sonnet haiku inherit` for commands and kit skills, forbids any Fable value, requires a `disable-model-invocation: true` command to inherit (four grandfathered), and checks drift against that doc's `## Agents` section |
+| Bump a default **MCP server** (`.mcp.json` pins `npx` packages exactly; `validate.sh` rejects `@latest` and ranges) | `npm view <pkg> version`, read the diff or release notes since the pin, then edit `.mcp.json`. Nothing bumps these automatically |
+| Add/remove a **submodule pack** | **Scan the repo at the commit you are pinning first** — `docs/skill-packs.md` carries the checklist, a pack that fails it is not pinned, and what the scan found goes in the entry's `safety`. Then `.gitmodules`; a `skill-registry.json` entry with `tier`, `path`, `commit` (a placeholder must exist before `pins --write` will rewrite it), `triggers`, `default_installed`, an `install` object (every entry needs one — only `type: aggregator` may have `install: null`, and must; `tests/test_registry_installability.sh`), and an https `source` if any plugin file links the pack; `docs/skill-packs.md`'s submodules table; `.claude/skills/SKILL.md` routing. For an extension, every line linking into it names `bash .claude/bin/skills.sh add <id>` and the hub's Extensions table gets a row (`tests/test_skill_extensions.sh` enforces both). **QUICK-START.md's tree enumerates every pack id** — only `docs/repo-structure.md` collapses `ext/` to one line. Add the pin with `skills.sh pins --write`, never by hand |
+| Move a pack between **core and extension** | `tier` + `default_installed` in the registry (they must agree); the hub's intro sentence and Extensions table (core packs are not in it); `docs/skill-packs.md`'s Tier column; QUICK-START.md's core list and tree; `CORE=` in `tests/test_install_packs.sh`. **A pack with a `skills` list** is an upstream pack, not a submodule, and gains two consequences as core: `wanted_upstream()` in `skills.sh` is what makes `select` and `prune` fetch it at all, since `keep` holds only extensions; and it installs top-level, so it is in neither `ext/` nor `extensions.txt` — compare it against `kit-packs.txt`, and keep the `ext/` assertions on the submodule core packs alone (`KIT_CORE` in `tests/test_skill_extensions.sh`, `CORE=` likewise). Its fetch failure warns and the install continues; a submodule core pack's failure stops it |
+| Change a pack's **pinned commit** | The gitlink and the registry `commit` move together or `validate.sh` fails: `skills.sh pins --write` after the bump. Dependabot's weekly PR gets that push from `.github/workflows/sync-skill-pins.yml`. A bump is a new commit range, so it gets the scan a new pack gets — read the diff, don't just move the sha. A pack's *own* submodules are recorded in `vendored` and deliberately not auto-synced, so a third party moving a pin inside a pack we ship fails CI until someone reads it; `install.sh` and `skills.sh` never fetch them, while `update.sh` clones with `--recurse-submodules` and prunes the `vendored` paths after the copy — either way nothing nested reaches a user project |
+| Link an agent, command or bundled skill into **`ext/`** | Plugin installs have no `ext/` and no `.claude/bin/`, so the plugin hub's "When a link into an `ext` pack is missing" section is their next step. Keep that section, and give the pack an https `source` in its registry entry (`tests/test_plugin.sh` enforces both) |
+| Re-pin or change **anthropic-skills** (a core pack pinned by `commit` in its registry entry, not a submodule; moved by hand, not Dependabot) | Scan and review the upstream diff of each folder in its `skills` list first; never list docx, pdf, pptx, xlsx or doc-coauthoring (`DENIED_SKILLS` in `skills.sh` refuses them). Changing that list ripples into the entry's own prose — `description`, `triggers`, `tags`, and the skill count and standing-token figure in `safety` — plus `docs/skill-packs.md`'s "Anthropic's skills in any agent" section, the hub's and QUICK-START.md's token figures, and the two core-pack rows above. `tests/test_anthropic_skills.sh` re-checks licences and frontmatter at the pin, reading the allowed set from the registry |
+| Re-pin or change **safe-ai-skill** (a core plugin from its own repo, not a submodule) | `.claude-plugin/marketplace.json` entry `sha` (a commit whose `plugins/safe-ai-skill/bin/` has every platform binary), `plugin.json` `dependencies`, `.claude/settings.json` `extraKnownMarketplaces` + `enabledPlugins`, README's "Security firewall: safe-ai-skill" section, `tests/test_plugin.sh` + `test_settings_deep.sh`. Its project policy is separate: `install.sh` writes `.safe-ai-skill/policy.yaml`, `/update` adds it when missing, `tests/test_safe_ai_skill_policy.sh` covers it, and the firewall denies `Edit` on it at every tier — so a policy change crosses the row below too |
+| Change a **firewall tier's rule set** (`.claude/bin/firewall.sh`) | The tier is **regenerated wholesale**, never layered (see Common Mistakes). **Bump `RULE_SET_VERSION`**: `/update` re-applies the declared tier when `enforced.ruleSetVersion` is behind, the only route to a project that already has a `security.json` (the pre-firewall migration exits early there). Then re-apply, from a **clean non-worktree copy**, or `git_common_write()` bakes this machine's absolute `.git` path into the committed `settings.json`. Also update `enforced.ruleIds` in `.claude/security.json`; the tier migration in `update.sh` (below line 93, or existing installs never receive it); `/doctor`'s declared-vs-enforced check; `/firewall`; the firewall assertions in `tests/` and `validate.sh`; README's "Firewall tiers" table; `docs/firewall.md`'s gate table and honesty paragraphs; `docs/other-agents.md`'s cross-harness table. Don't express a tier through `permissions.defaultMode` — session mode is the user's call and nothing in the suite would catch it, since `validate.sh`'s retired-keys check rejects only a bare top-level `defaultMode`, which is not a real setting — nor `disableBypassPermissionsMode`, which limits the *user's* mode choice rather than the agent's reach |
+| Modify **install.sh** | `bash tests/test_install.sh` in a temp dir. It also asserts `docs/` and `QUICK-START.md` stay out of a project: the copy loop takes named `.claude/` subdirectories plus named root files, so kit-only documentation is excluded by construction. `install.sh` takes an optional target path, defaulting to the cwd — which is what the `curl | bash` route uses |
+| Move a section between **README.md and `docs/`** | The README is for getting installed and oriented; everything else lives in `docs/` behind a link. Update the `docs/README.md` index, all three README.md link tables (routes, documentation, Firewall tiers), any QUICK-START.md pointer, and the test that reads the moved text — `tests/test_cross_references.sh` targets `docs/agents-and-commands.md` (agent + command names), `docs/skill-packs.md` (submodule rows) and `docs/install.md` (from-a-clone steps), and checks every relative link and anchor in README, QUICK-START and `docs/`; `tests/test_model_routing.sh` reads `docs/agents-and-commands.md`. Retarget an assertion, never drop it. `docs/` is also on `/cleanup`'s removal list |
+| Change the **repo URL** | Update all ~25 occurrences except `.claude/bin/update.sh:16`, which sits in the frozen region and still names the pre-rename `solanabr/solana-ai-kit`. GitHub's rename redirect covers it; editing it breaks self-update for every existing install |
+| Bump the **pinned agent CLIs** (`opencode-ai`, `@openai/codex` in `.github/workflows/ci.yml`) | Re-check that `opencode debug skill` and `codex debug prompt-input` still emit the shape the `agents-mode-clients` job greps — both subcommands are undocumented. Codex also splits one shared ~22 KB budget across every registered skill description and truncates each to its share with no warning, so assert a minimum length rather than non-empty; and its shell tool is `shell`/`local_shell`, so a `^Bash$` hook matcher may never fire there |
+| Add a **Claude-Code-only** command (describes the kit repo, `/plugin`, or anything an `--agents` install can't do) | Add it to `AGENTS_SKIP_FILES` in both `install.sh` and `.claude/bin/update.sh`; `tests/test_install_agents_only.sh` asserts the two lists match |
+| Modify **CLAUDE-solana.md** | Ships to every user project — re-read the two-audiences note above |
+| Bump **`.claude/VERSION`** | Also bump `plugin/.claude-plugin/plugin.json` `version` and `.claude-plugin/marketplace.json` `metadata.version` (both must equal it — `tests/test_plugin.sh` enforces) and the README.md badge (`tests/test_cross_references.sh` enforces). Keep the new version outside `update.sh`'s retired-defaults `case`, or `/update` would strip settings a current user set themselves (`validate.sh` fails on it). The plugin is pinned by `plugin.json` `version` plus the `vX.Y.Z` git tag; don't run `claude plugin tag`, which adds a redundant `{name}--vX.Y.Z` tag |
 
 ## Submodule Pitfalls
 
-- **Never** `git add .claude/skills/ext/<dir>` — commits as tree, not submodule. Use `git submodule add <url> .claude/skills/ext/<name>` then `git add .gitmodules .claude/skills/ext/<name>`.
-- Path renames in upstream submodules ripple into all agents + commands that reference skill files. Grep for old path before committing.
-- install.sh silently skips submodule init if target isn't a git repo — intentional, not a bug.
-- Submodule bump PRs (Dependabot or manual) are never auto-merged: a person reads the `Submodule review` job summary (hooks, scripts, new hosts, installers, credential names, licence changes) before merging, because agents read and may run what a pack ships.
+- Add a pack with `git submodule add <url> .claude/skills/ext/<name>`, then `git add .gitmodules .claude/skills/ext/<name>`. A bare `git add` on the directory stages a gitlink with git's "embedded git repository" warning when the checkout has a `.git`, and the whole tree when it doesn't — neither is a submodule.
+- Path renames upstream ripple into every agent and command referencing a skill file. Grep the old path before committing.
+- `install.sh` skips submodule init with a warning when the target is not a git repo — intentional.
+- Submodule bump PRs are never auto-merged: a person reads the `Submodule review` job summary (hooks, scripts, new hosts, installers, credential names, licence changes) first, because agents read and may run what a pack ships.
 
-## When Editing This Repo
+## Plugin Layout
 
-| Component | Location | Key Rule |
-|-----------|----------|----------|
-| **Agents** | `.claude/agents/` | Non-overlapping responsibilities; spawn other agents for cross-domain work; description ≤ 2 sentences |
-| **Skills** | `.claude/skills/` | Progressive loading; reference from `SKILL.md`; prefer code over prose |
-| **Commands** | `.claude/commands/` | Atomic (one command, one purpose); document inputs/outputs; one-line description |
-| **Rules** | `.claude/rules/` | The kit ships none. A project rule needs `paths:` frontmatter (`globs:` is ignored, so the rule loads every session) |
-| **MCP Servers** | `.mcp.json` | Document env vars; test connectivity; update setup-mcp command |
-| **Plugin** | `.claude-plugin/marketplace.json` + `plugin/` | In-repo marketplace + symlinked core-plugin subtree (agents/commands/.mcp.json/local skills are **symlinks** into `.claude/`; only `hooks/hooks.json` + plugin-variant `skills/solana-ai-kit/SKILL.md` are real files). Keep `plugin.json` version = `.claude/VERSION`. Every plugin skill is `plugin/skills/<name>/SKILL.md`; a `SKILL.md` directly in `plugin/skills/` loads as the only skill and hides the rest. `plugin/skills/solana-ai-kit/SKILL.md` must have NO `ext/` links (submodules absent in plugin installs). Validate: `claude plugin validate .` + `./plugin`. `install.sh` stays the full install (CLAUDE.md/permissions/submodules) |
+`.claude-plugin/marketplace.json` is an in-repo marketplace; `plugin/` is the core-plugin subtree. Its `agents/`, `commands/`, `.mcp.json`, `VERSION` and the four local skills are **symlinks** into `.claude/` — only `hooks/hooks.json` and the plugin-variant `skills/solana-ai-kit/SKILL.md` are real files, and that hub must carry no `ext/` links, since submodules are absent in plugin installs. Every plugin skill lives at `plugin/skills/<name>/SKILL.md`; a `SKILL.md` placed directly in `plugin/skills/` loads as the only skill and hides the rest. Validate with `claude plugin validate .` and `./plugin`.
 
-## Agent Teams
+## Workflow
 
-Teams are dynamic — created via natural language, not static config. They are an experimental Claude Code feature the kit leaves off; users opt in with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `.claude/settings.local.json`. See `docs/agents-and-commands.md` for recommended team patterns.
+All work on a feature branch: `git checkout -b <type>/<scope>-<description>-<DD-MM-YYYY>`.
 
-## Branch Workflow
-
-All changes on feature branches: `git checkout -b <type>/<scope>-<description>-<DD-MM-YYYY>`
-
-## Pre-Merge Checklist
-
-- [ ] `bash validate.sh && bash tests/run_all.sh` passes
-- [ ] No duplicate functionality or AI slop (run `/diff-review`)
-- [ ] Ripple map checked — all cross-references updated
-- [ ] Manual test: `bash install.sh /tmp/test-project` → verify in Claude Code
-
-## Testing Local Changes
-
-- **Local install test**: `SOLANA_AI_KIT_LOCAL_SRC=. bash install.sh /tmp/test-project` — uses local repo instead of cloning from GitHub (legacy `SOLANA_CLAUDE_LOCAL_SRC` still works).
-- **Agents-only mode**: `bash install.sh --agents /path` — installs to `.agents/` instead of `.claude/`. Test both modes when modifying install.sh.
+- **Local install test**: `SOLANA_AI_KIT_LOCAL_SRC=. bash install.sh /tmp/test-project` uses the local repo instead of cloning from GitHub (legacy `SOLANA_CLAUDE_LOCAL_SRC` still works). Also test `bash install.sh --agents /path`, which installs into `.agents/` with `AGENTS.md`, whenever you touch `install.sh`.
+- Before merging: `bash validate.sh && bash tests/run_all.sh` passes; `/diff-review` is clean (no duplicate functionality, no AI slop); every Ripple Map row has been walked; and the install above verifies in Claude Code.
 
 ## Release Management
-<!-- Workflow: bump .claude/VERSION → update .claude/CHANGELOG.md → validate → tag -->
 
-- `.claude/VERSION` contains current semver (e.g. `1.1.0`). Bump **patch** for bug fixes, **minor** for new agents/skills/commands, **major** for breaking install.sh changes.
-- When bumping VERSION, also prepend a new entry to `.claude/CHANGELOG.md` with date and categorized changes (Added/Changed/Fixed/Removed).
-- After bumping, run `bash validate.sh && bash tests/run_all.sh` and tag: `git tag v$(cat .claude/VERSION)`.
+- `.claude/VERSION` holds `<name> <semver>` on one line, so read the version with `awk '{print $NF}'`, never `cat`. Bump **patch** for fixes, **minor** for new agents, skills or commands, **major** for breaking `install.sh` changes, then walk the VERSION row above.
+- Prepend a dated `.claude/CHANGELOG.md` entry with categorized changes (Added/Changed/Fixed/Removed).
+- Then `bash validate.sh && bash tests/run_all.sh` and tag: `git tag "v$(awk '{print $NF}' .claude/VERSION)"`.
 
 ## Project Learnings
-<!-- Append 1-2 line entries after non-obvious bugs, stale-doc incidents,
-     or config changes that had unexpected side effects.
-     Don't duplicate existing entries. Check before appending. -->
+<!-- /dream and /diff-review append here, one or two lines per entry, under one of the
+     three subsections below. Don't duplicate an existing entry; check before appending. -->
 
 ### Recurring Issues
 
 ### Fix Patterns
 
-- When submodule paths change upstream: `grep -r "old/path" .claude/` → update all references → `bash validate.sh`
-- When adding a component: follow Ripple Map above, then `bash validate.sh && bash tests/run_all.sh` to catch anything missed
-
 ### Config Conventions
 
-- `.claude/VERSION` follows semver; bump on every release. `.claude/CHANGELOG.md` tracks what changed.
-- `/dream` triggers memory consolidation (merges, prunes, deduplicates MEMORY.md). Run after major refactors.
-- `settings.json` ships only security policy (sandbox, permissions, hooks), attribution, and the `stbr` marketplace (`extraKnownMarketplaces`) with `safe-ai-skill@stbr` enabled. Don't pin session behavior (effort, env toggles, LSP plugins, MCP auto-approval); `validate.sh` rejects the retired keys, and a key you retire needs a matching entry in update.sh's retired-defaults migration. Default MCP servers must start with no key and no extra install; the rest are opt-in in `docs/configuration.md`.
-- Model routing: `model: opus` = deep reasoning, `model: sonnet` = implementation/mechanical/docs, no `model:` line = inherit the session model (strongest-model work). Commands get `model: sonnet` only when mechanical and run at session start (a mid-session switch drops the prompt cache). Never hardcode `fable`/`claude-fable-*`; `modelDefaults` is not a Claude Code setting.
+- A default MCP server must work with no key and no extra install; the rest are opt-in in `docs/configuration.md`.
+- Model routing intent: `opus` for deep reasoning, `sonnet` for implementation, mechanical work and docs, no `model:` line to inherit the session model. A command gets `sonnet` only when it is mechanical and runs at session start — a mid-session switch drops the prompt cache.
 
 ---
 
-**Main config**: `CLAUDE-solana.md` | **Docs**: `docs/` | **Agents**: `.claude/agents/` | **Skills**: `.claude/skills/` | **Commands**: `.claude/commands/` | **MCP**: `.mcp.json`
+**Ships to projects**: `CLAUDE-solana.md` | **Full spec**: `docs/` | **Agents**: `.claude/agents/` | **Skills**: `.claude/skills/` | **Commands**: `.claude/commands/` | **MCP**: `.mcp.json`
