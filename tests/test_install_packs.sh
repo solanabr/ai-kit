@@ -28,6 +28,9 @@ new_pack() {  # new_pack <id>: a one-commit repo standing in for an upstream pac
   G -C "$TEMP_DIR/packs/$1" commit -qm "$1"
 }
 
+# The core packs that arrive as ext/ submodules. anthropic-skills is core too, but it is
+# fetched from its own upstream into skills/<name>/, so it never shows up in ext/ and has
+# no fixture here; helpers.sh keeps that fetch offline and its failure harmless.
 CORE="solana-dev auditor-skill colosseum"
 for id in $CORE jupiter sendai; do new_pack "$id"; done
 
