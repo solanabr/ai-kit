@@ -76,3 +76,6 @@
 [submodule ".claude/skills/ext/frontend-slides"]
 	path = .claude/skills/ext/frontend-slides
 	url = https://github.com/zarazhangrui/frontend-slides
+[submodule ".claude/skills/ext/superseo"]
+	path = .claude/skills/ext/superseo
+	url = https://github.com/inhouseseo/superseo-skills

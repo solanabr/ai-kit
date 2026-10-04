@@ -542,6 +542,25 @@
       "tags": ["slides", "presentation", "html", "animation", "frontend", "marketing"]
     },
     {
+      "id": "superseo",
+      "name": "SuperSEO Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "marketing",
+      "path": ".claude/skills/ext/superseo",
+      "commit": "9cf22cc065a294bf0077ea6af6b4ea0eb7f89cdc",
+      "description": "Eleven SEO skills for the pages a Solana project actually ships: page audits, content briefs, article writing with an anti-AI-slop ruleset, E-E-A-T and YMYL scoring, semantic gap analysis, topic clusters, featured-snippet optimization, link building and expert interviews. Bundles 23 content-type templates, 16 writing-technique modules and 9 link-building playbooks. Drives your own search and fetch tools and names no paid data source.",
+      "triggers": ["SEO audit of a landing page", "write or improve a blog post or docs page", "keyword research or search intent", "topic clusters and internal linking", "why does this page not rank"],
+      "source": "https://github.com/inhouseseo/superseo-skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add superseo", "env": [] },
+      "license": "Apache-2.0",
+      "maintainer": "inhouseseo",
+      "signal": { "stars": 343, "last_commit": "2026-09-03", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "Scanned at 9cf22cc (2026-09-03): zero executables and zero script files of any kind — no .sh, .py, .js, .mjs, .cjs or .ts anywhere. The pack is markdown plus one demo GIF and one asciinema cast. No package.json at all and so no install lifecycle hook; no hooks.json, no .mcp.json, no .claude/settings.json; no eval, atob, new Function or createRequire; no child_process; no lines over 500 characters; no bidi or invisible Unicode; no IP literals; and no env-var or credential read outside its own GitHub release workflow, which only zips the skills folder onto a release. Its 415 blobs across 54 commits add only a deleted demo/demo-runner.sh and a research/ tree since folded into skills/*/references/, neither of which a pin checks out. Verbatim 202-line Apache-2.0 plus a NOTICE naming InhouseSEO, and a SECURITY.md whose claims match what the scan found. It works through your own WebSearch and WebFetch tools: the SEO vendors named in its text (ahrefs.com, semrush.com, backlinko.com, searchengineland.com) are prose citations, not endpoints it calls, so no paid data source is required and nothing is sent anywhere you did not already send it. Provenance is the thin part, not the code: the author account is six months old with this as its only repository, which is why it has a row in the provenance table.",
+      "tags": ["seo", "content", "marketing", "copywriting", "eeat", "link-building"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",
