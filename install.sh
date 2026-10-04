@@ -102,7 +102,10 @@ LOCAL_SRC="${SOLANA_AI_KIT_LOCAL_SRC:-${SOLANA_CLAUDE_LOCAL_SRC:-}}"
 if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
   step "Using local source: $LOCAL_SRC"
   mkdir -p "$TEMP_DIR/repo"
-  cp -r "$LOCAL_SRC/.claude" "$TEMP_DIR/repo/.claude"
+  # -R, not -r: -r follows source symlinks, so a pack that ships one (stripe has four
+  # self-referential LICENSE links) fails the copy with ELOOP, and a pack symlinking
+  # outside its tree would have its target's contents copied in. -R keeps links as links.
+  cp -R "$LOCAL_SRC/.claude" "$TEMP_DIR/repo/.claude"
   cp "$LOCAL_SRC/CLAUDE-solana.md" "$TEMP_DIR/repo/CLAUDE-solana.md"
   [ -f "$LOCAL_SRC/.mcp.json" ] && cp "$LOCAL_SRC/.mcp.json" "$TEMP_DIR/repo/.mcp.json"
   [ -f "$LOCAL_SRC/.env.example" ] && cp "$LOCAL_SRC/.env.example" "$TEMP_DIR/repo/.env.example"
@@ -251,11 +254,14 @@ fi
 # Directories: always overwrite with upstream (same as update.sh).
 # Copy contents (src/.) into a pre-created destination so an existing symlink
 # (e.g. .agents/skills -> ../.claude/skills) is followed and merged into,
-# instead of cp failing with "cannot overwrite non-directory".
+# instead of cp failing with "cannot overwrite non-directory". That is the src/.
+# form's job and -R does not change it: -R governs source links, not the
+# destination path. -R rather than -r so a pack's own symlink is copied as a link
+# (stripe ships four self-referential LICENSE links, which -r fails on with ELOOP).
 for dir in agents skills commands bin hooks; do
   if [ -d "$TEMP_DIR/repo/.claude/$dir" ]; then
     mkdir -p "$TARGET_DIR/$CONFIG_DIR/$dir"
-    cp -r "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
+    cp -R "$TEMP_DIR/repo/.claude/$dir/." "$TARGET_DIR/$CONFIG_DIR/$dir/"
   fi
 done
 
