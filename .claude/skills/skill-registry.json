@@ -854,36 +854,8 @@
       "safety": "caution: niche mobile, unverified — cross-check vs ext/solana-mobile before adding",
       "tags": ["seeker", "mobile", "watchlist", "solana"]
     },
-    {
-      "id": "composio-awesome-claude-skills",
-      "name": "Composio Awesome Claude Skills",
-      "type": "aggregator",
-      "domain": "dev-workflow",
-      "description": "Scout source: best current skills-specific aggregator (1000+, domain-grouped). Not installable.",
-      "source": "https://github.com/ComposioHQ/awesome-claude-skills",
-      "install": null,
-      "license": "unspecified",
-      "maintainer": "ComposioHQ",
-      "signal": { "stars": 64700, "last_commit": "2026-05-22", "reputability": "org" },
-      "default_installed": false,
-      "safety": "clean — discovery source only, nothing executed",
-      "tags": ["aggregator", "scout", "skills", "discovery"]
-    },
-    {
-      "id": "travisvn-awesome-claude-skills",
-      "name": "travisvn Awesome Claude Skills",
-      "type": "aggregator",
-      "domain": "dev-workflow",
-      "description": "Scout source: tight, high-signal, well-maintained skills list. Not installable.",
-      "source": "https://github.com/travisvn/awesome-claude-skills",
-      "install": null,
-      "license": "unspecified",
-      "maintainer": "travisvn",
-      "signal": { "stars": 13500, "last_commit": "2026-04-28", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "clean — discovery source only, nothing executed",
-      "tags": ["aggregator", "scout", "skills", "discovery"]
-    },
+
+
     {
       "id": "buildwithclaude",
       "name": "Build With Claude",
@@ -899,21 +871,7 @@
       "safety": "clean — discovery source only, nothing executed",
       "tags": ["aggregator", "scout", "plugins", "marketplaces", "discovery"]
     },
-    {
-      "id": "hesreallyhim-awesome-claude-code",
-      "name": "Awesome Claude Code",
-      "type": "aggregator",
-      "domain": "dev-workflow",
-      "description": "Scout source: canonical Claude Code list (README mid-reorg). Not installable.",
-      "source": "https://github.com/hesreallyhim/awesome-claude-code",
-      "install": null,
-      "license": "unspecified",
-      "maintainer": "hesreallyhim",
-      "signal": { "stars": 46500, "last_commit": "2026-04-27", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "clean — discovery source only, nothing executed",
-      "tags": ["aggregator", "scout", "claude-code", "discovery"]
-    },
+
     {
       "id": "voltagent-awesome-claude-code-subagents",
       "name": "VoltAgent Awesome Claude Code Subagents",
@@ -930,6 +888,36 @@
       "tags": ["aggregator", "scout", "subagents", "discovery"]
     },
     {
+      "id": "voltagent-awesome-agent-skills",
+      "name": "VoltAgent Awesome Agent Skills",
+      "type": "aggregator",
+      "domain": "dev-workflow",
+      "description": "Scout source: skills index whose \"Official Skills by\" section lists vendor-published packs. Not installable.",
+      "source": "https://github.com/VoltAgent/awesome-agent-skills",
+      "install": null,
+      "license": "MIT",
+      "maintainer": "VoltAgent",
+      "signal": { "stars": 35191, "last_commit": "2026-10-02", "reputability": "org" },
+      "default_installed": false,
+      "safety": "clean \u2014 discovery source only, nothing executed. Carries a licence file, unlike several larger skill indexes",
+      "tags": ["aggregator", "scout", "skills", "vendor-packs", "discovery"]
+    },
+    {
+      "id": "github-awesome-copilot",
+      "name": "GitHub Awesome Copilot",
+      "type": "aggregator",
+      "domain": "dev-workflow",
+      "description": "Scout source: GitHub's own index of Copilot and agent customisations \u2014 instructions, prompts and chat modes. Not installable.",
+      "source": "https://github.com/github/awesome-copilot",
+      "install": null,
+      "license": "MIT",
+      "maintainer": "github",
+      "signal": { "stars": 39687, "last_commit": "2026-10-01", "reputability": "official" },
+      "default_installed": false,
+      "safety": "clean \u2014 discovery source only, nothing executed",
+      "tags": ["aggregator", "scout", "prompts", "instructions", "discovery"]
+    },
+    {
       "id": "anthropics-claude-plugins-community",
       "name": "Anthropic Claude Plugins Community Index",
       "type": "aggregator",
@@ -943,6 +931,21 @@
       "default_installed": false,
       "safety": "clean — community index, not first-party-vetted; verify each entry before installing",
       "tags": ["aggregator", "scout", "plugins", "community", "discovery"]
+    },
+    {
+      "id": "claude-skill-social-post",
+      "name": "Social Post",
+      "type": "skill",
+      "domain": "go-to-market",
+      "description": "Learns a posting voice from your own past posts, then drafts and schedules social content across Facebook, Instagram, Threads and X on a 14-day calendar. Catalogued rather than pinned: the kit's launch and content lanes are served by content-gen-skill and writer-style-skill, and this one's platforms are consumer-social rather than developer-facing.",
+      "source": "https://github.com/Hao0321/claude-skill-social-post",
+      "install": { "method": "submodule", "command": "git submodule add https://github.com/Hao0321/claude-skill-social-post .claude/skills/ext/claude-skill-social-post", "env": [] },
+      "license": "MIT",
+      "maintainer": "Hao0321",
+      "signal": { "stars": 722, "last_commit": "2026-10-03", "reputability": "individual" },
+      "default_installed": false,
+      "safety": "caution, and the reason this is an add-on rather than a pinned extension: it acts as you, on your own accounts. Around 180 files drive a real Chrome session to publish posts and replies under your logged-in identity on Facebook, Instagram, Threads and X \u2014 the largest act-as-user surface of any pack reviewed for this catalogue. It is not pinned and not scanned at a commit, so read it before installing, and note that a mistake posts publicly under your name instead of failing quietly. No MCP server and no credential file: it uses the browser session you are already signed into, which is also why a sandbox cannot contain it",
+      "tags": ["social", "marketing", "content", "launch", "act-as-user"]
     }
   ]
 }

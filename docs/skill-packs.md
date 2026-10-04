@@ -80,7 +80,11 @@ Featured add-ons by domain:
 - **Testing:** [SawyerHood/dev-browser](https://github.com/SawyerHood/dev-browser) · [conorluddy/ios-simulator-skill](https://github.com/conorluddy/ios-simulator-skill)
 - **Data:** [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills)
 
-**Where we scout** new tools (aggregators, not installable): [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) · [travisvn/awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills) · [davepoon/buildwithclaude](https://github.com/davepoon/buildwithclaude) · [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) · [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents).
+**Where we scout** new tools (aggregators, not installable): [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) · [github/awesome-copilot](https://github.com/github/awesome-copilot) · [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) · [davepoon/buildwithclaude](https://github.com/davepoon/buildwithclaude) · [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community).
+
+Every index above carries a licence file. Three larger ones the kit used to list do not, and they are gone from here and from the registry: an unlicensed index can be read, but nothing in it can be quoted or vendored, and pointing readers at the biggest result is how they end up in the next paragraph.
+
+**If you go looking for packs yourself, know the star farm.** A cluster of clone repositories targets the popular skill indexes by name, and the shape is consistent: the repo name is a short prefix plus the index it copies plus a topic (`r08-…-seo`, `r17-…-datascience`), the star counts sit in a narrow band around 50, none of them ships a `LICENSE`, and each lives under a different throwaway account. Nine were counted in one search, and they rank on the first page for skill queries. A repository whose name describes another repository, whose star count matches its siblings' and which carries no licence file, is not worth reading and is never worth pinning.
 
 For broader Solana coverage, see solana-new's vendored catalogs at `ext/solana-new/cli/data/` (MCPs, skills, clonable repos; install the solana-new extension first).
 
