@@ -330,8 +330,9 @@ bad = [e for e in hooks
        and e.get('matcher') != 'Bash|mcp__context-mode__.*']
 print(len(bad))" 2>/dev/null)" \
   "every kit guard now matches Bash and context-mode's MCP tools"
-# The rule-set catch-up has to have re-applied High, which is what adds the tool denies.
-assert_eq "5" "$(python3 -c "
+# The rule-set catch-up has to have re-applied High, which is what adds the tool denies:
+# context-mode's five, plus mcp__cloudflare__execute, which only High carries.
+assert_eq "6" "$(python3 -c "
 import json
 p = json.load(open('$FW_SETTINGS')).get('permissions') or {}
 print(len([r for r in (p.get('deny') or []) if r.startswith('mcp__')]))" 2>/dev/null)" \
