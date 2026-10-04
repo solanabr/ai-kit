@@ -618,6 +618,25 @@
       "tags": ["data", "sql", "duckdb", "parquet", "analytics", "reporting", "csv"]
     },
     {
+      "id": "crypto-legal",
+      "name": "Crypto Legal Skill",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "compliance",
+      "path": ".claude/skills/ext/crypto-legal",
+      "commit": "0f0de7ccbf39213c20bc34fa76791628ad43b838",
+      "description": "The legal and compliance questions a token launch raises, with statutory citations rather than vibes: is this mint a security, is the airdrop lawful, what does the Terms of Service need, is a money-transmitter licence or BitLicense in scope. Seven domain references (securities law, AML and KYC, sanctions, privacy and data protection, tax, tokenomics legality, Solana-specific) across three jurisdictions (US, EU under MiCA, Brazil under Lei 14.478 and the BCB resolutions), plus triage and launch-checklist workflows and document checklists. Informational only, never a substitute for counsel.",
+      "triggers": ["is this token a security", "is my airdrop legal", "review a Terms of Service or privacy policy", "do I need a money transmitter licence or BitLicense", "sanctions or KYC obligations for a launch"],
+      "source": "https://github.com/solanabr/crypto-legal-skill",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add crypto-legal", "env": [] },
+      "license": "MIT",
+      "maintainer": "solanabr",
+      "signal": { "stars": 2, "last_commit": "2026-07-10", "reputability": "first-party" },
+      "default_installed": false,
+      "safety": "Scanned at 0f0de7c (2026-07-10): 42 files, no lines over 500 characters, no eval, atob, new Function or createRequire, no child_process, no bidi or invisible Unicode, no IP literals, no package.json and so no install lifecycle hook, no hooks.json, no .mcp.json and no .claude/settings.json; 94 blobs across 4 commits with nothing deleted, and install.sh is the only script path the repo has ever had. The kit never runs that installer: it exists for people installing the skill standalone, and it writes to ~/.claude/skills/crypto-legal, ~/.claude/commands/crypto-legal/ and, when the codex CLI is on PATH, ~/.codex/skills/crypto-legal; it is interactive and can move an existing install aside to a .backup.<timestamp> folder; it makes no network call. Checked specifically because a different repo of the same name was rejected for it: this one does not write an unscoped rule into ~/.claude/. Its two rules/*.md files use globs: frontmatter, which Claude Code ignores, but install.sh copies them inside the skill folder and never into ~/.claude/rules/, and validate.sh's unscoped-rule check only scans .claude/rules, so they can neither load every session nor fail a gate from this pin. Pinned whole for that reason rather than skill/ alone. What matters more than any of that is what the content is: informational only, not legal advice, no attorney-client relationship, and no substitute for licensed counsel in the relevant jurisdiction. Its statutory review is calendar-pinned at 2026-06 and goes stale as law moves, and it covers the US, the EU and Brazil only — treat an answer about anywhere else as absent, not as permissive. First-party solanabr repo, the same organisation that publishes this kit, so it needs no provenance-table row.",
+      "tags": ["legal", "compliance", "securities", "aml", "kyc", "privacy", "tax", "mica"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",

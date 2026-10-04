@@ -88,3 +88,6 @@
 [submodule ".claude/skills/ext/duckdb"]
 	path = .claude/skills/ext/duckdb
 	url = https://github.com/duckdb/duckdb-skills
+[submodule ".claude/skills/ext/crypto-legal"]
+	path = .claude/skills/ext/crypto-legal
+	url = https://github.com/solanabr/crypto-legal-skill
