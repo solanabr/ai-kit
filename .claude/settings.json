@@ -438,6 +438,8 @@
       "WebSearch(*)"
     ],
     "deny": [
+      "Edit(/.claude/hooks/**)",
+      "Edit(~/.claude/hooks/**)",
       "Bash(claude *)",
       "Bash(claude)",
       "Edit(//**/managed-settings.json)",

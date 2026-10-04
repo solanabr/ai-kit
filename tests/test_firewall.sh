@@ -364,30 +364,36 @@ else:
     print('no')" "$WORK/gen.$1.json" "$2" 2>/dev/null
 }
 
-# The self-protection denies are High-only: below it, the kit defers to a user who
-# chose to customize their own installation. Relaxed is the DEFAULT, so this is where
-# the widening bites — .claude/hooks/ holds the mainnet, secrets and on-chain gates, and
-# at Relaxed an agent that trips one can now edit the script that produced it.
-SELF_PROTECTED=".claude/settings.json
+# CONFIG is High-only: below it, the kit defers to a user who chose to customize their
+# own installation. "Customizing your installation" describes settings.json exactly —
+# declarative config, tuned by hand.
+SELF_PROTECTED_CONFIG=".claude/settings.json
 .claude/settings.local.json
 .claude/security.json
-.claude/hooks/onchain-guard.sh
 .mcp.json
 ~/.claude/settings.json
-~/.claude/hooks/my-hook.sh
+~/.claude/.credentials.json
 ~/.claude/agents/x.md
 ~/.claude/commands/x.md
 ~/.claude/skills/x/SKILL.md
+~/.claude/rules/x.md
 ~/.claude/output-styles/x.md
 ~/.claude/plugins/config.json
+~/.claude/cowork_plugins/config.json
+~/.claude/workflows/x.js
+~/.claude/routines/x.json
 ~/.claude/shell-snapshots/snapshot-zsh-1.sh
-~/.claude/scheduled_tasks.json"
+~/.claude/local/claude
+~/.claude/scheduled_tasks.json
+~/.claude/daemon.json
+~/.claude/launch.json
+~/.claude/loop.md"
 for t in off relaxed medium; do
   BAD=""
   while IFS= read -r p; do
     [ "$(edit_denied "$t" "$p")" = "no" ] || BAD="$BAD $p"
   done <<EOF
-$SELF_PROTECTED
+$SELF_PROTECTED_CONFIG
 EOF
   assert_eq "" "$BAD" "$t lets the agent edit the installation's own config (High-only denies)"
 done
@@ -395,9 +401,32 @@ BAD=""
 while IFS= read -r p; do
   [ "$(edit_denied high "$p")" = "yes" ] || BAD="$BAD $p"
 done <<EOF
-$SELF_PROTECTED
+$SELF_PROTECTED_CONFIG
 EOF
 assert_eq "" "$BAD" "high denies every self-protected config path"
+
+# The HOOKS are the carve-out and are denied at EVERY tier, Off included. Not because
+# they are more sensitive than settings.json, but because they are a different kind of
+# thing: executable shell scripts that *implement* the mainnet-deploy gate, the
+# keypair-read block and the egress denylist, rather than config that declares them. The
+# decisive point is that /firewall changes every tier knob without touching hooks/, so a
+# user who wants to customize never has to edit a guard script. Regression this guards:
+# the hooks riding along with the config group and becoming editable at the DEFAULT
+# tier, where an agent that trips the mainnet gate could rewrite the script behind it.
+HOOK_PATHS=".claude/hooks/onchain-guard.sh
+.claude/hooks/secrets-guard.sh
+.claude/hooks/egress-guard.sh
+.claude/hooks/lib-headless.sh
+~/.claude/hooks/my-hook.sh"
+for t in $TIERS; do
+  BAD=""
+  while IFS= read -r p; do
+    [ "$(edit_denied "$t" "$p")" = "yes" ] || BAD="$BAD $p"
+  done <<EOF
+$HOOK_PATHS
+EOF
+  assert_eq "" "$BAD" "$t denies edits to the guard hooks (unconditional, Off included)"
+done
 
 # Writable at EVERY tier, High included. The memory directory is a documented harness
 # feature; ~/.claude/CLAUDE.md is what the kit's own CLAUDE-solana.md points users at.
@@ -477,15 +506,19 @@ print(' '.join(bad) or 'none')" 2>/dev/null)"
 assert_eq "none" "$VARY_KIND" \
   "only MCP tool-name denies and self-protection Edit denies vary by tier"
 
-# Bash(claude ...) is in the unconditional group on purpose: a nested
-# `claude -p --dangerously-skip-permissions` re-rolls the whole policy in a child
-# process, which is not "customizing your installation" and no tier hands it back.
+# The unconditional group, by exact rule, at every tier. Each is here because it is not
+# "customizing your installation": a nested `claude -p --dangerously-skip-permissions`
+# re-rolls the whole policy in a child process; managed settings belong to an
+# administrator; .safe-ai-skill/** is a third-party security tool's policy; and the
+# hooks are the scripts that enforce the gates rather than config that declares them.
 for t in $TIERS; do
-  assert_eq "yes" "$(python3 -c "
+  MISSING="$(python3 -c "
 import json
-deny = (json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or []
-print('yes' if 'Bash(claude *)' in deny and 'Bash(claude)' in deny else 'no')" 2>/dev/null)" \
-    "$t denies a nested claude invocation (unconditional, Off included)"
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+want = ['Bash(claude *)', 'Bash(claude)', 'Edit(//**/managed-settings.json)',
+        'Edit(/.safe-ai-skill/**)', 'Edit(/.claude/hooks/**)', 'Edit(~/.claude/hooks/**)']
+print(' '.join(r for r in want if r not in deny) or 'none')" 2>/dev/null)"
+  assert_eq "none" "$MISSING" "$t carries the whole unconditional group (Off included)"
 done
 
 MCP_BY_TIER="$(python3 -c "

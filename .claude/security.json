@@ -16,7 +16,7 @@
     "tier": "relaxed",
     "ruleSetVersion": 4,
     "target": ".claude/settings.json",
-    "sha256": "d82202f25cd44382df2bc3ca2be237f4646e1af381aa22caede85c636c43f4ae",
+    "sha256": "18c09410226745a408203e7b05f9de0ec8ee8ea11db21eb0b0833e214cb3450a",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -183,6 +183,8 @@
       "Agent(*)",
       "WebFetch(*)",
       "WebSearch(*)",
+      "Edit(/.claude/hooks/**)",
+      "Edit(~/.claude/hooks/**)",
       "Bash(claude *)",
       "Bash(claude)",
       "Edit(//**/managed-settings.json)",

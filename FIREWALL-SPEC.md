@@ -73,26 +73,27 @@ Expressed as `permissions.deny` plus a matching `sandbox.filesystem.denyRead`/`d
 
 **Self-protection — High only.** At bypass, protected-path writes are *allowed* and allow rules do not pre-approve them, so only an explicit deny stops the agent rewriting its own tier. Use `Edit(...)`, not `Read(...)`: a Read deny also blocks Edit/Write but leaves `NotebookEdit` open and would block the kit's own tooling from reading its config.
 
-Off, Relaxed and Medium do **not** carry this group: below High the kit defers to a user who chose to customize their own installation, which is the same split that makes High the only tier to refuse Cloudflare's `execute`. The consequence is deliberate and has to be stated rather than buried — Relaxed is the **default**, and `.claude/hooks/` holds the mainnet, secrets and on-chain gates, so at the default tier an agent that trips the mainnet gate can edit the script that produced it. Choosing High is what restores the old behaviour.
+Off, Relaxed and Medium do **not** carry this group: below High the kit defers to a user who chose to customize their own installation, which is the same split that makes High the only tier to refuse Cloudflare's `execute`. The **guard hooks are carved out of that and denied at every tier** (see the unconditional set below), so what the lower tiers hand back is the configuration, not the scripts enforcing it.
 
 ```
 Edit(/.claude/settings.json), Edit(/.claude/settings.local.json),
 Edit(/.claude/settings.*.json), Edit(/.claude/security.json),
-Edit(/.claude/hooks/**), Edit(/.mcp.json),
+Edit(/.mcp.json),
 Edit(~/.claude/settings.json), Edit(~/.claude/settings.local.json),
 Edit(~/.claude/settings.*.json), Edit(~/.claude/.credentials.json),
-Edit(~/.claude/hooks/**), Edit(~/.claude/agents/**),
-Edit(~/.claude/commands/**), Edit(~/.claude/skills/**),
-Edit(~/.claude/rules/**), Edit(~/.claude/output-styles/**),
-Edit(~/.claude/plugins/**), Edit(~/.claude/workflows/**),
+Edit(~/.claude/agents/**), Edit(~/.claude/commands/**),
+Edit(~/.claude/skills/**), Edit(~/.claude/rules/**),
+Edit(~/.claude/output-styles/**), Edit(~/.claude/plugins/**),
+Edit(~/.claude/cowork_plugins/**), Edit(~/.claude/workflows/**),
 Edit(~/.claude/routines/**), Edit(~/.claude/scheduled_tasks.json),
-Edit(~/.claude/daemon.json), Edit(~/.claude/launch.json),
-Edit(~/.claude/shell-snapshots/**), Edit(~/.claude/local/**)
+Edit(~/.claude/loop.md), Edit(~/.claude/daemon.json),
+Edit(~/.claude/launch.json), Edit(~/.claude/shell-snapshots/**),
+Edit(~/.claude/local/**)
 ```
 
-The user-scope half is an enumeration of the **policy surface** — what Claude Code loads as configuration or executes — and not the blanket `Edit(~/.claude/**)` it replaced. That glob also denied `~/.claude/projects/**/memory/**`, the harness's own file-based agent memory, and `~/.claude/CLAUDE.md`, which `CLAUDE-solana.md` tells every user project to use for cross-project preferences: the kit was forbidding a documented feature and its own shipped instruction. Because deny beats allow in every scope with no un-deny primitive and no specificity tiebreak, no allow rule could carve either back out — the glob itself had to go. Deliberately left writable: caches, logs, session state, `plans/`, `keybindings.json` (which the `keybindings-help` skill exists to edit) and the two paths above. Session transcripts are a separate rule and stay **read**-denied at Medium and High (`~/.claude/projects/**/*.jsonl`, `~/.claude/history.jsonl`), so the transcripts remain unreadable while the memory directory beside them is writable. Two of the entries are not obvious: `shell-snapshots/` is sourced into every Bash invocation, so a write there is code execution on the next shell command, and `local/` is where a local `claude` install's binary lives.
+The user-scope half is an enumeration of the **policy surface** — what Claude Code loads as configuration or executes — and not the blanket `Edit(~/.claude/**)` it replaced. `~/.claude/hooks/**` is absent from the list above only because it sits in the unconditional set instead. That glob also denied `~/.claude/projects/**/memory/**`, the harness's own file-based agent memory, and `~/.claude/CLAUDE.md`, which `CLAUDE-solana.md` tells every user project to use for cross-project preferences: the kit was forbidding a documented feature and its own shipped instruction. Because deny beats allow in every scope with no un-deny primitive and no specificity tiebreak, no allow rule could carve either back out — the glob itself had to go. Deliberately left writable: caches, logs, session state, `plans/`, `keybindings.json` (which the `keybindings-help` skill exists to edit) and the two paths above. Session transcripts are a separate rule and stay **read**-denied at Medium and High (`~/.claude/projects/**/*.jsonl`, `~/.claude/history.jsonl`), so the transcripts remain unreadable while the memory directory beside them is writable. Two of the entries are not obvious: `shell-snapshots/` is sourced into every Bash invocation, so a write there is code execution on the next shell command, and `local/` is where a local `claude` install's binary lives.
 
-**Unconditional at every tier, Off included** — the three rules that are not "customizing your installation": `Bash(claude *)` and `Bash(claude)`, because a nested `claude -p --dangerously-skip-permissions` re-rolls the whole policy in a child process and `npm`/`npx`/`node` are allowed; `Edit(//**/managed-settings.json)`, because managed settings belong to an administrator rather than to the user; and `Edit(/.safe-ai-skill/**)`, a third-party security tool's policy whose deep-merge could loosen any of its gates, spend caps included. Un-closable residuals to document: `--settings`, `--permission-mode`, `CLAUDE_CONFIG_DIR`, `--setting-sources` (excluding a source drops its Read denies, Edit rules *and* sandbox entries).
+**Unconditional at every tier, Off included** — the rules that are not "customizing your installation": `Edit(/.claude/hooks/**)` and `Edit(~/.claude/hooks/**)`, because these are executable shell scripts that *implement* the mainnet gate, the keypair-read block and the egress denylist rather than config that declares them, and because `/firewall` changes every tier knob without touching them, so customizing never requires editing a guard; `Bash(claude *)` and `Bash(claude)`, because a nested `claude -p --dangerously-skip-permissions` re-rolls the whole policy in a child process and `npm`/`npx`/`node` are allowed; `Edit(//**/managed-settings.json)`, because managed settings belong to an administrator rather than to the user; and `Edit(/.safe-ai-skill/**)`, a third-party security tool's policy whose deep-merge could loosen any of its gates, spend caps included. Un-closable residuals to document: `--settings`, `--permission-mode`, `CLAUDE_CONFIG_DIR`, `--setting-sources` (excluding a source drops its Read denies, Edit rules *and* sandbox entries).
 
 **Matcher-evading wrappers** — rules cannot see past these, so deny the wrappers themselves: `Bash(env *)`, `Bash(sh -c *)`, `Bash(bash -c *)`, `Bash(bash -lc *)`, `Bash(zsh -c *)`, `Bash(git -c *)`, `Bash(git -C *)`, `Bash(flock *)`, `Bash(watch *)`, `Bash(setsid *)`, `Bash(ionice *)`, `Bash(devbox run *)`, `Bash(direnv exec *)`, `Bash(mise exec *)`, `Bash(docker exec *)`. `git -c core.fsmonitor=/tmp/x.sh status` is arbitrary code execution that evades every `git <subcmd>` rule.
 

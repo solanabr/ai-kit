@@ -121,7 +121,8 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #   2 -> 3: Edit(/.safe-ai-skill/**) in DENY_SELF_PROTECTION, every tier.
 #   3 -> 4: DENY_MCP_CLOUDFLARE_EXECUTION at High only; DENY_SELF_PROTECTION became
 #           High-only (Off/Relaxed/Medium now permit edits to the installation's own
-#           config), and its blanket Edit(~/.claude/**) was narrowed to the policy
+#           config) EXCEPT the hooks, which moved to DENY_POLICY_ESCAPE and stay denied
+#           at every tier; and its blanket Edit(~/.claude/**) was narrowed to the policy
 #           surface so agent memory and ~/.claude/CLAUDE.md are writable at High too.
 RULE_SET_VERSION = 4
 TIERS = ("off", "relaxed", "medium", "high")
@@ -350,9 +351,21 @@ ALLOW = [
 #     wildcard, so Bash(gh auth token *) already covers bare `gh auth token`.
 
 DENY_POLICY_ESCAPE = [
-    # Unconditional at every tier, Off included. What these three have in common is that
-    # none of them is "the user customizing their own installation" — the distinction
-    # that makes DENY_SELF_PROTECTION below tier-varying.
+    # Unconditional at every tier, Off included. What these have in common is that none
+    # of them is "the user customizing their own installation" — the distinction that
+    # makes DENY_SELF_PROTECTION below tier-varying.
+    #
+    # The hooks are the carve-out out of that distinction, and the reason is not that
+    # they are more sensitive but that they are a different kind of thing. "Customizing
+    # your installation" describes settings.json exactly: declarative config, tuned by
+    # hand. It describes hooks/ badly, because these are executable shell scripts — the
+    # mainnet-deploy gate, the keypair-read block and the egress denylist are
+    # implemented in them, not declared. The decisive point is that /firewall already
+    # changes every tier knob without touching hooks/, so a user who wants to customize
+    # has a supported path that never requires editing a guard script. The line falls
+    # between the config and the thing enforcing it, not between strict and lenient.
+    "Edit(/.claude/hooks/**)",
+    "Edit(~/.claude/hooks/**)",
     #
     # A nested `claude -p --dangerously-skip-permissions` re-rolls the whole policy in
     # a child process, and npm/npx/node are allowed. That is not editing a config file,
@@ -372,18 +385,15 @@ DENY_POLICY_ESCAPE = [
     "Edit(/.safe-ai-skill/**)",
 ]
 
-# High only. Every other tier lets the agent edit the installation's own configuration.
+# High only. Every other tier lets the agent edit the installation's own CONFIGURATION —
+# but not the hooks, which are in DENY_POLICY_ESCAPE above and denied at every tier.
 #
 # The rationale is the same one that makes High the only tier to refuse Cloudflare's
 # `execute`: below High, the kit defers to a user who chose to customize their setup;
 # High is the locked-down tier, where "the agent cannot rewrite what constrains it" is
 # part of the proposition. At Off, Relaxed and Medium an agent may now edit
-# .claude/settings.json, .claude/hooks/** and the user-scope equivalents.
-#
-# State the consequence rather than burying it: Relaxed is the DEFAULT tier, and the
-# hooks under .claude/hooks/ are what gate mainnet deploys, value-moving actions and
-# secret reads. At the default tier an agent that hits the mainnet gate can now edit the
-# script that produced it. A user who wants the old behaviour has to choose High.
+# .claude/settings.json, .claude/security.json, .mcp.json and the user-scope
+# equivalents.
 #
 # Edit(...), not Read(...): a Read deny also blocks Edit and Write but leaves
 # NotebookEdit open, and would stop the kit's own tooling reading its config. At bypass,
@@ -394,7 +404,6 @@ DENY_SELF_PROTECTION = [
     "Edit(/.claude/settings.local.json)",
     "Edit(/.claude/settings.*.json)",
     "Edit(/.claude/security.json)",
-    "Edit(/.claude/hooks/**)",
     "Edit(/.mcp.json)",
     # User scope. Deliberately NOT the blanket Edit(~/.claude/**) this list used to
     # carry: that glob also denied ~/.claude/projects/**/memory/**, the harness's own
@@ -410,20 +419,24 @@ DENY_SELF_PROTECTION = [
     # separately and still read-denied at Medium and High (sandbox.filesystem.denyRead
     # carries ~/.claude/projects/**/*.jsonl and ~/.claude/history.jsonl), so the
     # transcripts stay unreadable while the memory directory beside them is writable.
+    # ~/.claude/hooks/** is absent from this list because it is unconditional above.
     "Edit(~/.claude/settings.json)",
     "Edit(~/.claude/settings.local.json)",
     "Edit(~/.claude/settings.*.json)",
     "Edit(~/.claude/.credentials.json)",
-    "Edit(~/.claude/hooks/**)",
     "Edit(~/.claude/agents/**)",
     "Edit(~/.claude/commands/**)",
     "Edit(~/.claude/skills/**)",
     "Edit(~/.claude/rules/**)",
     "Edit(~/.claude/output-styles/**)",
     "Edit(~/.claude/plugins/**)",
+    "Edit(~/.claude/cowork_plugins/**)",
     "Edit(~/.claude/workflows/**)",
     "Edit(~/.claude/routines/**)",
     "Edit(~/.claude/scheduled_tasks.json)",
+    # /loop's prompt file. Re-run on an interval, so rewriting it changes what a
+    # recurring run does — the same class as scheduled_tasks.json, not a cache.
+    "Edit(~/.claude/loop.md)",
     "Edit(~/.claude/daemon.json)",
     "Edit(~/.claude/launch.json)",
     # Sourced into every Bash invocation, so a write here is code execution on the next
