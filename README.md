@@ -8,7 +8,7 @@
 ![Solana](https://img.shields.io/badge/Solana-black?logo=solana)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-powered-orange)
 
-**Claude Code, set up to ship Solana.** One command installs 15 specialized agents, 32 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 3 MCP servers for on-chain data and live docs, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
+**Claude Code, set up to ship Solana.** One command installs 15 specialized agents, 32 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 4 MCP servers for on-chain data, live docs and context compression, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
 
 ```bash
 curl -fsSL https://aikit.superteam.codes | bash
