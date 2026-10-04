@@ -18,6 +18,46 @@ REGISTRY="$REPO_ROOT/.claude/skills/skill-registry.json"
 echo "[test_registry_installability] every install command names something that exists"
 echo ""
 
+# --- Declared: every entry has an install object at all ---------------------------
+# The three checks below walk entries whose `install` is a dict, so an entry with
+# `"install": null` was skipped by all of them. That is how `gmem` sat in the registry
+# with a null install, no tier and an unverified licence while passing every check:
+# the suite caught a *fabricated* install command but not a *missing* one.
+DECLARED="$(python3 - "$REGISTRY" <<'PY'
+import json, sys
+
+problems = []
+def walk(node):
+    if isinstance(node, dict):
+        if node.get("id"):
+            install = node.get("install")
+            # `type: aggregator` is a scouting pointer -- an index to read, not a pack to
+            # install -- so a null install is correct there and all six say so. Every
+            # other type promises something installable.
+            if node.get("type") == "aggregator":
+                if isinstance(install, dict):
+                    problems.append(f"{node['id']}: type aggregator but it declares an install")
+            elif not isinstance(install, dict):
+                problems.append(
+                    f"{node['id']}: type {node.get('type')!r} with install"
+                    f" {type(install).__name__} -- an entry the registry cannot serve"
+                    " belongs in prose or as an aggregator, not as a pack")
+            else:
+                for key in ("method", "command"):
+                    if not install.get(key):
+                        problems.append(f"{node['id']}: install.{key} is missing or empty")
+        for value in node.values():
+            walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            walk(value)
+walk(json.load(open(sys.argv[1])))
+
+print("\n".join(problems) or "OK")
+PY
+)"
+assert_eq "OK" "$DECLARED" "Every registry entry declares an install object with a method and a command"
+
 # --- Shape: the command has to match the method it claims -------------------------
 SHAPE="$(python3 - "$REGISTRY" <<'PY'
 import json, re, sys
