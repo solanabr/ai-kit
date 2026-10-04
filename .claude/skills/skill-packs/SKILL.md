@@ -13,7 +13,7 @@ Four packs ship installed — solana-dev, auditor-skill, colosseum and anthropic
 | | Pinned extension | Add-on |
 |---|---|---|
 | In [skill-registry.json](../skill-registry.json) | `"tier": "extension"` | no tier |
-| Install | `bash .claude/bin/skills.sh add <id>`, or `/add-skill <id>` | the `install.command` in its registry entry — read the entry rather than reconstructing the command, because the method varies (submodule, clone, npx, `claude mcp add`) |
+| Install | `bash .claude/bin/skills.sh add <id>`, or `/add-skill <id>` | the `install.command` in its registry entry — read the entry rather than reconstructing the command, because the method varies (submodule, clone, npx, a plugin marketplace) |
 | Commit installed | the `commit` its registry entry records — reviewed here, and checked against the gitlink by `validate.sh` | whatever upstream HEAD is that day, reviewed by nobody here |
 | Kept by `/update` | yes | no |
 | Who runs it | the user, on a yes | the user, and only after `safe-ai-skill add skill\|mcp <source>` returns `proceed: true` |
