@@ -14,7 +14,7 @@ Ask first only when their answer would change what gets built. Re-confirming som
 
 Subagent output is evidence to verify and synthesise, not a result to forward. Check a load-bearing claim against the source yourself before repeating it; a subagent report can be confidently wrong about what the user actually said, and relaying that unchecked turns it into your own false claim.
 
-Commits and PR bodies carry no Claude attribution and no co-author trailers. Author with an email registered on the author's GitHub account (`git -c user.name=... -c user.email=...`) — the one in session context often is not, and GitHub links such commits to no profile.
+Commits and PR bodies carry no Claude attribution and no co-author trailers. Author with an email registered on the author's GitHub account — the one in session context often is not, and GitHub links such commits to no profile. Set it per commit with leading assignments (`GIT_AUTHOR_NAME=... GIT_AUTHOR_EMAIL=... GIT_COMMITTER_NAME=... GIT_COMMITTER_EMAIL=... git commit ...`), not `git -c`: every tier denies `Bash(git -c *)` as a wrapper that evades the `git <subcommand>` rules, while leading `VAR=value` assignments are deliberately left matchable.
 
 ## Token Loading Model
 <!-- CLAUDE.md arrives as a user message, not a system prompt, so shorter buys adherence
