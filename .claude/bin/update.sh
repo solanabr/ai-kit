@@ -798,3 +798,17 @@ fi
 
 echo ""
 echo "Update complete!"
+
+# The standard plugins are installed by the user from inside Claude Code, so no
+# install or update step can place them. Print the commands rather than assume
+# an older install ever saw them. Claude Code only: an --agents install has no
+# /plugin.
+if [ "$CONFIG_NAME" = ".claude" ]; then
+  echo ""
+  echo "Standard plugins (skip any you already have):"
+  echo "  /plugin marketplace add zilliztech/memsearch"
+  echo "  /plugin install memsearch"
+  echo "  /plugin install rust-analyzer-lsp@claude-plugins-official"
+  echo "Also typescript-lsp and csharp-lsp for those languages. Install the"
+  echo "language server first; memsearch needs a restart to activate."
+fi
