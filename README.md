@@ -25,7 +25,7 @@ A complete `.claude/` configuration that turns Claude into a Solana building par
 - **4 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev), library docs (Context7) and context optimization (context-mode), plus opt-in browser automation (Playwright) and local-validator / mainnet-fork control (Surfpool)
 - **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands, egress and `context-mode`'s code executor — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
-- **Four standard plugins**, two commands at the end of the install: [memsearch](#persistent-memory-memsearch) for memory that outlives a session, and [`rust-analyzer-lsp`, `typescript-lsp`, `csharp-lsp`](#code-intelligence-language-server-plugins) so the agent reads your code through a compiler
+- **Four standard plugins**, two steps at the end of the install: [memsearch](#persistent-memory-memsearch) for memory that outlives a session, and [`rust-analyzer-lsp`, `typescript-lsp`, `csharp-lsp`](#code-intelligence-language-server-plugins) so the agent reads your code through a compiler
 - **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — three installed by default, the rest on demand ([skill-packs.md](docs/skill-packs.md))
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
@@ -117,7 +117,7 @@ Of everything in the standard install, this is the one that changes how the kit 
 
 [memsearch](docs/configuration.md#persistent-memory-memsearch) gives it semantic recall over markdown you own, so the store can grow without the always-on context budget growing with it. That is the opposite trade from putting more in `CLAUDE.md`, which every session and every subagent pays for whether it is relevant or not. Markdown stays the source of truth, so your memory stays diffable, reviewable and portable.
 
-Nothing leaves your machine: a local Milvus Lite store and an ONNX `bge-m3` embedder on CPU, no key and no account. The cost is a ~558 MB model download on first launch and one restart.
+Nothing leaves your machine: a local Milvus Lite store and an ONNX `bge-m3` embedder on CPU, no key and no account. Setup costs a ~558 MB model download on first launch and one restart; per session it costs four hooks and ~400 tokens of skill descriptions, plus the recent-memory preview its `SessionStart` hook injects — [the measured breakdown](docs/configuration.md#standard-plugins).
 
 ```text
 /plugin marketplace add zilliztech/memsearch

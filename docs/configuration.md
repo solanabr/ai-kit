@@ -70,7 +70,7 @@ A plugin is not a skill pack. It can carry hooks, MCP servers, agents, commands,
 
 ### Standard plugins
 
-Four plugins are part of a standard install rather than extras, and between them they cost about nothing per session. Two commands add memory; three more add code intelligence, one per language you write:
+Four plugins are part of a standard install rather than extras. Two commands add memory; three more add code intelligence, one per language you write. The three LSP plugins are free standing; memsearch is the one that costs something, and what it spends is your own project history:
 
 ```text
 /plugin marketplace add zilliztech/memsearch
