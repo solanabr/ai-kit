@@ -88,3 +88,9 @@
 [submodule ".claude/skills/ext/crypto-legal"]
 	path = .claude/skills/ext/crypto-legal
 	url = https://github.com/solanabr/crypto-legal-skill
+[submodule ".claude/skills/ext/obsidian-skills"]
+	path = .claude/skills/ext/obsidian-skills
+	url = https://github.com/kepano/obsidian-skills
+[submodule ".claude/skills/ext/huggingface-skills"]
+	path = .claude/skills/ext/huggingface-skills
+	url = https://github.com/huggingface/skills
