@@ -27,7 +27,6 @@ When sources overlap: the program-code house rules in the project instruction fi
 | Error codes, failing transactions | [common-errors.md](ext/solana-dev/skills/solana-dev/references/common-errors.md) |
 | Toolchain version pairing | [compatibility-matrix.md](ext/solana-dev/skills/solana-dev/references/compatibility-matrix.md) |
 | Security review | [security.md](ext/solana-dev/skills/solana-dev/references/security.md), then [auditor-skill](ext/auditor-skill/SKILL.md) for the audit itself (scope-gated checklists, 1,424 items; see Security tooling below) |
-| Financial math, Quasar zero-copy | [RUST.md](ext/quicknode-anchor/skills/solana/RUST.md), [ANCHOR.md](ext/quicknode-anchor/skills/solana/ANCHOR.md), [QUASAR.md](ext/quicknode-anchor/skills/solana/QUASAR.md) from [quicknode-anchor](ext/quicknode-anchor/); reference files only, skip that repo's SKILL.md workflow layer (install: `bash .claude/bin/skills.sh add quicknode-anchor`) |
 | Formal verification (Lean 4) | [qedgen](ext/qedgen/skills/qedgen/SKILL.md) from [QEDGen](ext/qedgen/); needs the `qedgen` CLI, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY` depending on the command (install: `bash .claude/bin/skills.sh add qedgen`) |
 | Port from Solidity/EVM | concept map: [solana-vs-evm.md](ext/solana-new/skills/idea/solana-beginner/references/solana-vs-evm.md) (install: `bash .claude/bin/skills.sh add solana-new`). The Solana Foundation's eth-to-sol skill carries the full type, pattern and stdlib mappings, but it ships no license, so the kit records it as an add-on pointer in [skill-registry.json](skill-registry.json) instead of pinning a copy into projects |
 
@@ -138,7 +137,6 @@ Pinned by the kit, installed on demand. `bash .claude/bin/skills.sh list` shows 
 | magicblock | MagicBlock Ephemeral Rollups, real-time apps and games, private payments | `bash .claude/bin/skills.sh add magicblock` |
 | helius | Helius RPC, DAS, webhooks, Laserstream, Sender, priority fees, SVM internals | `bash .claude/bin/skills.sh add helius` |
 | alchemy | Alchemy RPC, DAS, Yellowstone gRPC, x402 gateway (`ALCHEMY_API_KEY` for the API skill) | `bash .claude/bin/skills.sh add alchemy` |
-| quicknode-anchor | Financial math, fixed-point arithmetic, Quasar zero-copy | `bash .claude/bin/skills.sh add quicknode-anchor` |
 | position-manager-skill | Concentrated-liquidity LP: positions, out-of-range alerts, IL backtests, rebalancing, tax lots | `bash .claude/bin/skills.sh add position-manager-skill` |
 | solana-game | Unity, C#, games, PlaySolana, PSG1 | `bash .claude/bin/skills.sh add solana-game` |
 | solana-mobile | React Native, Expo, Mobile Wallet Adapter, Seeker, dApp Store | `bash .claude/bin/skills.sh add solana-mobile` |

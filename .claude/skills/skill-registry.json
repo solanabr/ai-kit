@@ -260,25 +260,6 @@
       "tags": ["rpc", "das", "grpc", "multi-chain", "official"]
     },
     {
-      "id": "quicknode-anchor",
-      "name": "QuickNode Solana Finance Skill",
-      "type": "skill",
-      "tier": "extension",
-      "domain": "solana-core",
-      "path": ".claude/skills/ext/quicknode-anchor",
-      "commit": "bb451d6166ead1f566845b19e2755b5cdc6f64aa",
-      "description": "QuickNode's Solana references: financial math and fixed-point arithmetic (RUST.md), Anchor patterns, Quasar zero-copy. The hub reads the reference files, not the SKILL.md workflow layer.",
-      "triggers": ["financial math", "fixed-point arithmetic", "Quasar zero-copy"],
-      "source": "https://github.com/quicknode/solana-finance-claude-plugin",
-      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add quicknode-anchor", "env": [] },
-      "license": "MIT",
-      "maintainer": "quicknode",
-      "signal": { "stars": 91, "last_commit": "2026-09-25", "reputability": "official" },
-      "default_installed": false,
-      "safety": "clean",
-      "tags": ["solana", "anchor", "math", "quasar"]
-    },
-    {
       "id": "eth-to-sol",
       "name": "ETH to SOL",
       "type": "skill",
@@ -860,21 +841,6 @@
       "tags": ["code-review", "lsp", "session-report", "skill-creator", "official"]
     },
     {
-      "id": "wshobson-agents",
-      "name": "wshobson Agents Marketplace",
-      "type": "plugin",
-      "domain": "dev-workflow",
-      "description": "Multi-harness agent/command/skill plugin marketplace for general dev workflows.",
-      "source": "https://github.com/wshobson/agents",
-      "install": { "method": "plugin-marketplace", "command": "/plugin marketplace add wshobson/agents", "env": [] },
-      "license": "MIT",
-      "maintainer": "wshobson",
-      "signal": { "stars": 40157, "last_commit": "2026-09-29", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "clean",
-      "tags": ["agents", "commands", "workflow", "marketplace"]
-    },
-    {
       "id": "get-shit-done",
       "name": "Get Shit Done (GSD)",
       "type": "template-repo",
@@ -978,21 +944,6 @@
       "default_installed": false,
       "safety": "clean — pure-prose, zero scripts/installers; stale (~Dec 2025), unmaintained",
       "tags": ["animation", "motion", "ui", "frontend"]
-    },
-    {
-      "id": "emilkowalski-skill",
-      "name": "Emil Kowalski Design Skills",
-      "type": "skill",
-      "domain": "frontend-design",
-      "description": "Motion, interaction and design-engineering skills (animate, review-animations, apple-design, pick-ui-library) from the author of Sonner and Vaul.",
-      "source": "https://github.com/emilkowalski/skills",
-      "install": { "method": "submodule", "command": "git submodule add https://github.com/emilkowalski/skills .claude/skills/ext/emilkowalski-skill", "env": [] },
-      "license": "MIT",
-      "maintainer": "emilkowalski",
-      "signal": { "stars": 42784, "last_commit": "2026-10-02", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "clean (markdown only, no scripts or hooks)",
-      "tags": ["motion", "animation", "interaction", "frontend"]
     },
     {
       "id": "brand-design-md",
@@ -1153,21 +1104,6 @@
       "safety": "no malware: scanned at 1b708843cd8104e3dd4433a0e85a6b443ed4c711 — no eval, atob or createRequire, no network egress, no keypair reads, stdlib-only Python. Its Keccak-256 is correct (cross-checked against SHA3 over 305 input lengths). Correctness caveats, though, and they matter because airdrop roots are irreversible: verify_all() is self-referential and cannot fail, so it does not catch a wrong leaf encoding, and its eval grades itself against its own root. De-dup keys on (pubkey, amount) while the Foundation template's claim PDA is per-claimant, so a repeated pubkey strands funds. The claim builder asks for a Keypair where a PublicKey would do, and its install.sh overwrites a project's agents, commands and rules without asking. See upstream issue 1; treat its gate as a self-consistency check and verify a root against the target program's own tooling before publishing",
       "tags": ["airdrop", "merkle", "distribution", "claim", "keccak"]
     },
-    {
-      "id": "seeker-skills",
-      "name": "Seeker Skills",
-      "type": "skill",
-      "domain": "solana-infra",
-      "description": "Solana Seeker (mobile) skills (watchlist — young/unverified). Cross-check vs ext/solana-mobile coverage.",
-      "source": "https://github.com/Sarthib7/seeker-skills",
-      "install": { "method": "submodule", "command": "git submodule add https://github.com/Sarthib7/seeker-skills .claude/skills/ext/seeker-skills", "env": [] },
-      "license": "unverified",
-      "maintainer": "Sarthib7",
-      "signal": { "stars": null, "last_commit": null, "reputability": "emerging — verify before install" },
-      "default_installed": false,
-      "safety": "caution: niche mobile, unverified — cross-check vs ext/solana-mobile before adding",
-      "tags": ["seeker", "mobile", "watchlist", "solana"]
-    },
 
 
     {
@@ -1245,21 +1181,6 @@
       "default_installed": false,
       "safety": "clean — community index, not first-party-vetted; verify each entry before installing",
       "tags": ["aggregator", "scout", "plugins", "community", "discovery"]
-    },
-    {
-      "id": "claude-skill-social-post",
-      "name": "Social Post",
-      "type": "skill",
-      "domain": "go-to-market",
-      "description": "Learns a posting voice from your own past posts, then drafts and schedules social content across Facebook, Instagram, Threads and X on a 14-day calendar. Catalogued rather than pinned: the kit's launch and content lanes are served by content-gen-skill and writer-style-skill, and this one's platforms are consumer-social rather than developer-facing.",
-      "source": "https://github.com/Hao0321/claude-skill-social-post",
-      "install": { "method": "submodule", "command": "git submodule add https://github.com/Hao0321/claude-skill-social-post .claude/skills/ext/claude-skill-social-post", "env": [] },
-      "license": "MIT",
-      "maintainer": "Hao0321",
-      "signal": { "stars": 722, "last_commit": "2026-10-03", "reputability": "individual" },
-      "default_installed": false,
-      "safety": "caution, and the reason this is an add-on rather than a pinned extension: it acts as you, on your own accounts. Around 180 files drive a real Chrome session to publish posts and replies under your logged-in identity on Facebook, Instagram, Threads and X \u2014 the largest act-as-user surface of any pack reviewed for this catalogue. It is not pinned and not scanned at a commit, so read it before installing, and note that a mistake posts publicly under your name instead of failing quietly. No MCP server and no credential file: it uses the browser session you are already signed into, which is also why a sandbox cannot contain it",
-      "tags": ["social", "marketing", "content", "launch", "act-as-user"]
     }
   ]
 }

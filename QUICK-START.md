@@ -220,7 +220,7 @@ your-project/
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   │                      # anthropic-skills is core too, but installs top-level (below)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
-│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, solana-fuzz,
+│   │   │   │                      # helius, alchemy, qedgen, solana-fuzz,
 │   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, supabase,
 │   │   │   │                      # solana-new, sign-safe, counterparty-gate, get-shit-pretty,
 │   │   │   │                      # community-moderation, position-manager-skill,

@@ -34,9 +34,6 @@
 [submodule ".claude/skills/ext/helius"]
 	path = .claude/skills/ext/helius
 	url = https://github.com/helius-labs/core-ai
-[submodule ".claude/skills/ext/quicknode-anchor"]
-	path = .claude/skills/ext/quicknode-anchor
-	url = https://github.com/quicknode/solana-finance-claude-plugin
 [submodule ".claude/skills/ext/magicblock"]
 	path = .claude/skills/ext/magicblock
 	url = https://github.com/magicblock-labs/magicblock-dev-skill

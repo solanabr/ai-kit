@@ -25,7 +25,6 @@ A pack's *own* submodules are not fetched: they are pinned by that pack's author
 | `ext/magicblock` | Extension | [magicblock-labs/magicblock-dev-skill](https://github.com/magicblock-labs/magicblock-dev-skill) | Official MagicBlock: Ephemeral Rollups, private payments, VRF, cranks |
 | `ext/helius` | Extension | [helius-labs/core-ai](https://github.com/helius-labs/core-ai) | Official Helius infra skill + unique SVM internals skill |
 | `ext/alchemy` | Extension | [alchemyplatform/skills](https://github.com/alchemyplatform/skills) | Official Alchemy: Solana RPC, DAS, Yellowstone gRPC, x402 gateway |
-| `ext/quicknode-anchor` | Extension | [quicknode/solana-finance-claude-plugin](https://github.com/quicknode/solana-finance-claude-plugin) | Anchor/financial-math/Quasar reference files (quarantined — refs only) |
 | `ext/position-manager-skill` | Extension | [solanabr/position-manager-skill](https://github.com/solanabr/position-manager-skill) | CLMM LP: positions, out-of-range alerts, IL backtests, rebalancing, tax lots |
 | `ext/content-gen-skill` | Extension | [solanabr/content-gen-skill](https://github.com/solanabr/content-gen-skill) | Educational content: courses, tutorials, explainers, litepapers, slides, threads |
 | `ext/writer-style-skill` | Extension | [solanabr/writer-style-skill](https://github.com/solanabr/writer-style-skill) | Prose in a named author's voice, facts verified before styling. MIT plus an appended advisory NOTICE, which GitHub classifies as `NOASSERTION` |
@@ -110,7 +109,6 @@ Beyond the bundled submodules above, the kit ships a curated catalog of **opt-in
 Featured add-ons by domain:
 
 - **Claude-official:** the 315 plugins in [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official), which Claude Code registers for you — which ones earn their keep here, and what each costs per session, is [configuration.md → plugins worth installing](configuration.md#claude-code-plugins-worth-installing). Anthropic's Apache-2.0 skills are the `anthropic-skills` core pack above
-- **Dev-workflow:** [wshobson/agents](https://github.com/wshobson/agents)
 - **Frontend/Design:** [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
 - **Testing:** [SawyerHood/dev-browser](https://github.com/SawyerHood/dev-browser) · [conorluddy/ios-simulator-skill](https://github.com/conorluddy/ios-simulator-skill)

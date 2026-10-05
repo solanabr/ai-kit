@@ -54,7 +54,6 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   │   ├── magicblock/            # Official MagicBlock (Ephemeral Rollups)
     │   │   ├── helius/                # Official Helius infra + SVM internals
     │   │   ├── alchemy/               # Official Alchemy (Solana RPC, DAS, gRPC)
-    │   │   ├── quicknode-anchor/      # Anchor/Quasar reference files (quarantined)
     │   │   ├── position-manager-skill/ # CLMM LP lifecycle (Orca, Raydium, Meteora)
     │   │   ├── content-gen-skill/      # Educational content pipeline (courses, explainers)
     │   │   └── writer-style-skill/     # Prose in a named author's voice
