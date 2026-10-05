@@ -14,12 +14,8 @@ When sources overlap: a protocol's official skill wins for its own SDK (Jupiter,
 
 These load when the plugin is enabled. Commands and skills are namespaced under `solana-ai-kit:` (for example `/solana-ai-kit:deploy`).
 
-- [idea-sprint](../idea-sprint/SKILL.md): what to build; blunt interview, crypto-necessity gate, 3 scored candidates, go/no-go
-- [pitch-deck](../pitch-deck/SKILL.md): audience-aware decks (hackathon, VC, grant, accelerator) with speaking notes and objection prep
-- [hackathon](../hackathon/SKILL.md): scannable submissions, demo scripts under 3 minutes, track choice, Superteam Earn grants
 - [skill-registry.json](../skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Entries with a `tier` are the full install's pinned skill packs; their `source` is the upstream repo.
 
-These three skills are adapted from sendaifun/solana-new (MIT, telemetry removed).
 
 The kit's own [token-extensions](../token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the `install.sh` full install.
 
@@ -63,9 +59,6 @@ The plugin's agents, commands and bundled skills are the same files the full ins
 
 | User asks about | Skill |
 |-----------------|-------|
-| Idea validation, "what should I build" | [idea-sprint](../idea-sprint/SKILL.md) |
-| Pitch deck, demo day, investor or grant slides | [pitch-deck](../pitch-deck/SKILL.md) |
-| Hackathon submission, demo script, track choice | [hackathon](../hackathon/SKILL.md) |
 | An add-on skill, plugin or MCP that isn't bundled | [skill-registry.json](../skill-registry.json) |
 | A safe-ai-skill ask or deny, skill or MCP supply-chain checks | Security firewall (core) above |
 | Protocol SDK depth, security audits, infra | Option A marketplaces or the Option B full install |

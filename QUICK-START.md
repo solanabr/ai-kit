@@ -34,6 +34,18 @@ Then start Claude Code:
 claude
 ```
 
+Two things finish the install from inside Claude Code, and both are standard rather than extras — memory that outlives a session, and code intelligence through a compiler instead of grep:
+
+```
+/plugin marketplace add zilliztech/memsearch
+/plugin install memsearch
+/plugin install rust-analyzer-lsp@claude-plugins-official
+/plugin install typescript-lsp@claude-plugins-official
+/plugin install csharp-lsp@claude-plugins-official
+```
+
+Take the LSP lines for the languages you actually write — Rust for programs, TypeScript for the client, C# for the Unity/PSG1 track — and install each language server first (`rustup component add rust-analyzer`, `npm i -g typescript typescript-language-server`, a C# server such as `csharp-ls`), since Claude Code offers the plugin once the binary is on your `PATH`. memsearch needs a restart. [docs/configuration.md → plugins worth installing](docs/configuration.md#claude-code-plugins-worth-installing) has what each one costs you per session.
+
 That's it. Claude now has Solana superpowers.
 
 > The installer gitignores the kit (`.claude/`, `CLAUDE.md`, `.mcp.json`, `.gitmodules`, `.safe-ai-skill/`) by default to keep your repo clean. To version it instead (team setup), run `/commit-claude-config`.
@@ -75,12 +87,11 @@ Opt-in, because each needs a browser, a CLI, a key or a workflow choice. Run `/s
 - **Surfpool** — Agent-driven local validator / mainnet-fork control (requires the `surfpool` CLI)
 - **Chainstack** — Multi-chain RPC platform control (needs a key for most tools; 5 read-only ones answer without)
 - **Nansen** — Wallet and token intelligence (paid key required, free tier within credits; ~50 tool schemas per session)
-- **Supabase** — The Postgres backend behind an indexer or dApp. Add it in the hardened form only: `?read_only=true&project_ref=<ref>`. Unflagged it hands over 12 write tools, `execute_sql` among them — an unrestricted SQL channel into your database
+- **Supabase** — The Postgres backend behind an indexer or dApp. The read-only, project-scoped form is offered first as the recommended default (`?read_only=true&project_ref=<ref>`): `read_only=true` hides the 12 write tools and forces `execute_sql` into a read-only session, `project_ref` drops the whole `account` group and with it cross-project reach. Drop the parameters when you actually want write access — applying a migration, seeding a table — knowing `execute_sql` is then an unrestricted SQL channel into the app's database. A third form, `?features=docs`, narrows it to documentation lookup alone. Which one fits is your call
 - **Cloudflare** — Operate the Workers, KV, R2, D1, DNS and Queues behind a dApp. Three tools for the whole Cloudflare API, and one of them, `execute`, reaches every one of its 2,594 endpoints — so scope the API token to the specific zone or account resources you want reachable
+- **Phantom** — A wallet and trading surface, and the one server here that acts on funds rather than reporting on them. Of its 29 tools, `solana_sign`/`solana_send` and `evm_sign`/`evm_send` land signed transactions, and ten more — `buy`, `pay`, `transfer`, `wallet_rebalance`, `withdraw_from_hyperliquid_spot` and nine `perps_*` — move real funds. `phantom_login` keeps the session on disk, so no key goes in a config file and nothing re-prompts between the attached server and a trade. No firewall tier denies its tools by name, and the kit's hooks do not reach an MCP server (their matcher is `Bash|mcp__context-mode__.*`), so at every tier the boundary is whatever the logged-in wallet holds. Attach it when you want the agent transacting, and fund the wallet accordingly
 
-Documented but deliberately not offered by `/setup-mcp`: **Phantom** (`claude mcp add phantom -- npx -y @phantom/mcp-server`) is a 29-tool wallet and trading surface — signing, transfers, payments and perps — that needs no key once logged in. Add it only if you want Claude able to move your funds.
-
-The kit pins no effort level, agent teams or LSP plugins; [docs/configuration.md](docs/configuration.md#settings-the-kit-leaves-to-you) shows how to turn them on.
+The kit pins no effort level and no agent teams; [docs/configuration.md](docs/configuration.md#settings-the-kit-leaves-to-you) shows how to turn them on. The LSP plugins are not in that category — `rust-analyzer-lsp`, `typescript-lsp` and `csharp-lsp` are part of a standard install, above.
 
 ---
 
@@ -220,19 +231,19 @@ your-project/
 │   │   │   ├── colosseum/         # Colosseum Copilot, startup research (core)
 │   │   │   │                      # anthropic-skills is core too, but installs top-level (below)
 │   │   │   ├── ...                # extensions you add: sendai, jupiter, metaplex, magicblock,
-│   │   │   │                      # helius, alchemy, qedgen, quicknode-anchor, solana-fuzz,
+│   │   │   │                      # helius, alchemy, qedgen, solana-fuzz,
 │   │   │   │                      # solana-game, solana-mobile, cloudflare, vercel, supabase,
 │   │   │   │                      # solana-new, sign-safe, counterparty-gate, get-shit-pretty,
 │   │   │   │                      # community-moderation, position-manager-skill,
 │   │   │   │                      # content-gen-skill, writer-style-skill, frontend-slides,
 │   │   │   │                      # superseo, expo, duckdb, crypto-legal, obsidian-skills,
-│   │   │   │                      # huggingface-skills
+│   │   │   │                      # huggingface-skills, dune, circle, google,
+│   │   │   │                      # knowledge-work, mongodb, elevenlabs, light-protocol,
+│   │   │   │                      # gmgn, redis, resend, pulumi, meteora-invent,
+│   │   │   │                      # playwright-skill, gsap-skills
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer
-│   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
-│   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
-│   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
 │   │   ├── frontend-design/  # anthropic-skills (core), with webapp-testing/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns

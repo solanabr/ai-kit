@@ -113,7 +113,7 @@ cases = [
     ("a landing page surfaces the design packs", r"landing page",
      ["vercel", "solana-new"], ["anydesign"]),
     ("animation surfaces the animation packs", r"\banimation\b",
-     ["solana-new"], ["emilkowalski-skill"]),
+     ["solana-new"], ["animation-principles"]),
 ]
 for label, pattern, want_pinned, want_addons in cases:
     match = None
@@ -181,7 +181,7 @@ for agent in anchor-engineer pinocchio-engineer; do
 done
 FE="$AGENTS/solana-frontend-engineer.md"
 assert_file_contains "$FE" "anthropic-skills" "solana-frontend-engineer offers a design pack for a landing page"
-assert_file_contains "$FE" "emilkowalski-skill" "solana-frontend-engineer names the animation add-on"
+assert_file_contains "$FE" "animation-principles" "solana-frontend-engineer names the animation add-on"
 assert_file_contains "$FE" "skill-packs/SKILL.md" "solana-frontend-engineer routes on to the map"
 
 # --- Repo-wide: no kit file offers a pack the registry does not pin ---

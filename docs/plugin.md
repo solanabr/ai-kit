@@ -41,7 +41,7 @@ If you use the plugin anyway, keep the exposure small:
    claude plugin update solana-ai-kit@stbr --scope local
    ```
 
-The plugin ships the **core kit**: the 15 agents, 32 commands (`/firewall` included, though a plugin install has no tier for it to set — see below), the local go-to-market + registry skills (idea-sprint, pitch-deck, hackathon), the token-extensions skill, the 4 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](firewall.md#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 32 commands (`/firewall` included, though a plugin install has no tier for it to set — see below), the local token-extensions and skill-packs skills, the 4 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](firewall.md#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 

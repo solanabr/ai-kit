@@ -80,7 +80,7 @@ fi
 # --- Each plugin symlink target resolves on disk (-e follows symlinks) ---
 echo "[plugin symlinks]"
 for link in agents commands .mcp.json VERSION \
-            skills/idea-sprint skills/pitch-deck skills/hackathon skills/token-extensions \
+            skills/token-extensions \
             skills/skill-registry.json; do
   target="$PLUGIN_DIR/$link"
   TOTAL=$((TOTAL + 1))
@@ -98,7 +98,7 @@ done
 # there, so the skills in its subdirectories never register. The hub needs its own directory.
 echo "[plugin skills layout]"
 assert_file_not_exists "$PLUGIN_DIR/skills/SKILL.md" "no SKILL.md directly in plugin/skills/ (it would hide the bundled skills)"
-for skill in solana-ai-kit idea-sprint pitch-deck hackathon token-extensions; do
+for skill in solana-ai-kit token-extensions; do
   assert_file_exists "$PLUGIN_DIR/skills/$skill/SKILL.md" "plugin skill is discoverable: skills/$skill/SKILL.md"
 done
 HUB_NAME="$(sed -n 's/^name:[[:space:]]*//p' "$PLUGIN_HUB" 2>/dev/null | head -1 || true)"
