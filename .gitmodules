@@ -34,9 +34,6 @@
 [submodule ".claude/skills/ext/helius"]
 	path = .claude/skills/ext/helius
 	url = https://github.com/helius-labs/core-ai
-[submodule ".claude/skills/ext/quicknode-anchor"]
-	path = .claude/skills/ext/quicknode-anchor
-	url = https://github.com/quicknode/solana-finance-claude-plugin
 [submodule ".claude/skills/ext/magicblock"]
 	path = .claude/skills/ext/magicblock
 	url = https://github.com/magicblock-labs/magicblock-dev-skill
@@ -70,3 +67,69 @@
 [submodule ".claude/skills/ext/supabase"]
 	path = .claude/skills/ext/supabase
 	url = https://github.com/supabase/agent-skills
+[submodule ".claude/skills/ext/get-shit-pretty"]
+	path = .claude/skills/ext/get-shit-pretty
+	url = https://github.com/jubscodes/get-shit-pretty
+[submodule ".claude/skills/ext/frontend-slides"]
+	path = .claude/skills/ext/frontend-slides
+	url = https://github.com/zarazhangrui/frontend-slides
+[submodule ".claude/skills/ext/superseo"]
+	path = .claude/skills/ext/superseo
+	url = https://github.com/inhouseseo/superseo-skills
+[submodule ".claude/skills/ext/expo"]
+	path = .claude/skills/ext/expo
+	url = https://github.com/expo/skills
+[submodule ".claude/skills/ext/duckdb"]
+	path = .claude/skills/ext/duckdb
+	url = https://github.com/duckdb/duckdb-skills
+[submodule ".claude/skills/ext/crypto-legal"]
+	path = .claude/skills/ext/crypto-legal
+	url = https://github.com/solanabr/crypto-legal-skill
+[submodule ".claude/skills/ext/dune"]
+	path = .claude/skills/ext/dune
+	url = https://github.com/duneanalytics/skills
+[submodule ".claude/skills/ext/circle"]
+	path = .claude/skills/ext/circle
+	url = https://github.com/circlefin/skills
+[submodule ".claude/skills/ext/mongodb"]
+	path = .claude/skills/ext/mongodb
+	url = https://github.com/mongodb/agent-skills
+[submodule ".claude/skills/ext/elevenlabs"]
+	path = .claude/skills/ext/elevenlabs
+	url = https://github.com/elevenlabs/skills
+[submodule ".claude/skills/ext/light-protocol"]
+	path = .claude/skills/ext/light-protocol
+	url = https://github.com/Lightprotocol/skills
+[submodule ".claude/skills/ext/gmgn"]
+	path = .claude/skills/ext/gmgn
+	url = https://github.com/GMGNAI/gmgn-skills
+[submodule ".claude/skills/ext/redis"]
+	path = .claude/skills/ext/redis
+	url = https://github.com/redis/agent-skills
+[submodule ".claude/skills/ext/resend"]
+	path = .claude/skills/ext/resend
+	url = https://github.com/resend/resend-skills
+[submodule ".claude/skills/ext/pulumi"]
+	path = .claude/skills/ext/pulumi
+	url = https://github.com/pulumi/agent-skills
+[submodule ".claude/skills/ext/google"]
+	path = .claude/skills/ext/google
+	url = https://github.com/google/skills
+[submodule ".claude/skills/ext/knowledge-work"]
+	path = .claude/skills/ext/knowledge-work
+	url = https://github.com/anthropics/knowledge-work-plugins
+[submodule ".claude/skills/ext/playwright-skill"]
+	path = .claude/skills/ext/playwright-skill
+	url = https://github.com/lackeyjb/playwright-skill
+[submodule ".claude/skills/ext/meteora-invent"]
+	path = .claude/skills/ext/meteora-invent
+	url = https://github.com/MeteoraAg/meteora-invent
+[submodule ".claude/skills/ext/obsidian-skills"]
+	path = .claude/skills/ext/obsidian-skills
+	url = https://github.com/kepano/obsidian-skills
+[submodule ".claude/skills/ext/huggingface-skills"]
+	path = .claude/skills/ext/huggingface-skills
+	url = https://github.com/huggingface/skills
+[submodule ".claude/skills/ext/gsap-skills"]
+	path = .claude/skills/ext/gsap-skills
+	url = https://github.com/greensock/gsap-skills

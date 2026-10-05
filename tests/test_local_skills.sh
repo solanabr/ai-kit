@@ -10,14 +10,18 @@ echo "[test_local_skills] Kit-owned skills (.claude/skills/<name>/SKILL.md): fro
 
 # Claude Code, Codex and opencode list every <name>/SKILL.md by its frontmatter, so the
 # name must match the directory and the description must exist (Agent Skills caps it
-# at 1024 chars). Relative links in the skill's files must resolve; ../ext/ targets need
-# the submodules (CI checks them out). The hub must route to each skill.
+# at 1024 chars). Relative links in the skill's files must resolve; a ../ext/ target in a
+# pack that is not checked out is skipped and counted, not called broken. The hub must
+# route to each skill.
 while IFS=$'\t' read -r status message; do
-  TOTAL=$((TOTAL + 1))
   if [ "$status" = "PASS" ]; then
+    TOTAL=$((TOTAL + 1))
     echo "  PASS: $message"
     PASS=$((PASS + 1))
+  elif [ "$status" = "SKIP" ]; then
+    skip "$message"
   else
+    TOTAL=$((TOTAL + 1))
     echo "  FAIL: $message"
     FAIL=$((FAIL + 1))
   fi
@@ -31,6 +35,16 @@ link_re = re.compile(r"\]\(([^)\s]+)\)")
 
 def report(ok, msg):
     print(("PASS" if ok else "FAIL") + "\t" + msg)
+
+def report_skip(msg):
+    print("SKIP\t" + msg)
+
+def not_checked_out(resolved):
+    """resolved points into a .../skills/ext/<pack>/ that exists but is empty, i.e. the
+    submodule was never checked out. A pack that IS checked out with the file missing is
+    not this case and stays a failure."""
+    m = re.match(r"(.*/skills/ext/[^/]+)(?:/|$)", resolved)
+    return bool(m) and os.path.isdir(m.group(1)) and not os.listdir(m.group(1))
 
 for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
     skill_dir = os.path.dirname(skill_md)
@@ -56,6 +70,7 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
 
     broken = []
     checked = 0
+    uninit = 0
     for dirpath, _dirs, files in os.walk(skill_dir):
         for fname in files:
             if not fname.endswith(".md"):
@@ -64,12 +79,18 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
             for target in link_re.findall(open(path, encoding="utf-8").read()):
                 if re.match(r"^[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
                     continue
-                checked += 1
                 resolved = os.path.normpath(os.path.join(dirpath, target.split("#", 1)[0]))
-                if not os.path.exists(resolved):
+                if os.path.exists(resolved):
+                    checked += 1
+                elif not_checked_out(resolved):
+                    uninit += 1
+                else:
+                    checked += 1
                     broken.append(f"{os.path.relpath(path, skills)} -> {target}")
     report(not broken, f"{name}: {checked} relative links resolve" +
            ("" if not broken else " (broken: " + "; ".join(broken[:5]) + ")"))
+    if uninit:
+        report_skip(f"{name}: {uninit} links into ext/ packs that are not checked out")
 PY
 )
 

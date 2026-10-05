@@ -7,9 +7,13 @@
 
 Be direct: no filler, code before explanation, say so when unsure.
 
-## Before writing Solana code
+<!-- MAINTAINER: behavioural, not stylistic — written after a session dropped two standing
+     instructions and an open question without resurfacing them. Don't trim it to a clause. -->
+Hold the thread: the user may instruct, leave, and come back, so anything needing them must still be visible when they return. In the main session, close your final reply of a turn with **Done** (what landed), **Warnings** (what broke or needs watching) and **Open** (questions awaiting their answer, instructions not yet carried out, blocked work — one line each, restated until they resolve it or say to drop it); skip any that would be empty, and leave them off notes between tool calls. A point raised once and then dropped is lost. Ask before acting only when their answer would change what gets built, never to re-confirm what they already instructed. Build the scope you were given, not an adjacent thing, and delete nothing outside the files and actions they named. Subagent output is evidence to verify, not a result to relay.
 
-Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data.
+## Before building
+
+Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data — and, for work that is not program code, to the app, launch and growth packs the kit pins.
 
 Only the core skill packs ship installed. A link into a missing `.claude/skills/ext/<id>/` folder is an extension the kit pins: run the `bash .claude/bin/skills.sh add <id>` command given next to it, then read the link.
 
@@ -24,12 +28,12 @@ Only the core skill packs ship installed. A link into a missing `.claude/skills/
 
 - Branches: `<type>/<scope>-<description>-<DD-MM-YYYY>` (`/quick-commit` automates this).
 - Deploy to devnet first. Mainnet needs the user's explicit go-ahead every time — get it yourself, never assume a tool gate will stop you. (Claude Code adds one: deploys, upgrades and authority changes stop for the user's approval on every cluster, and irreversible ones such as `--final` or a program close are left for the user to run. Other runtimes have no such gate.)
-- Before finishing a branch: build, `cargo fmt`, clippy and tests pass, `/diff-review` is clean, and docs that describe the change are updated. For program changes also run `/audit-solana` and `/profile-cu`, and deploy only the `.so` from `solana-verify build` (run after `anchor build`), the binary verification reproduces.
+- Before finishing a branch: the project's own build, format, lint and test commands pass, `/diff-review` is clean, and docs that describe the change are updated. For Rust program code that means `cargo fmt` and clippy, plus `/audit-solana` and `/profile-cu`, and deploy only the `.so` from `solana-verify build` (run after `anchor build`), the binary verification reproduces.
 - The firewall tier named in `.claude/security.json`, read at session start, sets this session's file, command and egress rules; it and `.claude/settings*.json` are the user's to change, so ask them to run `/firewall` instead of editing those files yourself.
 
 ## MCP
 
-Helius, solana-dev, Context7 and context-mode are configured in `.mcp.json`; Playwright, Surfpool, Chainstack, Nansen, Supabase and Cloudflare are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers. Supabase is only ever added as `?read_only=true&project_ref=<ref>`: unflagged, its `execute_sql` is an unrestricted SQL channel into the project's database. Cloudflare's `execute` tool reaches every endpoint its API token does, so ask the user for a token scoped to the zone or account resources in question rather than a broad one.
+Helius, solana-dev, Context7 and context-mode are configured in `.mcp.json`; Playwright, Surfpool, Chainstack, Nansen, Supabase and Cloudflare are opt-in. Keys belong in `.env`, never in `.mcp.json`; `/setup-mcp` sets them up and adds the optional servers. Offer Supabase as `?read_only=true&project_ref=<ref>` first — that hides the write tools and forces a read-only Postgres session, and `project_ref` drops the account group; unflagged, `execute_sql` is an unrestricted SQL channel into the project's database and `apply_migration` the same with DDL. The user may want the unrestricted form; say what each reaches and let them choose. Cloudflare's `execute` tool reaches every endpoint its API token does, so ask the user for a token scoped to the zone or account resources in question rather than a broad one.
 
 ## Project Learnings
 

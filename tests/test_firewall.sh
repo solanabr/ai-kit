@@ -140,6 +140,19 @@ else
   PASS=$((PASS + 1))
 fi
 
+# ── descent from High leaves nothing behind, at the tier below it too ───────
+# The MCP deny set now differs between Medium and High, so High is the first tier whose
+# rules must be subtracted on the way down to Medium and not only to Relaxed. An apply
+# that appended would leave mcp__cloudflare__execute in a Medium project forever.
+echo "[descent from high]"
+fw medium
+cp "$WORK/proj/.claude/settings.json" "$WORK/medium-first.json"
+fw high
+fw medium
+assert_cmd_success "cmp -s '$WORK/medium-first.json' '$WORK/proj/.claude/settings.json'" \
+  "high -> medium restores the medium bytes exactly (no High-only rule left behind)"
+fw relaxed
+
 # ── harvest every tier once, then assert over the four generated files ──────
 for t in $TIERS; do
   fw "$t"
@@ -294,18 +307,172 @@ import json
 p = json.load(open('$WORK/gen.off.json')).get('permissions') or {}
 print(len(p.get('ask') or []))" 2>/dev/null)" "off emits zero permissions.ask entries"
 
+# ── what each tier lets the agent write under .claude/ and ~/.claude/ ───────
+# Asserted as an effective permission on a PATH, not as the presence of a rule string,
+# because the regression this replaces was invisible: Edit(~/.claude/**) silently denied
+# ~/.claude/projects/**/memory/**, the harness's own file-based agent memory, and
+# ~/.claude/CLAUDE.md, which CLAUDE-solana.md tells every user project to write to. No
+# allow rule can undo that — deny beats allow in every scope, with no un-deny primitive
+# and no specificity tiebreak ("An allow rule can't carve an exception out of a deny
+# rule", code.claude.com/docs/en/permissions) — so only the deny set decides, and only
+# the deny set is consulted below.
+echo "[writable config surface]"
+# edit_denied <tier> <path> -> yes|no. `path` is either project-relative (".claude/x")
+# or home-anchored ("~/.claude/x").
+edit_denied() {
+  python3 -c "
+import json, re, sys
+
+def to_regex(pat):
+    'the glob dialect the kit emits: ** spans segments, * stays inside one'
+    out, i = [], 0
+    while i < len(pat):
+        c = pat[i]
+        if pat.startswith('/**', i):
+            out.append('(?:/.*)?'); i += 3
+        elif pat.startswith('**', i):
+            out.append('.*'); i += 2
+        elif c == '*':
+            out.append('[^/]*'); i += 1
+        elif c == '?':
+            out.append('[^/]'); i += 1
+        else:
+            out.append(re.escape(c)); i += 1
+    return re.compile('^' + ''.join(out) + r'\$')
+
+path = sys.argv[2]
+deny = (json.load(open(sys.argv[1])).get('permissions') or {}).get('deny') or []
+for rule in deny:
+    if not (rule.startswith('Edit(') and rule.endswith(')')):
+        continue
+    inner = rule[5:-1]
+    if inner.startswith('~/'):
+        if not path.startswith('~/'):
+            continue
+        cand, pat = path[2:], inner[2:]
+    elif inner.startswith('//'):
+        continue                      # absolute (managed settings); not these paths
+    elif inner.startswith('/'):
+        if path.startswith('~/'):
+            continue
+        cand, pat = path, inner[1:]   # /-anchored means project-root-relative
+    else:
+        continue
+    if to_regex(pat).match(cand):
+        print('yes'); break
+else:
+    print('no')" "$WORK/gen.$1.json" "$2" 2>/dev/null
+}
+
+# CONFIG is High-only: below it, the kit defers to a user who chose to customize their
+# own installation. "Customizing your installation" describes settings.json exactly —
+# declarative config, tuned by hand.
+SELF_PROTECTED_CONFIG=".claude/settings.json
+.claude/settings.local.json
+.claude/security.json
+.mcp.json
+~/.claude/settings.json
+~/.claude/.credentials.json
+~/.claude/agents/x.md
+~/.claude/commands/x.md
+~/.claude/skills/x/SKILL.md
+~/.claude/rules/x.md
+~/.claude/output-styles/x.md
+~/.claude/plugins/config.json
+~/.claude/cowork_plugins/config.json
+~/.claude/workflows/x.js
+~/.claude/routines/x.json
+~/.claude/shell-snapshots/snapshot-zsh-1.sh
+~/.claude/local/claude
+~/.claude/scheduled_tasks.json
+~/.claude/daemon.json
+~/.claude/launch.json
+~/.claude/loop.md"
+for t in off relaxed medium; do
+  BAD=""
+  while IFS= read -r p; do
+    [ "$(edit_denied "$t" "$p")" = "no" ] || BAD="$BAD $p"
+  done <<EOF
+$SELF_PROTECTED_CONFIG
+EOF
+  assert_eq "" "$BAD" "$t lets the agent edit the installation's own config (High-only denies)"
+done
+BAD=""
+while IFS= read -r p; do
+  [ "$(edit_denied high "$p")" = "yes" ] || BAD="$BAD $p"
+done <<EOF
+$SELF_PROTECTED_CONFIG
+EOF
+assert_eq "" "$BAD" "high denies every self-protected config path"
+
+# The HOOKS are the carve-out and are denied at EVERY tier, Off included. Not because
+# they are more sensitive than settings.json, but because they are a different kind of
+# thing: executable shell scripts that *implement* the mainnet-deploy gate, the
+# keypair-read block and the egress denylist, rather than config that declares them. The
+# decisive point is that /firewall changes every tier knob without touching hooks/, so a
+# user who wants to customize never has to edit a guard script. Regression this guards:
+# the hooks riding along with the config group and becoming editable at the DEFAULT
+# tier, where an agent that trips the mainnet gate could rewrite the script behind it.
+HOOK_PATHS=".claude/hooks/onchain-guard.sh
+.claude/hooks/secrets-guard.sh
+.claude/hooks/egress-guard.sh
+.claude/hooks/lib-headless.sh
+~/.claude/hooks/my-hook.sh"
+for t in $TIERS; do
+  BAD=""
+  while IFS= read -r p; do
+    [ "$(edit_denied "$t" "$p")" = "yes" ] || BAD="$BAD $p"
+  done <<EOF
+$HOOK_PATHS
+EOF
+  assert_eq "" "$BAD" "$t denies edits to the guard hooks (unconditional, Off included)"
+done
+
+# Writable at EVERY tier, High included. The memory directory is a documented harness
+# feature; ~/.claude/CLAUDE.md is what the kit's own CLAUDE-solana.md points users at.
+# Neither may be collaterally denied by a glob aimed at the policy surface.
+AGENT_WRITABLE="~/.claude/CLAUDE.md
+~/.claude/projects/-Users-me-proj/memory/MEMORY.md
+~/.claude/projects/-Users-me-proj/memory/notes/decisions.md
+~/.claude/keybindings.json"
+for t in $TIERS; do
+  BAD=""
+  while IFS= read -r p; do
+    [ "$(edit_denied "$t" "$p")" = "no" ] || BAD="$BAD $p"
+  done <<EOF
+$AGENT_WRITABLE
+EOF
+  assert_eq "" "$BAD" "$t leaves agent memory and ~/.claude/CLAUDE.md writable"
+done
+
+# The other half of the same parent directory: transcripts replay every secret a session
+# ever read, so they stay READ-denied where the tier fences reads, while the memory
+# directory beside them is writable. Both properties have to hold at once.
+for t in medium high; do
+  assert_eq "yes" "$(python3 -c "
+import json
+fs = ((json.load(open('$WORK/gen.$t.json')).get('sandbox') or {}).get('filesystem') or {})
+dr = fs.get('denyRead') or []
+print('yes' if '~/.claude/projects/**/*.jsonl' in dr and '~/.claude/history.jsonl' in dr else 'no')" 2>/dev/null)" \
+    "$t still read-denies session transcripts next to the writable memory directory"
+done
+
 # ── the never-allowed set varies only where it provably can ─────────────────
 # Deny is merge-monotonic: lists union across settings sources and there is no un-deny,
 # so a deny that reaches a user or managed file cannot be taken back on the way down a
 # tier. That is why every Bash deny is identical at every tier, and the assertion below
 # is what keeps it that way.
 #
-# The one sanctioned exception is MCP tool-name denies. They are safe because MCP rules
-# have no argument form at all (a parenthesised mcp__ rule is skipped on load), so a
-# tool-name deny is the only expressible gate, and because firewall.sh writes one file
-# and subtracts exactly its recorded ruleIds -- which the relaxed -> high -> relaxed
-# byte-identity test above is the proof of. Anything else that starts varying by tier
-# here is the bug this test exists to catch.
+# Two sanctioned exceptions, both safe for the same reason: firewall.sh writes one file
+# and subtracts exactly its recorded ruleIds, which the relaxed -> high -> relaxed and
+# high -> medium byte-identity tests above are the proof of.
+#   * MCP tool-name denies -- MCP rules have no argument form at all (a parenthesised
+#     mcp__ rule is skipped on load), so a tool-name deny is the only expressible gate.
+#   * The self-protection Edit denies, High only, because below High the kit defers to a
+#     user customizing their own installation.
+# Every Bash rule stays identical at every tier, and that is what this test pins: a Bash
+# deny is the one that most plausibly reaches user or managed scope by hand-copying,
+# where no descent can lift it.
 echo "[never-allowed set]"
 DENY_DRIFT="$(python3 -c "
 import json
@@ -313,13 +480,46 @@ base = None
 drift = []
 for t in '$TIERS'.split():
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
-    bash_only = sorted(r for r in deny if not r.startswith('mcp__'))
+    bash_only = sorted(r for r in deny if r.startswith('Bash('))
     if base is None:
         base = bash_only
     elif bash_only != base:
         drift.append(t)
 print(';'.join(drift) or 'none')" 2>/dev/null)"
-assert_eq "none" "$DENY_DRIFT" "every non-MCP permissions.deny entry is identical across all four tiers"
+assert_eq "none" "$DENY_DRIFT" "every Bash permissions.deny entry is identical across all four tiers"
+
+# And the tier-varying remainder is exactly the two sanctioned groups -- nothing else may
+# start varying here without this test being updated on purpose.
+VARY_KIND="$(python3 -c "
+import json
+sets = {}
+for t in '$TIERS'.split():
+    deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
+    sets[t] = set(deny)
+union, common = set(), None
+for s in sets.values():
+    union |= s
+    common = s if common is None else (common & s)
+varying = union - common
+bad = sorted(r for r in varying if not (r.startswith('mcp__') or r.startswith('Edit(')))
+print(' '.join(bad) or 'none')" 2>/dev/null)"
+assert_eq "none" "$VARY_KIND" \
+  "only MCP tool-name denies and self-protection Edit denies vary by tier"
+
+# The unconditional group, by exact rule, at every tier. Each is here because it is not
+# "customizing your installation": a nested `claude -p --dangerously-skip-permissions`
+# re-rolls the whole policy in a child process; managed settings belong to an
+# administrator; .safe-ai-skill/** is a third-party security tool's policy; and the
+# hooks are the scripts that enforce the gates rather than config that declares them.
+for t in $TIERS; do
+  MISSING="$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+want = ['Bash(claude *)', 'Bash(claude)', 'Edit(//**/managed-settings.json)',
+        'Edit(/.safe-ai-skill/**)', 'Edit(/.claude/hooks/**)', 'Edit(~/.claude/hooks/**)']
+print(' '.join(r for r in want if r not in deny) or 'none')" 2>/dev/null)"
+  assert_eq "none" "$MISSING" "$t carries the whole unconditional group (Off included)"
+done
 
 MCP_BY_TIER="$(python3 -c "
 import json
@@ -328,8 +528,44 @@ for t in '$TIERS'.split():
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
     out.append('%s=%d' % (t, len([r for r in deny if r.startswith('mcp__')])))
 print(' '.join(out))" 2>/dev/null)"
-assert_eq "off=0 relaxed=0 medium=5 high=5" "$MCP_BY_TIER" \
+assert_eq "off=0 relaxed=0 medium=5 high=6" "$MCP_BY_TIER" \
   "only medium and high deny MCP tools by name (off and relaxed rely on the hooks)"
+
+# ── which MCP executor each tier refuses ────────────────────────────────────
+# context-mode ships on by default, so both gated tiers have to speak for a user who
+# never chose it. Cloudflare is opt-in behind a user-scoped API token, so attaching it is
+# itself a decision: Medium respects that, High does not, because "no arbitrary executor
+# is reachable" is High's whole proposition. This is the only place the two gated tiers'
+# deny sets differ, which is why it is asserted by exact tool name rather than by count.
+echo "[mcp executors by tier]"
+# mcp_denied <tier> <tool> -> yes|no
+mcp_denied() {
+  python3 -c "
+import json, sys
+deny = (json.load(open(sys.argv[1])).get('permissions') or {}).get('deny') or []
+print('yes' if sys.argv[2] in deny else 'no')" "$WORK/gen.$1.json" "$2" 2>/dev/null
+}
+for t in off relaxed; do
+  assert_eq "no" "$(mcp_denied "$t" mcp__context-mode__ctx_execute)" \
+    "$t leaves context-mode's ctx_execute callable (the hooks gate it)"
+  assert_eq "no" "$(mcp_denied "$t" mcp__cloudflare__execute)" \
+    "$t leaves cloudflare's execute callable (the hooks gate it)"
+done
+assert_eq "yes" "$(mcp_denied medium mcp__context-mode__ctx_execute)" \
+  "medium denies context-mode's ctx_execute (a default-on executor)"
+assert_eq "no" "$(mcp_denied medium mcp__cloudflare__execute)" \
+  "medium leaves cloudflare's execute callable (opt-in, so attaching it is the user's choice)"
+for tool in mcp__context-mode__ctx_execute mcp__cloudflare__execute; do
+  assert_eq "yes" "$(mcp_denied high "$tool")" "high denies $tool"
+done
+# cloudflare/mcp has exactly three tools and only `execute` mutates. Documentation
+# lookup is the main reason to attach the server, so the two read-only tools must keep
+# working at every tier — a server-wide mcp__cloudflare__* deny would be the easy bug.
+for t in $TIERS; do
+  for tool in mcp__cloudflare__docs mcp__cloudflare__search; do
+    assert_eq "no" "$(mcp_denied "$t" "$tool")" "$t keeps cloudflare's read-only $tool callable"
+  done
+done
 
 # A parenthesised mcp__ rule is SKIPPED when Claude Code loads a settings file, so an
 # argument filter would read as policy and be none. No tier may emit one, in any list.
@@ -363,10 +599,14 @@ for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(
   fi
 done
 # Self-protection uses Edit(...), not Read(...): a Read deny also blocks Edit and Write
-# but leaves NotebookEdit open, and would stop the kit reading its own config.
+# but leaves NotebookEdit open, and would stop the kit reading its own config. Checked
+# against High, the only tier that carries the self-protection group at all.
+DENY_HIGH="$(python3 -c "
+import json
+print('\n'.join((json.load(open('$WORK/gen.high.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
 TOTAL=$((TOTAL + 1))
-if printf '%s\n' "$DENY_LIVE" | grep -qF 'Edit(/.claude/security.json)' \
-   && ! printf '%s\n' "$DENY_LIVE" | grep -qF 'Read(/.claude/security.json)'; then
+if printf '%s\n' "$DENY_HIGH" | grep -qF 'Edit(/.claude/security.json)' \
+   && ! printf '%s\n' "$DENY_HIGH" | grep -qF 'Read(/.claude/security.json)'; then
   echo "  PASS: the kit's own config is self-protected with Edit(...), not Read(...)"
   PASS=$((PASS + 1))
 else

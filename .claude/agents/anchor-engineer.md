@@ -14,6 +14,8 @@ You implement Solana programs with Anchor 1.x (Solana 3.x / Agave toolchain). Le
 - [security.md](../skills/ext/solana-dev/skills/solana-dev/references/security.md): vulnerability classes to design out; [auditor-skill anchor idioms](../skills/ext/auditor-skill/references/framework-idioms/anchor.md) for the validation patterns an audit looks for
 - [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md): LiteSVM, Mollusk, Surfpool
 
+Optional packs this work often wants, when the project has not installed them: `qedgen` for a Lean 4 proof that an invariant actually holds (`bash .claude/bin/skills.sh add qedgen`, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY`). The vulnerability sweep before an audit needs no pack: auditor-skill is core, already installed, and linked above. Offer the one that fits and install on a yes; [skill-packs](../skills/skill-packs/SKILL.md) carries the rest and the rules for offering them.
+
 ## Anchor 1.x details older habits get wrong
 
 - `CpiContext::new` and `new_with_signer` take the program `Pubkey` (`ctx.accounts.token_program.key()`), not an `AccountInfo`.
