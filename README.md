@@ -25,6 +25,7 @@ A complete `.claude/` configuration that turns Claude into a Solana building par
 - **4 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev), library docs (Context7) and context optimization (context-mode), plus opt-in browser automation (Playwright) and local-validator / mainnet-fork control (Surfpool)
 - **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands, egress and `context-mode`'s code executor — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
+- **Four standard plugins**, two commands at the end of the install: [memsearch](#persistent-memory-memsearch) for memory that outlives a session, and [`rust-analyzer-lsp`, `typescript-lsp`, `csharp-lsp`](#code-intelligence-language-server-plugins) so the agent reads your code through a compiler
 - **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — three installed by default, the rest on demand ([skill-packs.md](docs/skill-packs.md))
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
@@ -64,6 +65,18 @@ When the installer finishes, start Claude Code in the project:
 claude
 ```
 
+Two things finish the install from inside Claude Code, and both are part of a standard setup rather than extras: **[memsearch](#persistent-memory-memsearch)**, so the project's decisions survive the end of a session, and **[the language server plugins](#code-intelligence-language-server-plugins)**, so the agent reads your code through a compiler instead of grep.
+
+```text
+/plugin marketplace add zilliztech/memsearch
+/plugin install memsearch
+/plugin install rust-analyzer-lsp@claude-plugins-official
+/plugin install typescript-lsp@claude-plugins-official
+/plugin install csharp-lsp@claude-plugins-official
+```
+
+Then `/setup-mcp` for the Helius API key. Everything past that point is genuinely optional: the [opt-in MCP servers](docs/configuration.md#optional-mcp-servers) and the [optional plugins](docs/configuration.md#optional-plugins).
+
 ### Other ways to install
 
 Codex, opencode and anything else that reads `AGENTS.md` and `.agents/skills/` instead of Claude Code's files:
@@ -88,7 +101,7 @@ To keep your project clean, the installer adds `.claude/`, `CLAUDE.md`, `.mcp.js
 
 Want the config tracked in git (team setup, reproducible config)? Run `/commit-claude-config` — it un-ignores those files and commits them (or edit `.gitignore` by hand). If your project already commits `.claude/` or its own `.gitmodules`, the new ignore lines are a no-op — git keeps tracking files it already tracks.
 
-### MCP setup (optional)
+### MCP setup
 
 After installation, configure the MCP servers from inside Claude Code in your project:
 
@@ -96,11 +109,11 @@ After installation, configure the MCP servers from inside Claude Code in your pr
 /setup-mcp
 ```
 
-This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers). Anthropic's marketplace has plugins worth adding too, and some that collide with the firewall: [which ones, and what each costs per session](docs/configuration.md#claude-code-plugins-worth-installing).
+This guides you through the Helius API key and offers the [optional MCP servers](docs/configuration.md#optional-mcp-servers) — including the ones that sign transactions or reach a production database, with what each exposes before you attach it. Beyond the standard plugins above, Anthropic's marketplace has more worth adding and some that collide with the firewall: [which ones, and what each costs per session](docs/configuration.md#optional-plugins).
 
 ### Persistent memory: memsearch
 
-Of everything optional here, this is the one that changes how the kit feels day to day. A Solana project accumulates context that is expensive to rediscover: which program ID is live on which cluster, the account layout you settled on and the reason you rejected the other one, the approach that failed, the protocol quirk that cost you an afternoon. Without persistent memory every session starts cold — the agent re-derives it, re-asks you, or quietly re-makes a decision you already threw out.
+Of everything in the standard install, this is the one that changes how the kit feels day to day. A Solana project accumulates context that is expensive to rediscover: which program ID is live on which cluster, the account layout you settled on and the reason you rejected the other one, the approach that failed, the protocol quirk that cost you an afternoon. Without persistent memory every session starts cold — the agent re-derives it, re-asks you, or quietly re-makes a decision you already threw out.
 
 [memsearch](docs/configuration.md#persistent-memory-memsearch) gives it semantic recall over markdown you own, so the store can grow without the always-on context budget growing with it. That is the opposite trade from putting more in `CLAUDE.md`, which every session and every subagent pays for whether it is relevant or not. Markdown stays the source of truth, so your memory stays diffable, reviewable and portable.
 
@@ -112,6 +125,20 @@ Nothing leaves your machine: a local Milvus Lite store and an ONNX `bge-m3` embe
 ```
 
 It is a plugin, not an MCP server. `memsearch-mcp` was never published to npm, so an `.mcp.json` entry for it silently never starts — `/doctor` flags that entry if an older install still carries one, and `/update` removes it.
+
+### Code intelligence: language server plugins
+
+The other half of the standard install. Without a language server the agent navigates your code by reading files and matching text; with one it asks the compiler — go-to-definition, find-all-references, the real type of a value, the diagnostics your editor shows. On a Solana project that is three servers for three languages: Rust for the programs, TypeScript for the client and frontend, C# for the Unity/PSG1 track.
+
+```text
+/plugin install rust-analyzer-lsp@claude-plugins-official
+/plugin install typescript-lsp@claude-plugins-official
+/plugin install csharp-lsp@claude-plugins-official
+```
+
+**Install the language server itself first** — `rustup component add rust-analyzer`, `npm i -g typescript typescript-language-server`, and a C# server such as `csharp-ls` — and Claude Code then offers the matching plugin once the binary is on your `PATH`. Install only the ones whose language you write.
+
+These are the cheapest additions in the kit: no hook, nothing registered in the session listing, so the standing context cost is about zero and an idle one is free. Skip a language and you simply skip its plugin.
 
 ### Security firewall: safe-ai-skill
 
@@ -155,7 +182,7 @@ Which gate stops what, how a tier is generated, and — at length — **what the
 | [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 32 commands, agent teams |
 | [skill-packs.md](docs/skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry |
 | [other-agents.md](docs/other-agents.md) | Codex, Grok Build, Cursor, Gemini CLI, opencode: what each one actually enforces |
-| [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, the Claude Code plugins worth installing and what each costs per session, and the settings the kit leaves to you |
+| [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, the standard plugins and the optional ones with what each costs per session, and the settings the kit leaves to you |
 | [plugin.md](docs/plugin.md) | The plugin route and why it is not recommended |
 | [design.md](docs/design.md) | Why the always-on context is small, and the 2026 stack |
 | [repo-structure.md](docs/repo-structure.md) | Repository layout, DX scripts, the GitHub Action, branch and review workflow |
