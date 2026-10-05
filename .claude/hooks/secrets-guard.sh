@@ -264,6 +264,41 @@ END {
         print "DENY gcloud auth " p2 " prints a live credential"; exit }
       if (c0 == "aws" && p1 == "configure" && p2 == "get") { print "DENY aws configure get reads stored credentials"; exit }
 
+      # solana-keygen new|recover with a force flag and NO outfile destroys the default
+      # wallet keypair, ~/.config/solana/id.json.  That path is in the vault regex, but
+      # it never appears in the command text, so the argument scan below cannot see it:
+      # the target is implied by the ABSENCE of -o.  The explicit spelling
+      # (`solana-keygen new --force -o ~/.config/solana/id.json`) has always been blocked
+      # by that scan, and two spellings of one act must not get different answers.
+      #
+      # Why a hook and not a rule: a glob cannot express "and no -o".  A deny on
+      # `solana-keygen new *--force*` would also stop
+      # `solana-keygen new --force -o target/deploy/x-keypair.json`, which is how a
+      # program keypair gets regenerated — ordinary work at every tier.
+      #
+      # Why a deny and not an ask: without a force flag solana-keygen refuses to
+      # overwrite an existing outfile by itself, so the flag is only ever needed when a
+      # wallet is already there.  On a machine (or a fresh CI container) with no wallet
+      # yet, dropping the flag runs the identical command — which is what the message
+      # says, so there is nothing for a prompt to add.
+      if (c0 == "solana-keygen" && (p1 == "new" || p1 == "recover")) {
+        kgf = 0; kgo = 0
+        for (i = CWI + 2; i <= n; i++) {
+          a = T[i]
+          if (a == "") continue
+          # --no-outfile writes nothing at all, so there is no target to protect.
+          if (a ~ /^--no-outfile/) { kgo = 1; continue }
+          if (a == "-o" || a ~ /^--outfile/ || a ~ /^-o./ || a ~ /^-[A-Za-z]*o$/) { kgo = 1; continue }
+          if (a == "--force" || a ~ /^--force=/) { kgf = 1; continue }
+          # Clustered short flags (-sf, -fs).  Long options are excluded first, so
+          # --no-bip39-passphrase and friends cannot reach this test.
+          if (a !~ /^--/ && a ~ /^-[A-Za-z]*f/) { kgf = 1; continue }
+        }
+        if (kgf && !kgo) {
+          print "WIPE solana-keygen " p1 " --force"; exit
+        }
+      }
+
       pat = is_pattern_tool(c0); skipfirst = pat; interp = is_interp(c0)
       if (pat) for (i = CWI + 1; i <= n; i++) {
         f = T[i]; sub(/=.*$/, "", f)
@@ -304,6 +339,11 @@ END {
 ' 2>/dev/null) || exit 0
 
 case $VERDICT in
+  WIPE*)
+    # Destroying key material, not reading it, so the "use solana address instead"
+    # trailer would be nonsense here. The route around is the flag, not the command.
+    kit_deny "${VERDICT#WIPE } overwrites the default wallet keypair at ~/.config/solana/id.json, and a Solana keypair cannot be recovered without its seed phrase. Drop --force to keep the existing wallet (solana-keygen refuses to overwrite one without it, so the command works unchanged where no wallet exists yet), or pass -o <path> to write somewhere else. If the user really means to replace their default wallet, they run it themselves."
+    ;;
   DENY*)
     kit_deny "${VERDICT#DENY } — reading private keys, wallet vaults or credentials is not allowed. Use \`solana address\` for the pubkey; ask the user to run anything that needs the secret."
     ;;
