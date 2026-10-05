@@ -637,6 +637,25 @@
       "tags": ["legal", "compliance", "securities", "aml", "kyc", "privacy", "tax", "mica"]
     },
     {
+      "id": "gsap-skills",
+      "name": "GSAP Skills",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "frontend-design",
+      "path": ".claude/skills/ext/gsap-skills",
+      "commit": "aed9cfd3277740755f6bfc1155c7aa645403b760",
+      "description": "GreenSock's own pack for GSAP, in eight skills: the core tween and property API, timelines and sequencing, ScrollTrigger, the plugin set, the React integration (useGSAP), framework wiring for Vue and Nuxt, the utility methods, and a performance lane. The animation craft layer for a dApp's landing page or marketing site — solana-new carries page-load references and the kit has no other GSAP coverage.",
+      "triggers": ["GSAP", "ScrollTrigger", "timeline animation", "scroll-driven animation", "useGSAP", "landing page motion"],
+      "source": "https://github.com/greensock/gsap-skills",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add gsap-skills", "env": [] },
+      "license": "MIT",
+      "maintainer": "greensock",
+      "signal": { "stars": 15939, "last_commit": "2026-04-21", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Scanned at aed9cfd (2026-04-21): 264 KB, eight skill folders, and clean on every checklist item — zero executables, no .mcp.json, no hooks.json, no .claude/settings.json, no eval, atob, new Function or createRequire, no child_process, no bidi or invisible Unicode, no lines over 500 characters, and no environment variable or credential read anywhere. Verbatim MIT at the repo root. Three package.json files exist, all under examples/; examples/nuxt declares postinstall: nuxt prepare, which runs only if someone runs npm install inside that example directory, and no kit installer does. Its one caveat is the reason it is pinned as a submodule rather than fetched folder-by-folder: it ships two symlinks at its root, CLAUDE.md -> AGENTS.md and GEMINI.md -> AGENTS.md, and both resolve to the real AGENTS.md beside them. That is the shape ext/vercel has shipped since it was pinned, and the same end state helius, qedgen, solana-game, solana-new and mongodb already produce with plain files, so it is a pre-existing condition of the catalogue rather than something this pack introduces — see the copy-mechanics table in docs/skill-packs.md and do not re-litigate it per pack. An ext/ submodule also costs nothing in standing context, where fetching its eight folders top-level would have added about 674 tokens to every session and every subagent. Last moved 2026-04-21, around five months before this pin, so check its API against the current GSAP release.",
+      "tags": ["gsap", "animation", "scrolltrigger", "motion", "frontend", "official"]
+    },
+    {
       "id": "dune",
       "name": "Dune Analytics Skill",
       "type": "skill",

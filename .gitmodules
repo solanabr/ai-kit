@@ -130,3 +130,6 @@
 [submodule ".claude/skills/ext/huggingface-skills"]
 	path = .claude/skills/ext/huggingface-skills
 	url = https://github.com/huggingface/skills
+[submodule ".claude/skills/ext/gsap-skills"]
+	path = .claude/skills/ext/gsap-skills
+	url = https://github.com/greensock/gsap-skills
