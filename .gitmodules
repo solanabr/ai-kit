@@ -118,9 +118,15 @@
 [submodule ".claude/skills/ext/knowledge-work"]
 	path = .claude/skills/ext/knowledge-work
 	url = https://github.com/anthropics/knowledge-work-plugins
-[submodule ".claude/skills/ext/playwright"]
+[submodule ".claude/skills/ext/playwright-skill"]
 	path = .claude/skills/ext/playwright-skill
 	url = https://github.com/lackeyjb/playwright-skill
 [submodule ".claude/skills/ext/meteora-invent"]
 	path = .claude/skills/ext/meteora-invent
 	url = https://github.com/MeteoraAg/meteora-invent
+[submodule ".claude/skills/ext/obsidian-skills"]
+	path = .claude/skills/ext/obsidian-skills
+	url = https://github.com/kepano/obsidian-skills
+[submodule ".claude/skills/ext/huggingface-skills"]
+	path = .claude/skills/ext/huggingface-skills
+	url = https://github.com/huggingface/skills

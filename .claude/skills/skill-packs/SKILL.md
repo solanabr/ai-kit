@@ -53,6 +53,8 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 | Email a dApp has to send: alerts, receipts, a waitlist | `resend` (React Email, deliverability, an agent inbox; needs RESEND_API_KEY and sends as your domain, so a mistake reaches real inboxes) | — |
 | Narration, dubbing, sound or music for a demo or trailer | `elevenlabs` (TTS, dubbing, sound effects, music, transcripts — every call is billed to the user's ELEVENLABS_API_KEY) | — |
 | The business around the project rather than the chain: sales, finance, support, HR, enterprise search | `knowledge-work` (252 skills across 18 role plugins; its 186 catalogued MCP connectors stay inert until the user adds one). For statutory questions use `crypto-legal` instead | — |
+| Research notes, a knowledge base, an Obsidian vault | `obsidian-skills` (Obsidian Markdown, Bases query views, JSON Canvas, the Obsidian CLI, Defuddle web-to-Markdown — offer it for a vault the user already keeps, not as a place to put project docs; vault-write and local-exec, see its registry safety field) | — |
+| An AI or LLM feature: a model, inference endpoint, fine-tune or Gradio demo | `huggingface-skills` (the hf CLI and Hub, Gradio and Spaces, ZeroGPU, fine-tuning, evals, transformers.js, SageMaker — the one machinery pack, so name its registry safety field when offering it) | — |
 
 Some work needs no offer at all, because the pack for it already ships. A security audit, a dependency or secret scan, a threat model has no row above: read the core auditor-skill pack, which superseded the trailofbits, ghostsecurity, defending-code and safe-solana-builder packs the kit used to pin. General program, client and test work rests on core solana-dev — the program row above adds only the specialists on top of it. A visual direction for a UI, and Playwright QA of a running app, are core anthropic-skills: its `frontend-design` and `webapp-testing` install top-level and are listed every session, so they are already in front of you. Its third skill, `mcp-builder`, is not in the pack any more — Anthropic ships it per-user from its own marketplace. Colosseum archives, idea validation and competitive research are core colosseum, which signs in through its own helper rather than an API key, so the key section below does not list it ([the hub](../SKILL.md) has the sign-in). Offering any of these is a wasted question.
 
@@ -63,7 +65,11 @@ The registry holds more entries than this table: watchlist items, archived repos
 Name the key when offering the pack, and check whether it is set with `bash .claude/bin/env-keys.sh`, which prints one `KEY set|empty` line and never a value. Reading `.env` is denied at the Medium and High firewall tiers, and a value read into the transcript has already left the machine.
 
 - `qedgen` — `MISTRAL_API_KEY` for fill-sorry and generate, `ARISTOTLE_API_KEY` for the aristotle commands. Without either, its Lean references still read but nothing generates, so the pack is worth installing only alongside a key.
-- `alchemy` — `ALCHEMY_API_KEY` for the alchemy-api skill; its agentic-gateway skill is keyless (x402), so the pack still earns its place without a key.
+- `alchemy` — `ALCHEMY_API_KEY` for the alchemy-api skill; its agentic-gateway skill is keyless (x402), so the pack still earns its place without a key
+- `circle` — `CIRCLE_API_KEY` and `CIRCLE_ENTITY_SECRET`. Several of its skills also read `*_PRIVATE_KEY` variables, and with those set it moves real money: name that, and point it at a testnet before anything else
+- `gmgn` — `GMGN_API_KEY` for every call, plus `GMGN_PRIVATE_KEY` (a PEM request-signing key for GMGN's API, not a chain wallet key) before its two order-submitting skills work. The research skills are useful with the first key alone, which is the safer thing to offer
+- `elevenlabs` — `ELEVENLABS_API_KEY`. Every generation call is billed to it, so a long dubbing or music job costs real money; say so rather than starting one
+- `resend` — `RESEND_API_KEY`. It sends as your own domain, so a mistake lands in real inboxes under your sending reputation.
 
 A pack that is inert without a key the user has not set is a question, not an install: say which key it needs and what it would do once set.
 
