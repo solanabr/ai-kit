@@ -237,11 +237,21 @@ assert_cmd_fails "bash \"$SKILLS_SH\" select \"$P6/kit\" \"$P6/project/.claude\"
 # the same message. The region's own control flow then emits exactly one skip per check
 # it would have run — loop iterations included — so an uninitialised tree reports the
 # same total as a checked-out one, and there is no count to keep in step by hand.
+#
+# A pack_check call's arguments are expanded before pack_check runs, so every command
+# substitution in one executes even on the skipped path. Today's all tolerate the fixture
+# paths being absent (ext_dirs and the greps redirect stderr or end in `|| true`); one that
+# does not would run real commands against missing paths and fold their noise into the
+# check. It would not abort the suite — a failing substitution in an argument position is
+# not a `set -e` failure — but a bare assignment is, which is why the outputs captured
+# below are pre-set to "" and filled only inside `if packs_ready`.
 if ext_packs_uninitialized; then PACKS_READY=0; else PACKS_READY=1; fi
 packs_ready() { [ "$PACKS_READY" = 1 ]; }
 
 # pack_check <assert_*> <args...> — run one check of the region, or record it as skipped.
-# Every assert_* helper takes its message last, which is what the skip reports.
+# The skip text is the last argument, which is the message every assert_* helper takes
+# last. A helper called without its optional message would report its last argument
+# instead — still one skip, but the text would be a path rather than a sentence.
 pack_check() {
   if packs_ready; then
     "$@"
