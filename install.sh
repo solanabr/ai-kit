@@ -75,7 +75,7 @@ case "$JOBS" in ''|*[!0-9]*) JOBS=8 ;; esac
 [ "$JOBS" -ge 8 ] || JOBS=8
 
 print_banner() {
-  printf '%s%s%s\n' "$C1" '' '   _____ ____  __    ___    _   _____' "$CRST"
+  printf '%s%s%s\n' "$C1" '   _____ ____  __    ___    _   _____' "$CRST"
   printf '%s%s%s\n' "$C2" '  / ___// __ \/ /   /   |  / | / /   |' "$CRST"
   printf '%s%s%s\n' "$C3" '  \__ \/ / / / /   / /| | /  |/ / /| |' "$CRST"
   printf '%s%s%s\n' "$C4" ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' "$CRST"
