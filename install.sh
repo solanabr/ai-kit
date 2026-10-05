@@ -556,7 +556,13 @@ if [ "$AGENTS_ONLY" = true ]; then
 else
   BOX_LINES+=(
     "  3. Run 'claude' to start Claude Code with Solana config"
-    "  4. Try /build-program or /audit-solana commands"
+    "  4. Add the standard plugins: memory and code intelligence"
+    "       /plugin marketplace add zilliztech/memsearch"
+    "       /plugin install memsearch"
+    "       /plugin install rust-analyzer-lsp@claude-plugins-official"
+    "     Also typescript-lsp and csharp-lsp for those languages."
+    "     Install the language server first; memsearch needs a restart."
+    "  5. Try /build-program or /audit-solana commands"
     ""
     "This is the full install. If you also enable the solana-ai-kit"
     "plugin, prefer one path — both double-load commands/hooks/MCP"
