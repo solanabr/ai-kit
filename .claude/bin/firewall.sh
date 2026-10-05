@@ -658,14 +658,30 @@ DENY_WRAPPERS = [
 # instruction depends on that deny: it is what forces authorship through the explicit
 # `git -c user.name=...` form the maintainer reviews rather than a silent default.)
 #
-# `-C` only changes directory first. It evades nothing a rule inspects, because every
-# `git <subcommand>` rule still matches the subcommand that follows it; what it escapes
-# is PATH scoping, by operating on a repository other than this one. That is a real but
-# much narrower concern, and the price was wrong: `git -C .claude/skills/ext/<pack>
-# log` is how submodule inspection is spelled, so the deny blocked ordinary work at
-# every tier to close a gap only High claims to care about. High keeps it, because
-# "reads are fenced to the working directory" is High's proposition and a sibling
-# repository is outside it.
+# `-C` only changes directory first, so what it escapes is PATH scoping: it operates on
+# a repository other than this one, which is why High keeps it ("reads are fenced to the
+# working directory" is High's proposition, and a sibling repository is outside it).
+# The deny was lowered because the price was wrong at the other three tiers:
+# `git -C .claude/skills/ext/<pack> log` is how submodule inspection is spelled, and the
+# blanket rule blocked that ordinary work everywhere.
+#
+# MEASURED COST OF LOWERING IT, and it is not small: a `git -C <dir>` prefix also hides
+# the SUBCOMMAND from every `git <subcommand>` glob, because those globs anchor on the
+# literal `git clean`, `git reset`, `git push` and so on. So `git -C . clean -xdf`,
+# `git -C . reflog expire --expire=now --all`, `git -C . gc --prune=all`,
+# `git -C . reset --hard HEAD~5`, `git -C . restore .`, `git -C . push --mirror` and
+# `git -C . fetch --upload-pack=/tmp/x.sh .` are all reachable at Off, Relaxed and
+# Medium as of rule set 5 -- including `reflog expire`, which FIREWALL-SPEC.md section
+# 3.4 says is deny-at-every-tier, and the transport override added in this same bump.
+# Verified by matching each form against the generated deny set, not reasoned about.
+#
+# NOT closed here, deliberately. Closing it means a `git -C`-prefixed twin of every
+# destructive git rule, and the flag-scoped ones (`reset *--ha*`, `branch *-D*`,
+# `push *--mirror*`) need three wildcards plus their zero-gap collapses, so it is a
+# ~30-rule surface with its own false-positive risk rather than a one-line fix. That is
+# a policy call for the maintainer, and it is recorded in docs/firewall.md's residuals
+# table rather than decided here. The honest summary: below High, `git -C` is a general
+# bypass for the destructive-git deny set.
 DENY_WRAPPERS_HIGH = [
     "Bash(git -C *)",
 ]
