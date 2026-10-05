@@ -10,8 +10,9 @@ echo "[test_local_skills] Kit-owned skills (.claude/skills/<name>/SKILL.md): fro
 
 # Claude Code, Codex and opencode list every <name>/SKILL.md by its frontmatter, so the
 # name must match the directory and the description must exist (Agent Skills caps it
-# at 1024 chars). Relative links in the skill's files must resolve; ../ext/ targets need
-# the submodules (CI checks them out). The hub must route to each skill.
+# at 1024 chars). Relative links in the skill's files must resolve; a ../ext/ target in a
+# pack that is not checked out is skipped and counted, not called broken. The hub must
+# route to each skill.
 while IFS=$'\t' read -r status message; do
   if [ "$status" = "PASS" ]; then
     TOTAL=$((TOTAL + 1))
@@ -42,11 +43,8 @@ def not_checked_out(resolved):
     """resolved points into a .../skills/ext/<pack>/ that exists but is empty, i.e. the
     submodule was never checked out. A pack that IS checked out with the file missing is
     not this case and stays a failure."""
-    m = re.match(r"(.*[/\\]skills[/\\]ext[/\\][^/\\]+)(?:[/\\]|$)", resolved)
-    if not m:
-        return False
-    pack = m.group(1)
-    return os.path.isdir(pack) and not os.listdir(pack)
+    m = re.match(r"(.*/skills/ext/[^/]+)(?:/|$)", resolved)
+    return bool(m) and os.path.isdir(m.group(1)) and not os.listdir(m.group(1))
 
 for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
     skill_dir = os.path.dirname(skill_md)
