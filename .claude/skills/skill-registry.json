@@ -1181,6 +1181,51 @@
       "default_installed": false,
       "safety": "clean — community index, not first-party-vetted; verify each entry before installing",
       "tags": ["aggregator", "scout", "plugins", "community", "discovery"]
+    },
+    {
+      "id": "coderabbit",
+      "name": "CodeRabbit Skills",
+      "type": "skill",
+      "domain": "dev-workflow",
+      "description": "CodeRabbit's own skills for driving its AI code review: configuring review scope and path filters, reading and acting on review comments, and the CLI. Catalogued rather than pinned because the kit's review lane is already covered end to end by /diff-review, /audit-solana and auditor-skill, and this one only earns its keep on a repo that has CodeRabbit installed on its pull requests.",
+      "source": "https://github.com/coderabbitai/skills",
+      "install": { "method": "submodule", "command": "git submodule add https://github.com/coderabbitai/skills .claude/skills/ext/coderabbit", "env": [] },
+      "license": "MIT",
+      "maintainer": "coderabbitai",
+      "signal": { "stars": 187, "last_commit": "2026-10-01", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Not pinned and not scanned at a commit, so read it before installing. It is the vendor's own pack for a service that reads your repository and posts on your pull requests; what it can see is whatever you have already granted the CodeRabbit app.",
+      "tags": ["code-review", "ci", "pull-request", "dev-workflow"]
+    },
+    {
+      "id": "dagster",
+      "name": "Dagster Skills",
+      "type": "skill",
+      "domain": "data-analytics",
+      "description": "Dagster's own skills for building and operating asset-based data pipelines: asset and job definitions, partitions and backfills, schedules and sensors, and debugging a failed run. Catalogued rather than pinned because an orchestrator is a heavier commitment than most Solana indexers need — a webhook consumer plus a scheduled job usually is the pipeline. Reach for it when the pipeline has grown real dependency graphs and backfills.",
+      "source": "https://github.com/dagster-io/skills",
+      "install": { "method": "submodule", "command": "git submodule add https://github.com/dagster-io/skills .claude/skills/ext/dagster", "env": [] },
+      "license": "Apache-2.0",
+      "maintainer": "dagster-io",
+      "signal": { "stars": 210, "last_commit": "2026-10-02", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Not pinned and not scanned at a commit, so read it before installing. Its default branch is master rather than main, which matters if you pin it later.",
+      "tags": ["dagster", "orchestration", "pipeline", "data", "etl"]
+    },
+    {
+      "id": "motherduck",
+      "name": "MotherDuck Agent Skills",
+      "type": "skill",
+      "domain": "data-analytics",
+      "description": "MotherDuck's own skills for its hosted DuckDB: connecting, moving a local DuckDB database into the cloud, shared databases and query patterns. Catalogued rather than pinned because the pinned duckdb extension already covers the engine and local files, and this adds only the hosted service on top — useful once an indexer's exports outgrow one machine.",
+      "source": "https://github.com/motherduckdb/agent-skills",
+      "install": { "method": "submodule", "command": "git submodule add https://github.com/motherduckdb/agent-skills .claude/skills/ext/motherduck", "env": ["motherduck_token"] },
+      "license": "none",
+      "maintainer": "motherduckdb",
+      "signal": { "stars": 62, "last_commit": "2026-09-06", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Not pinned and not scanned at a commit, so read it before installing. The repository carries no licence file. It talks to a hosted service authenticated by a `motherduck_token`, so the data you query leaves your machine; the pinned `duckdb` extension stays entirely local.",
+      "tags": ["motherduck", "duckdb", "hosted", "sql", "data"]
     }
   ]
 }

@@ -112,7 +112,8 @@ Featured add-ons by domain:
 - **Frontend/Design:** [uxKero/anydesign](https://github.com/uxKero/anydesign) · [dylantarre/animation-principles](https://github.com/dylantarre/animation-principles)
 - **UX/Writing:** [content-designer/ux-writing-skill](https://github.com/content-designer/ux-writing-skill) · [cuellarfr/design-skills](https://github.com/cuellarfr/design-skills)
 - **Testing:** [SawyerHood/dev-browser](https://github.com/SawyerHood/dev-browser) · [conorluddy/ios-simulator-skill](https://github.com/conorluddy/ios-simulator-skill)
-- **Data:** [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills)
+- **Data:** [K-Dense-AI/scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills) · [dagster-io/skills](https://github.com/dagster-io/skills) (asset-based pipelines, once a webhook consumer plus a scheduled job stops being enough) · [motherduckdb/agent-skills](https://github.com/motherduckdb/agent-skills) (hosted DuckDB on top of the pinned local `duckdb`; its token sends your queries off the machine)
+- **Code review:** [coderabbitai/skills](https://github.com/coderabbitai/skills) — only earns its keep on a repo that already has CodeRabbit on its pull requests; `/diff-review`, `/audit-solana` and `auditor-skill` cover the lane otherwise
 
 **Where we scout** new tools (aggregators, not installable): [VoltAgent/awesome-agent-skills](https://github.com/VoltAgent/awesome-agent-skills) · [github/awesome-copilot](https://github.com/github/awesome-copilot) · [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) · [davepoon/buildwithclaude](https://github.com/davepoon/buildwithclaude) · [anthropics/claude-plugins-community](https://github.com/anthropics/claude-plugins-community).
 
