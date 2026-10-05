@@ -120,12 +120,12 @@ kit_field_all() {
 
 # kit_mcp_normalize — turn an MCP tool input into a shell-shaped KIT_CMD.
 #
-# Why normalise instead of writing a fourth guard: the three guards are each a
-# pattern corpus (kit_vault_re, kit_secret_re, the on-chain verb regex,
-# egress-guard.awk) applied to one command string.  A dedicated MCP guard would
-# need its own copy of all four, and a copy is a corpus that drifts.  Feeding the
-# MCP payload in as KIT_CMD means one corpus, and every future addition to it
-# covers both surfaces the day it lands.
+# Why normalise instead of writing a dedicated MCP guard: each of the four guards
+# is a pattern corpus (kit_vault_re, kit_secret_re, the on-chain verb regex,
+# egress-guard.awk, fetch-exec-guard.awk) applied to one command string.  An MCP
+# guard would need its own copy of every one, and a copy is a corpus that drifts.
+# Feeding the MCP payload in as KIT_CMD means one corpus, and every future
+# addition to it covers both surfaces the day it lands.
 #
 # The mapping, per the live context-mode schemas:
 #
@@ -198,8 +198,11 @@ $(printf '%s' "$_v" | tr '\042\047\140' '   ')
 
   # Fail closed above a size the hook can analyse inside its budget.
   #
-  # Measured on the shipped corpus: a 75 KB non-shell payload costs ~7.3 s across the
-  # three guards, and each hook is registered with timeout 10.  A hook that times out
+  # Measured on the shipped corpus: a 75 KB non-shell payload cost ~7.3 s across the
+  # guards that existed when this cap was added, and each hook is registered with
+  # timeout 10.  Re-measured at the cap with four guards: a 32 KB non-shell payload
+  # costs at most 0.36 s in any one of them (~1.1 s in total), so the margin held when
+  # the fourth arrived.  A hook that times out
   # does not block the call, so without this cap a payload could be walked past the
   # whole corpus simply by padding it — the cheapest evasion there is, and the one with
   # no sandbox behind it to catch the miss.  Truncating instead would be worse: it
