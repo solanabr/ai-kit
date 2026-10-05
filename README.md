@@ -75,6 +75,8 @@ Two things finish the install from inside Claude Code, and both are part of a st
 /plugin install csharp-lsp@claude-plugins-official
 ```
 
+Take the LSP lines for the languages you actually write — Rust for programs, TypeScript for the client, C# for the Unity/PSG1 track — and install each language server first, since Claude Code offers the plugin once the binary is on your `PATH`. memsearch needs a restart.
+
 Then `/setup-mcp` for the Helius API key. Everything past that point is genuinely optional: the [opt-in MCP servers](docs/configuration.md#optional-mcp-servers) and the [optional plugins](docs/configuration.md#optional-plugins).
 
 ### Other ways to install
