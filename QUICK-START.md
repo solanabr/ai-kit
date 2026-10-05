@@ -225,7 +225,10 @@ your-project/
 │   │   │   │                      # solana-new, sign-safe, counterparty-gate, get-shit-pretty,
 │   │   │   │                      # community-moderation, position-manager-skill,
 │   │   │   │                      # content-gen-skill, writer-style-skill, frontend-slides,
-│   │   │   │                      # superseo, expo, duckdb, crypto-legal
+│   │   │   │                      # superseo, expo, duckdb, crypto-legal, dune, circle,
+│   │   │   │                      # google, knowledge-work, mongodb, elevenlabs,
+│   │   │   │                      # light-protocol, gmgn, redis, resend, pulumi,
+│   │   │   │                      # meteora-invent, playwright
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer
