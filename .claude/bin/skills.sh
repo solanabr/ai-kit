@@ -244,8 +244,18 @@ check_skill() {
 # what it had. Callers test the status, which turns off errexit in here. A fourth
 # argument "force" refetches a pack that looks current.
 ensure_upstream() {
-  local reg="$1" cfg="$2" id="$3" force="${4:-}" lock="$2/skills/$3.lock" commit skills url owned name why tmp paths=()
+  local reg="$1" cfg="$2" id="$3" force="${4:-}" lock="$2/skills/$3.lock" commit skills url owned name why tmp root paths=()
   skills="$(entry_value "$reg" "$id" skills | tr '\n' ' ')"
+  # Where the skill folders live in the upstream tree. Defaults to skills/, which is
+  # the common layout; a pack that nests them deeper (providers/.../plugin/skills)
+  # declares skills_root instead. Only the source side moves — every pack still
+  # installs to <cfg>/skills/<name>/, because that is where the host discovers them.
+  root="$(entry_value "$reg" "$id" skills_root)"
+  root="${root:-skills}"
+  case "$root" in
+    /*|*..*|*' '*) echo "skills.sh: $id: skills_root must be a relative path with no '..': '$root'" >&2; return 1 ;;
+  esac
+  root="${root%/}"
   owned="$(lock_value "$lock" skill | tr '\n' ' ')"
   # The denylist answers before the lock does: a registry and lock that both list a
   # denied skill would otherwise read as current and keep it.
@@ -279,17 +289,17 @@ ensure_upstream() {
       echo "skills.sh: $id: $(basename "$cfg")/skills/$name exists and was not installed by the kit; move it away, then retry" >&2
       return 1
     fi
-    paths+=("skills/$name")
+    paths+=("$root/$name")
   done
   tmp="$(mktemp -d)" || return 1
-  echo "Fetching $id (${skills% }) from $url at ${commit:0:7}..."
+  echo "Fetching $id (${skills% }) from $url at ${commit:0:7} (${root}/)..."
   if ! fetch_paths "$url" "$commit" "$tmp/src" "${paths[@]}"; then
     rm -rf "$tmp"
     echo "skills.sh: $id: could not fetch its skills from $url at $commit" >&2
     return 1
   fi
   for name in $skills; do
-    if ! why="$(check_skill "$tmp/src/skills/$name" "$name")"; then
+    if ! why="$(check_skill "$tmp/src/$root/$name" "$name")"; then
       rm -rf "$tmp"
       echo "skills.sh: $id: refusing $name at $commit: $why" >&2
       return 1
@@ -304,7 +314,7 @@ ensure_upstream() {
     if valid_name "$name"; then rm -rf "${cfg:?}/skills/${name:?}"; fi
   done
   for name in $skills; do
-    if ! cp -R "$tmp/src/skills/$name" "$cfg/skills/$name"; then
+    if ! cp -R "$tmp/src/$root/$name" "$cfg/skills/$name"; then
       rm -rf "$tmp"
       echo "skills.sh: $id: could not copy $name into $(basename "$cfg")/skills/" >&2
       return 1

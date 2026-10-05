@@ -13,7 +13,7 @@
     {
       "name": "solana-ai-kit",
       "source": "./plugin",
-      "description": "Core Solana dev kit: specialized agents, workflow commands, idea→pitch→hackathon→registry skills, MCP servers, and dev hooks. Installs the safe-ai-skill security firewall as a dependency. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and the ext/ skill packs: core by default, extensions on demand.)",
+      "description": "Core Solana dev kit: specialized agents, workflow commands, skills, MCP servers, and dev hooks. Installs the safe-ai-skill security firewall as a dependency. (Full install via install.sh adds the project CLAUDE.md, the permissions/sandbox policy, and the ext/ skill packs: core by default, extensions on demand.)",
       "category": "Development",
       "homepage": "https://github.com/solanabr/ai-kit",
       "license": "MIT",
