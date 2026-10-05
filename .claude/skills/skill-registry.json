@@ -1283,6 +1283,21 @@
       "default_installed": false,
       "safety": "Not pinned and not scanned at a commit, so read it before installing. The repository carries no licence file. It talks to a hosted service authenticated by a `motherduck_token`, so the data you query leaves your machine; the pinned `duckdb` extension stays entirely local.",
       "tags": ["motherduck", "duckdb", "hosted", "sql", "data"]
+    },
+    {
+      "id": "stripe-ai",
+      "name": "Stripe AI Skills",
+      "type": "skill",
+      "domain": "payments",
+      "description": "Stripe's own pack (providers/agent-plugins/plugin/skills): ten skills over Stripe Pay, Connect onboarding and verification requirements, Stripe Apps, the Smart Contract-free fiat rails, API best practices, docs search, project scaffolding, Metronome usage billing and an upgrade path. The card-and-bank-rails counterpart to the pinned circle extension, which covers USDC and stablecoins; reach for this one when the money has to leave or enter the traditional system.",
+      "source": "https://github.com/stripe/ai",
+      "install": { "method": "git-clone", "command": "git clone --depth 1 https://github.com/stripe/ai stripe-ai && cp -R stripe-ai/providers/agent-plugins/plugin/skills/stripe-pay .claude/skills/stripe-pay", "env": ["STRIPE_SECRET_KEY"] },
+      "license": "MIT",
+      "maintainer": "stripe",
+      "signal": { "stars": 1855, "last_commit": "2026-10-05", "reputability": "official" },
+      "default_installed": false,
+      "safety": "Not pinned and not scanned at a commit, so read it before installing; it is an add-on for two mechanical reasons rather than anything about the content, and both are worth knowing before anyone retries a pin. First, a submodule pin is unavailable: the repo ships four self-referential symlinks (`llm/ai-sdk/LICENSE`, `llm/token-meter/LICENSE`, `tools/modelcontextprotocol/LICENSE`, `tools/typescript/LICENSE`, each pointing at `LICENSE` in its own directory), so they resolve to nothing and `cp` aborts on them with `Too many levels of symbolic links`. The copy sites that would hit them sit in the byte-frozen region of `.claude/bin/update.sh`, which an existing install runs from its own old copy, so a pin would break `/update` for every already-installed project with no way to fix it from upstream. Second, the kit's folder-fetch route does avoid those links — they are outside `providers/agent-plugins/plugin/skills/`, and that route checks out only the named folders — but `check_skill()` in `.claude/bin/skills.sh` requires an Apache-2.0 `LICENSE.txt` inside each fetched folder and refuses a folder that has none; stripe's skill folders contain only `SKILL.md`. The install command above sidesteps both by copying one skill folder out of a shallow clone, which never walks `llm/` or `tools/`. On the content itself: it moves real money through your Stripe account once a secret key is set, and `providers/` carries runnable TypeScript and MCP tooling beyond the skill text, so read the folder you copy rather than the repo wholesale.",
+      "tags": ["stripe", "payments", "fiat", "billing", "connect", "official"]
     }
   ]
 }
