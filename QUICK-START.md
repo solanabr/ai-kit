@@ -318,7 +318,7 @@ Edit your `CLAUDE.md` to add:
 
 ### Adjust Permissions
 
-Run `/firewall` to switch tier. The permission and sandbox block in `.claude/settings.json` is generated from the tier and rewritten whole when it changes, so put your own rules in `.claude/settings.local.json`, which `/update` never touches — the kit's rewrite only replaces the rules it wrote itself. [README → Firewall tiers](README.md#firewall-tiers) covers what each tier opens and closes, and [docs/firewall.md](docs/firewall.md) what the tiers cannot enforce.
+Run `/firewall` to switch tier, then restart Claude Code — permission and sandbox rules are read once at session start, so the session you are in keeps the rules it began with, whether you tightened or loosened them. The permission and sandbox block in `.claude/settings.json` is generated from the tier and rewritten whole when it changes, so put your own rules in `.claude/settings.local.json`, which `/update` never touches — the kit's rewrite only replaces the rules it wrote itself. [README → Firewall tiers](README.md#firewall-tiers) covers what each tier opens and closes, and [docs/firewall.md](docs/firewall.md) what the tiers cannot enforce.
 
 ### Configure MCP Servers
 
