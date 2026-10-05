@@ -168,20 +168,32 @@ print(" ".join(e["id"] for e in reg["entries"] if e.get("tier") == "core"))
 ' "$REPO_ROOT/.claude/skills/skill-registry.json")"
 
 assert_submodules_under_agents() {
-  local d="$1" paths bad="" p installed
+  local d="$1" paths bad="" p installed no_src=""
   # Every path must sit under .agents/skills/ext/; only installed packs (core plus
-  # the extensions this project recorded) must be populated.
+  # the extensions this project recorded) must be populated. A pack that is empty in
+  # THIS repo installs as an empty folder, so it cannot be expected populated here —
+  # that is skipped. A pack whose source is checked out but lands empty is still a
+  # failure, which is what catches a copy install.sh got wrong.
   installed=" $CORE_PACKS $(grep -vE '^[[:space:]]*(#|$)' "$d/.agents/skills/extensions.txt" 2>/dev/null | tr '\n' ' ' || true) "
   paths="$(git config -f "$d/.gitmodules" --get-regexp '\.path$' 2>/dev/null | awk '{print $2}')"
   for p in $paths; do
     case "$p" in
       .agents/skills/ext/*)
         case "$installed" in
-          *" ${p##*/} "*) [ -n "$(ls -A "$d/$p" 2>/dev/null)" ] || bad="$bad $p(empty)" ;;
+          *" ${p##*/} "*)
+            if [ -z "$(ls -A "$d/$p" 2>/dev/null)" ]; then
+              if ext_pack_empty "$REPO_ROOT/.claude/skills/ext/${p##*/}"; then
+                no_src="$no_src ${p##*/}"
+              else
+                bad="$bad $p(empty)"
+              fi
+            fi
+            ;;
         esac ;;
       *) bad="$bad $p" ;;
     esac
   done
+  [ -z "$no_src" ] || skip "$2: not checked out in this repo, so not expected populated:$no_src"
   assert_eq "$(git config -f "$REPO_ROOT/.gitmodules" --get-regexp '\.path$' | wc -l | tr -d ' ')" \
     "$(printf '%s\n' "$paths" | grep -c .)" "$2: every kit submodule is registered"
   assert_eq "" "$bad" "$2: .gitmodules paths are under .agents/skills/ext/ and installed packs are populated"
@@ -297,7 +309,13 @@ assert_submodules_under_agents "$TEMP_DIR" "after update.sh"
 
 if RESYNC_OUT="$(cd "$WORK" && bash "$TEMP_DIR/.agents/bin/resync.sh" 2>&1)"; then RC=0; else RC=$?; fi
 assert_eq "0" "$RC" "resync.sh exits 0 (run from another cwd)"
-assert_contains "$RESYNC_OUT" "All skill paths resolve correctly." "resync.sh resolves every SKILL.md path"
+# A core pack that is not checked out installs as an empty folder, so resync.sh reports
+# every link into it as MISSING. tests/test_resync.sh covers the report itself.
+if ext_packs_uninitialized; then
+  skip "resync.sh resolves every SKILL.md path (core packs are not checked out)"
+else
+  assert_contains "$RESYNC_OUT" "All skill paths resolve correctly." "resync.sh resolves every SKILL.md path"
+fi
 assert_dir_not_exists "$TEMP_DIR/.claude" "resync.sh does not create .claude/"
 
 # ── Not a git repository ────────────────────────────────────────────────────

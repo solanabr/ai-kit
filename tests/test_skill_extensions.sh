@@ -175,7 +175,15 @@ cfg = os.path.join(root, ".claude")
 files = [os.path.join(root, "CLAUDE.md")]
 for pattern in ("agents/*.md", "commands/*.md", "skills/*.md", "skills/*/SKILL.md"):
     files += glob.glob(os.path.join(cfg, pattern))
-checked, dead = 0, []
+checked, uninit, dead = 0, 0, []
+
+def not_checked_out(resolved):
+    """A pack folder that is present but empty: the submodule was never checked out, so
+    the install vendored nothing. A pack that IS there with the file missing is not this
+    case and stays dead."""
+    m = re.match(r"(.*/skills/ext/[^/]+)(?:/|$)", resolved)
+    return bool(m) and os.path.isdir(m.group(1)) and not os.listdir(m.group(1))
+
 for f in files:
     for n, line in enumerate(open(f, encoding="utf-8"), 1):
         given = set()
@@ -184,17 +192,39 @@ for f in files:
         for link in re.findall(r"\]\(([^)\s]*ext/[^)\s]*)\)", line):
             if link.startswith("http"):
                 continue
-            checked += 1
-            if os.path.exists(os.path.normpath(os.path.join(os.path.dirname(f), link.split("#")[0]))):
+            resolved = os.path.normpath(os.path.join(os.path.dirname(f), link.split("#")[0]))
+            if os.path.exists(resolved):
+                checked += 1
                 continue
+            if not_checked_out(resolved):
+                uninit += 1
+                continue
+            checked += 1
             pack = re.search(r"ext/([a-z0-9-]+)", link).group(1)
             if pack not in given:
                 dead.append(f"{os.path.relpath(f, root)}:{n} -> {link}")
-print(f"checked={checked}")
+print(f"checked={checked} not-checked-out={uninit}")
 print("\n".join(dead) or "OK")
 PY
 )"
 assert_eq "OK" "$(printf '%s\n' "$DEAD" | tail -n +2)" "Core-only install: every ext/ link resolves or its line gives the install command ($(printf '%s\n' "$DEAD" | head -1))"
+UNINIT_LINKS="$(printf '%s\n' "$DEAD" | sed -nE '1s/.*not-checked-out=([0-9]+).*/\1/p')"
+if [ "${UNINIT_LINKS:-0}" -gt 0 ]; then
+  skip "Core-only install: $UNINIT_LINKS ext/ links into core packs that are not checked out"
+fi
+
+# Everything from here on copies real pack content: skills.sh refuses an empty pack
+# outright ("<id> is empty in <repo> (run: git submodule update --init there)"), so
+# without a checkout these blocks can only report that, and the suite used to die here
+# under set -e with no summary at all. The blocks above need no pack content and have
+# already run. One skip line stands for the whole region rather than per check, because
+# the checks are never reached to be counted.
+if ext_packs_uninitialized; then
+  skip "[add] onwards: adding, updating and pruning packs needs the ext/ packs checked out"
+  SUMMARY_RC=0
+  print_summary || SUMMARY_RC=$?
+  exit "$SUMMARY_RC"
+fi
 
 # --- Installing an extension on demand ---
 echo "[add]"

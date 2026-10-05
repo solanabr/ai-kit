@@ -6,6 +6,9 @@ set -euo pipefail
 PASS=0
 FAIL=0
 TOTAL=0
+SKIP=0
+
+_KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # anthropic-skills is a core pack fetched from its own upstream, not vendored from a kit
 # submodule, so every install.sh and update.sh run in these suites would otherwise reach
@@ -36,6 +39,63 @@ new_tmp() {
     return 1
   fi
   printf '%s' "$d"
+}
+
+# --- Uninitialized ext/ packs: a setup state, not broken config -----------------------
+#
+# A fresh clone or a git worktree without `git submodule update --init` leaves every
+# .claude/skills/ext/<pack>/ present but empty. Links into those packs then dangle,
+# install.sh vendors empty folders, and skills.sh refuses to copy from them ("<id> is
+# empty in <repo> (run: git submodule update --init there)"). That is setup, not a
+# regression, and a suite that FAILs on it buries the failures that matter. validate.sh
+# counts such checks as skipped; these helpers let the suites do the same.
+#
+# The discrimination that earns the skip: the pack directory is present and EMPTY. A pack
+# that IS checked out with the linked file missing stays a failure — that is the case
+# which catches a path an upstream pack renamed, and it is the point of the check.
+
+# skip <message> — record a check as skipped: not passed, not failed, not in TOTAL.
+# print_summary's note names the submodule remedy, so a skip for some other reason (the
+# ALLOW_OFFLINE network skip in tests/test_anthropic_skills.sh, say) must not go through
+# here, or the remedy it prints would be wrong.
+skip() {
+  echo "  SKIP: ${1:-skipped}"
+  SKIP=$((SKIP + 1))
+}
+
+# ext_pack_empty <dir> — the pack directory exists and has nothing in it.
+ext_pack_empty() {
+  [ -d "$1" ] && [ -z "$(ls -A "$1" 2>/dev/null)" ]
+}
+
+# in_uninitialized_submodule <path> — <path> points into a pack that is present but empty.
+# Same contract as validate.sh's function of this name, but it matches the
+# skills/ext/<pack> segment anywhere in the path, so it also covers the absolute paths
+# and the .agents/ installs these suites build in temp dirs.
+in_uninitialized_submodule() {
+  local path="$1" sub
+  # Links from agents/, commands/ and skill folders climb out first
+  # (../skills/ext/..., ../ext/...): drop each "dir/.." pair.
+  path="$(printf '%s' "$path" | sed -E -e ':a' -e 's#(^|/)[^/.][^/]*/\.\./#\1#' -e 'ta')"
+  case "$path" in
+    */skills/ext/* | skills/ext/*)
+      sub="$(printf '%s' "$path" | sed -E 's#(.*skills/ext/[^/]+).*#\1#')"
+      ext_pack_empty "$sub"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# ext_packs_uninitialized — any pack in THIS repo is empty, so anything that copies or
+# reads real pack content (install.sh vendoring, skills.sh add, resync.sh's broken-path
+# report) can only report that setup state. Conservative on purpose: one empty pack is
+# enough, because the blocks gated on this one copy the whole ext/ tree.
+ext_packs_uninitialized() {
+  local d
+  for d in "$_KIT_ROOT/.claude/skills/ext"/*/; do
+    ext_pack_empty "$d" && return 0
+  done
+  return 1
 }
 
 assert_eq() {
@@ -189,13 +249,34 @@ assert_count() {
   fi
 }
 
+# print_summary — report the counts and say what a skip means.
+#
+# Returns 1 when anything failed, 2 when the suite checked nothing but skips (so
+# run_all.sh does not count that as a pass), 0 otherwise. With submodules checked out
+# SKIP is 0 and both the output and the return value are what they always were, which is
+# why this is a no-op in CI.
 print_summary() {
   echo ""
   echo "========================================="
-  echo "Results: $PASS passed, $FAIL failed (of $TOTAL checks)"
+  if [ "$SKIP" -gt 0 ]; then
+    echo "Results: $PASS passed, $FAIL failed, $SKIP skipped (of $((TOTAL + SKIP)) checks)"
+  else
+    echo "Results: $PASS passed, $FAIL failed (of $TOTAL checks)"
+  fi
   echo "========================================="
+  if [ "$SKIP" -gt 0 ]; then
+    echo "Note: $SKIP checks skipped because submodules aren't initialized."
+    echo "      Run 'git submodule update --init --recursive' (or ./install.sh) to check them."
+    # run_all.sh adds these up so the remedy appears once at the end of a full run.
+    if [ -n "${SAK_SKIP_REPORT:-}" ]; then
+      printf '%s\t%s\n' "$(basename "${0:-suite}" .sh)" "$SKIP" >> "$SAK_SKIP_REPORT" 2>/dev/null || true
+    fi
+  fi
   if [ "$FAIL" -gt 0 ]; then
     return 1
+  fi
+  if [ "$PASS" -eq 0 ] && [ "$SKIP" -gt 0 ]; then
+    return 2
   fi
   return 0
 }
