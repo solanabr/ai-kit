@@ -9,7 +9,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOTAL_SUITES=0
 PASSED_SUITES=0
 FAILED_SUITES=0
+SKIPPED_SUITES=0
 FAILED_NAMES=""
+SKIPPED_NAMES=""
+
+# Suites that find an ext/ pack present but empty skip those checks instead of failing
+# (see tests/helpers.sh). Collect the counts so the remedy appears once at the end of a
+# full run rather than only inside each suite. Best effort: no writable temp dir just
+# means no aggregate line.
+SAK_SKIP_REPORT="${TMPDIR:-/tmp}/sak-run-all-skips.$$"
+: > "$SAK_SKIP_REPORT" 2>/dev/null || SAK_SKIP_REPORT=""
+export SAK_SKIP_REPORT
+trap 'rm -f "${SAK_SKIP_REPORT:-/dev/null}" 2>/dev/null || true' EXIT
 
 echo "========================================"
 echo " Solana AI Kit - Test Suite"
@@ -31,8 +42,14 @@ for test_file in "$SCRIPT_DIR"/test_*.sh; do
   TOTAL_SUITES=$((TOTAL_SUITES + 1))
 
   echo "--- $test_name ---"
-  if bash "$test_file"; then
+  RC=0
+  bash "$test_file" || RC=$?
+  # 2 means the suite checked nothing but skips: not a pass, not a failure either.
+  if [ "$RC" -eq 0 ]; then
     PASSED_SUITES=$((PASSED_SUITES + 1))
+  elif [ "$RC" -eq 2 ]; then
+    SKIPPED_SUITES=$((SKIPPED_SUITES + 1))
+    SKIPPED_NAMES="$SKIPPED_NAMES  - $test_name\n"
   else
     FAILED_SUITES=$((FAILED_SUITES + 1))
     FAILED_NAMES="$FAILED_NAMES  - $test_name\n"
@@ -43,13 +60,35 @@ done
 echo "========================================"
 echo " Final Summary"
 echo "========================================"
-echo "Suites: $PASSED_SUITES passed, $FAILED_SUITES failed (of $TOTAL_SUITES)"
+if [ "$SKIPPED_SUITES" -gt 0 ]; then
+  echo "Suites: $PASSED_SUITES passed, $FAILED_SUITES failed, $SKIPPED_SUITES skipped (of $TOTAL_SUITES)"
+else
+  echo "Suites: $PASSED_SUITES passed, $FAILED_SUITES failed (of $TOTAL_SUITES)"
+fi
+
+if [ "$SKIPPED_SUITES" -gt 0 ]; then
+  echo ""
+  echo "Suites that checked nothing but skips:"
+  printf "$SKIPPED_NAMES"
+fi
+
+# What the suites skipped, added up. Empty when submodules are checked out, as in CI.
+if [ -n "${SAK_SKIP_REPORT:-}" ] && [ -s "$SAK_SKIP_REPORT" ]; then
+  SKIPPED_CHECKS="$(awk -F'\t' '{n += $2} END {print n + 0}' "$SAK_SKIP_REPORT")"
+  echo ""
+  echo "Skipped $SKIPPED_CHECKS checks across $(wc -l < "$SAK_SKIP_REPORT" | tr -d ' ') suite(s) because"
+  echo "submodules aren't initialized:"
+  awk -F'\t' '{printf "  - %s (%s)\n", $1, $2}' "$SAK_SKIP_REPORT"
+  echo "Run 'git submodule update --init --recursive' (or ./install.sh) to check them."
+fi
 
 if [ "$FAILED_SUITES" -gt 0 ]; then
   echo ""
   echo "Failed suites:"
   printf "$FAILED_NAMES"
   exit 1
+elif [ "$SKIPPED_SUITES" -gt 0 ]; then
+  echo "No suite failed, but $SKIPPED_SUITES checked nothing but skips."
 else
   echo "All test suites passed!"
 fi
