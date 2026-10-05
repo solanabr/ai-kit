@@ -318,4 +318,20 @@ done
 assert_eq "" "$UNGATED" \
   "Every suite that calls skip decides it from a present-and-empty pack test, since the remedy it prints is the submodule one"
 
+# --- test_skill_extensions.sh's pack-gated region routes every check through one wrapper
+echo "[pack-gated region]"
+# What keeps that region's skip count equal to its check count is that every check goes
+# through pack_check. A check written straight into the region would run in a checked-out
+# tree and vanish from the accounting in an uninitialised one, which is the bug #211 left
+# and this says cannot come back.
+REGION="$TEMP_DIR/region.sh"
+awk '/^# --- From here on every check needs the ext\/ packs checked out/ {f = 1} f' \
+  "$SCRIPT_DIR/test_skill_extensions.sh" > "$REGION"
+assert_cmd_success "[ -s '$REGION' ]" \
+  "test_skill_extensions.sh still marks where its pack-gated region begins"
+assert_file_not_contains "$REGION" 'TOTAL=$((TOTAL + 1))' \
+  "...and counts no check there by hand, which would not be skipped with the rest"
+assert_eq "" "$(grep -c '^assert_' "$REGION" | grep -v '^0$' || true)" \
+  "...so every check in it goes through pack_check and is counted in either state"
+
 print_summary
