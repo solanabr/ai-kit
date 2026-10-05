@@ -10,7 +10,7 @@ Edits and commits run without hooks, formatters or extra prompts. The gates sit 
 
 | Gate | Where | What happens |
 |------|-------|--------------|
-| Firewall tier | `.claude/security.json` names it; `/firewall` writes the matching rules into `.claude/settings.json` | Decides how much of the policy below applies, plus which paths are readable and writable. Default: **Relaxed**. See [Firewall tiers](../README.md#firewall-tiers) |
+| Firewall tier | `.claude/security.json` names it; `/firewall` writes the matching rules into `.claude/settings.json` | Decides how much of the policy below applies, plus which paths are readable and writable. Default: **Relaxed**. A switch lands in the **next** session, not the current one. See [Firewall tiers](../README.md#firewall-tiers) |
 | Private keys, wallet vaults, credentials (`~/.ssh`, `~/.config/solana/id.json`, browser wallet storage, `gh auth token`, ...) | `Read` deny rules (also enforced by the sandbox) + PreToolUse hook | Blocked; the message points to `solana address` or asks the user to run it |
 | `--final`, `solana program close --bypass-warning`, `program-v4 finalize`, `spl-token authorize --disable` | deny rules + PreToolUse hook | Blocked; the user runs them |
 | Program deploys, upgrades, buffer writes, `extend`, closes and authority changes; `spl-token transfer`/`authorize`; stake and vote withdrawals | `ask` rules + PreToolUse hook | Approval prompt on every cluster, naming the cluster it resolved (flag, `Anchor.toml` or `solana config`) |
