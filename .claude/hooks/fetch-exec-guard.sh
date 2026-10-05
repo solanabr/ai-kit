@@ -41,8 +41,10 @@ KIT_INPUT=$(cat)
 # adjacency test, so `cargo  install` and `go<tab>run` still match — a pre-filter
 # that cared about the whitespace between the two words would turn a formatting
 # quirk into a silent miss.  They buy a lot: `cargo build/test/clippy/fmt`,
-# `go build`, `go test` and `git status` all leave here for ~16 ms instead of
-# paying for jq, a tier read and an awk pass.
+# `go build`, `go test` and `git status` all leave here without paying for jq,
+# a tier read or an awk pass — measured at ~10 ms of marginal cost against a
+# no-op hook, where a call that reaches the detector costs ~26 ms and one that
+# gates ~55 ms.
 #
 # The broad branch comes first on purpose.  Ordered the other way, a command
 # naming two ecosystems (`npm exec -y cargo-foo`) would be judged by the cargo
