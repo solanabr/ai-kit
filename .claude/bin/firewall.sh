@@ -126,12 +126,9 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           surface so agent memory and ~/.claude/CLAUDE.md are writable at High too.
 #   4 -> 5: the families three user-facing surfaces promised a gate for and no mechanism
 #           covered. DENY_UNRECOVERABLE_REMOTE at every tier (the --receive-pack /
-#           --upload-pack / --exec transport overrides, and `gh issue delete`);
-#           DENY_GH_API at Medium and High; and `Bash(git -C *)` left the unconditional
-#           wrapper set for DENY_WRAPPERS_HIGH. This is the first bump whose net effect
-#           at Relaxed and Medium is to REMOVE a rule, which works only because the
-#           catch-up in update.sh subtracts enforced.ruleIds before writing the new
-#           block. The rest of those promises are hooks, which arrive with hooks/.
+#           --upload-pack / --exec transport overrides, and `gh issue delete`), and
+#           DENY_GH_API at Medium and High. The rest of those promises are hooks, which
+#           arrive with the hooks/ copy rather than through this corpus at all.
 RULE_SET_VERSION = 5
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
@@ -631,14 +628,26 @@ DENY_WRAPPERS = [
     # (`command -v`, `xargs grep|rg|wc|ls`) rather than as blanket globs, because
     # `Bash(xargs *)` pre-approved `xargs -I{} solana program deploy …` outright.
     #
-    # `git -C` is NOT here: it moved to DENY_WRAPPERS_HIGH below. `git -c` stays, and the
-    # two are not the same kind of thing — see that group for the distinction.
+    # `git -c` and `git -C` are both here, and the reason for the second one is not the
+    # obvious one. `-c` is arbitrary code execution (`git -c core.fsmonitor=/tmp/x.sh
+    # status`). `-C` merely changes directory first -- but every destructive git rule
+    # below is a glob anchored on the literal subcommand, so a `git -C <dir>` prefix sits
+    # in front of it and NONE of them match: measured against the generated set,
+    # `git -C . clean -xdf`, `git -C . reset --hard HEAD~5`, `git -C . restore .`,
+    # `git -C . gc --prune=all`, `git -C . reflog expire --expire=now --all`,
+    # `git -C . push --mirror` and `git -C . fetch --upload-pack=/tmp/x.sh .` all walk
+    # straight through. The `-C .` spelling needs no second repository, so no sandbox
+    # write fence is behind it either. It looks like lazy breadth and is not: lowering
+    # this one rule to High would make the whole destructive-git deny set advisory at the
+    # default tier, `reflog expire` included (FIREWALL-SPEC.md section 3.4 singles that
+    # one out as deny-at-every-tier because it is what makes history unrecoverable).
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
     "Bash(bash -lc *)",
     "Bash(zsh -c *)",
     "Bash(git -c *)",
+    "Bash(git -C *)",
     "Bash(flock *)",
     "Bash(watch *)",
     "Bash(setsid *)",
@@ -647,43 +656,6 @@ DENY_WRAPPERS = [
     "Bash(direnv exec *)",
     "Bash(mise exec *)",
     "Bash(docker exec *)",
-]
-
-# High only. The one wrapper whose denial was costing more than it bought.
-#
-# `git -c` and `git -C` look like the same evasion and are not. `-c` sets arbitrary
-# configuration for one command, and `git -c core.fsmonitor=/tmp/x.sh status` is
-# therefore arbitrary code execution wearing a `git status` costume — no rule can see
-# past it, and it stays denied at every tier. (CLAUDE.md's commit-attribution
-# instruction depends on that deny: it is what forces authorship through the explicit
-# `git -c user.name=...` form the maintainer reviews rather than a silent default.)
-#
-# `-C` only changes directory first, so what it escapes is PATH scoping: it operates on
-# a repository other than this one, which is why High keeps it ("reads are fenced to the
-# working directory" is High's proposition, and a sibling repository is outside it).
-# The deny was lowered because the price was wrong at the other three tiers:
-# `git -C .claude/skills/ext/<pack> log` is how submodule inspection is spelled, and the
-# blanket rule blocked that ordinary work everywhere.
-#
-# MEASURED COST OF LOWERING IT, and it is not small: a `git -C <dir>` prefix also hides
-# the SUBCOMMAND from every `git <subcommand>` glob, because those globs anchor on the
-# literal `git clean`, `git reset`, `git push` and so on. So `git -C . clean -xdf`,
-# `git -C . reflog expire --expire=now --all`, `git -C . gc --prune=all`,
-# `git -C . reset --hard HEAD~5`, `git -C . restore .`, `git -C . push --mirror` and
-# `git -C . fetch --upload-pack=/tmp/x.sh .` are all reachable at Off, Relaxed and
-# Medium as of rule set 5 -- including `reflog expire`, which FIREWALL-SPEC.md section
-# 3.4 says is deny-at-every-tier, and the transport override added in this same bump.
-# Verified by matching each form against the generated deny set, not reasoned about.
-#
-# NOT closed here, deliberately. Closing it means a `git -C`-prefixed twin of every
-# destructive git rule, and the flag-scoped ones (`reset *--ha*`, `branch *-D*`,
-# `push *--mirror*`) need three wildcards plus their zero-gap collapses, so it is a
-# ~30-rule surface with its own false-positive risk rather than a one-line fix. That is
-# a policy call for the maintainer, and it is recorded in docs/firewall.md's residuals
-# table rather than decided here. The honest summary: below High, `git -C` is a general
-# bypass for the destructive-git deny set.
-DENY_WRAPPERS_HIGH = [
-    "Bash(git -C *)",
 ]
 
 DENY_WHOLE_BINARY = [
@@ -1217,12 +1189,11 @@ def plan(tier):
     high = tier == "high"
 
     # Tier-varying permissions.deny groups, assembled in one place so the order the
-    # generator writes them in is fixed. Two of these are Bash rules, which every other
+    # generator writes them in is fixed. One of these is a Bash rule, which every other
     # Bash deny deliberately is not — see the note on permissions.deny below.
     deny_extra = []
     if high:
         deny_extra.append(DENY_SELF_PROTECTION)
-        deny_extra.append(DENY_WRAPPERS_HIGH)
     if medium_up:
         deny_extra.append(DENY_GH_API)
 
@@ -1236,15 +1207,15 @@ def plan(tier):
         # permissionDecision "ask"; every hard block is a deny rule or hook exit 2.
         # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
         "permissions.ask": [],
-        # Tier-varying deny groups, all of them: DENY_SELF_PROTECTION and
-        # DENY_WRAPPERS_HIGH at High, DENY_GH_API at Medium and High, and the two MCP
-        # groups appended after the Off early-return below.
+        # Tier-varying deny groups, all of them: DENY_SELF_PROTECTION at High,
+        # DENY_GH_API at Medium and High, and the two MCP groups appended after the Off
+        # early-return below.
         #
-        # DENY_WRAPPERS_HIGH and DENY_GH_API are the only Bash rules in the whole corpus
-        # that vary by tier, and they carry the residual the other tier-varying groups
-        # carry: /firewall subtracts exactly enforced.ruleIds from the one file it owns,
-        # so a descent really does lift them, but a generated block hand-copied into user
-        # or managed scope stops tracking the tier and then nothing can.
+        # DENY_GH_API is the ONLY Bash rule in the whole corpus that varies by tier, and
+        # it carries the residual the other tier-varying groups carry: /firewall subtracts
+        # exactly enforced.ruleIds from the one file it owns, so a descent really does
+        # lift it, but a generated block hand-copied into user or managed scope stops
+        # tracking the tier and then nothing can.
         "permissions.deny": DENY + deny_extra,
         "sandbox.excludedCommands": [] if off else [EXCLUDED_COMMANDS],
         "sandbox.network.deniedDomains": [],

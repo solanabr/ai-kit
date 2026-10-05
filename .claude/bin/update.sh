@@ -655,14 +655,12 @@ PY
   # Rule-set catch-up. Reads the shipped version out of the firewall.sh just copied in,
   # so there is one source for it and no literal here to drift.
   #
-  # The mechanism is version-generic, so a bump needs no edit here — but rule set 5 is
-  # the first one whose net effect at the lower tiers is to REMOVE a rule
-  # (`Bash(git -C *)` became High-only), and that direction depends on something worth
-  # naming: `firewall.sh apply` subtracts exactly the strings in enforced.ruleIds before
-  # it writes the new block, so a rule the new corpus no longer emits is dropped rather
-  # than left behind. The hook halves of rule set 5 do not come through here at all;
-  # they arrive with the hooks/ copy above, which is why they reach an install whose
-  # ruleSetVersion is already current.
+  # The mechanism is version-generic, so a bump needs no edit here. Worth naming once:
+  # `firewall.sh apply` subtracts exactly the strings in enforced.ruleIds before writing
+  # the new block, so a bump that DROPS a rule works the same way as one that adds — and
+  # the hook halves of a bump do not come through here at all. They arrive with the
+  # hooks/ copy above, which is why a hook gate reaches an install whose ruleSetVersion
+  # is already current (rule set 5 shipped four of those).
   FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
   SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
   if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then
