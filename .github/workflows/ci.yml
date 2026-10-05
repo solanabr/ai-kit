@@ -102,9 +102,10 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/proj"
           timeout 300 opencode debug skill > "$RUNNER_TEMP/opencode-skills.json"
-          # skill-packs is listed too: pack routing rests on its description being
-          # discovered, so an --agents install can surface a pack at all.
-          for s in idea-sprint pitch-deck hackathon skill-packs; do
+          # Both skills the kit ships in-repo. skill-packs carries the pack routing,
+          # so an --agents install can surface a pack at all; a pack installed on top
+          # lands beside these and is not asserted here.
+          for s in skill-packs token-extensions; do
             grep -q "/\.agents/skills/$s/SKILL\.md" "$RUNNER_TEMP/opencode-skills.json" \
               || { echo "::error::opencode did not discover $s"; head -c 3000 "$RUNNER_TEMP/opencode-skills.json"; exit 1; }
           done
@@ -115,5 +116,5 @@ jobs:
           timeout 300 codex debug prompt-input "hello" > "$RUNNER_TEMP/codex-prompt.json"
           grep -q 'solana-builder' "$RUNNER_TEMP/codex-prompt.json" \
             || { echo "::error::Codex did not load AGENTS.md"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
-          grep -q 'idea-sprint' "$RUNNER_TEMP/codex-prompt.json" \
+          grep -q 'skill-packs' "$RUNNER_TEMP/codex-prompt.json" \
             || { echo "::error::Codex did not list the kit skills"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
