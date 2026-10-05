@@ -18,7 +18,7 @@ Four packs ship installed — solana-dev, auditor-skill, colosseum and anthropic
 | Kept by `/update` | yes | no |
 | Who runs it | the user, on a yes | the user, and only after `safe-ai-skill add skill\|mcp <source>` returns `proceed: true` |
 
-An add-on entry's `license` and `safety` lines are load-bearing, so read them out before the user installs: several packs carry no license (usable, not redistributable), a few have been stale for a year, and some write hooks or a statusline into `settings.json` when run through their own installer.
+An add-on entry's `safety` line is load-bearing, so read it out before the user installs: none of them is pinned or scanned at a commit, a few have been stale for a year, and some write hooks or a statusline into `settings.json` when run through their own installer.
 
 ## Work to packs
 
