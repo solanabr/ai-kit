@@ -124,7 +124,7 @@ for P in "$TEMP_DIR" "$AGENTS_DIR"; do
   (cd "$P" && bash "$CFG/bin/resync.sh") > "$LOG-default.log" 2>&1 || true
   if [ "$NO_CHECKOUT" -eq 1 ]; then
     skip "$CFG: default install reports no broken skill path (core packs are not checked out)"
-    skip "$CFG: links into extensions it has not installed are not MISSING (same)"
+    skip "$CFG: links into extensions it has not installed are not MISSING (core packs are not checked out)"
   else
     assert_file_contains "$LOG-default.log" "All skill paths resolve correctly." "$CFG: default install reports no broken skill path"
     assert_file_not_contains "$LOG-default.log" "MISSING" "$CFG: links into extensions it has not installed are not MISSING"

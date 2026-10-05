@@ -181,12 +181,12 @@ assert_submodules_under_agents() {
       .agents/skills/ext/*)
         case "$installed" in
           *" ${p##*/} "*)
-            if [ -n "$(ls -A "$d/$p" 2>/dev/null)" ]; then
-              :
-            elif ext_pack_empty "$REPO_ROOT/.claude/skills/ext/${p##*/}"; then
-              no_src="$no_src ${p##*/}"
-            else
-              bad="$bad $p(empty)"
+            if [ -z "$(ls -A "$d/$p" 2>/dev/null)" ]; then
+              if ext_pack_empty "$REPO_ROOT/.claude/skills/ext/${p##*/}"; then
+                no_src="$no_src ${p##*/}"
+              else
+                bad="$bad $p(empty)"
+              fi
             fi
             ;;
         esac ;;
