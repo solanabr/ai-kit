@@ -303,8 +303,20 @@ solana-keygen recover --force
 solana-keygen recover -f
 solana-keygen recover ASK --force"
 if [ "$ASK_LEN" = "0" ]; then
-  echo "  PASS: no ask rules at this tier; solana-keygen --force is gated by the secrets hook"
-  PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1))
+  # No ask rules at this tier, so the gate has to be the secrets hook — and until rule
+  # set 5 it was not: this branch printed an unconditional PASS for a gate that did not
+  # exist. Assert the hook actually carries it. The behaviour (every force spelling
+  # denied, every -o spelling silent) is exercised in test_hooks.sh; this only checks
+  # that the mechanism the message names is present, which is what makes that PASS mean
+  # something when read here.
+  if grep -q 'c0 == "solana-keygen"' "$REPO_ROOT/.claude/hooks/secrets-guard.sh" 2>/dev/null; then
+    echo "  PASS: no ask rules at this tier, and secrets-guard.sh carries the solana-keygen --force gate"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: no ask rules at this tier and secrets-guard.sh has no solana-keygen gate — --force is unguarded"
+    FAIL=$((FAIL + 1))
+  fi
+  TOTAL=$((TOTAL + 1))
 else
   while IFS= read -r c; do
     [ -z "$c" ] && continue

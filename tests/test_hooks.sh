@@ -408,14 +408,18 @@ print(json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash",
   set +e
   OUT="$(cd "$WORK" && printf '%s' "$payload" | PATH="$WORK/bin:$PATH" \
     CLAUDE_PROJECT_DIR="$REPO_ROOT" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" \
-    KIT_FIREWALL_TIER="$2" KIT_FIREWALL_HEADLESS=0 sh -c "$1" 2>"$WORK/err")"
+    KIT_FIREWALL_TIER="$2" KIT_FIREWALL_HEADLESS="${4:-0}" sh -c "$1" 2>"$WORK/err")"
   RC=$?
   set -e
+  ERR="$(cat "$WORK/err")"
   case "$OUT" in
     *'"deny"'*) DECISION=deny ;;
     *'"ask"'*)  DECISION=ask ;;
     *)          DECISION=silent ;;
   esac
+  # A deny is exit 2 plus the JSON; a silent pass must leave stderr clean too.
+  [ "$DECISION" = silent ] && [ "$RC" != 0 ] && DECISION="exit$RC"
+  return 0
 }
 
 # --- Parity: the same payload through Bash and through ctx_execute must get the same
@@ -631,5 +635,114 @@ for path in [".claude/settings.json"]:
                 bad.append(rule)
 print(";".join(bad) or "ok")')"
 assert_eq "ok" "$PARENS" "no mcp__ permission rule carries parentheses (Claude Code skips those on load)"
+
+# ── rule set 5: the gates the docs promised with nothing behind them ─────────
+#
+# Three user-facing surfaces advertised approval prompts for these and no mechanism
+# covered any of them: permissions.ask is empty at every tier, Bash(solana-keygen *) and
+# Bash(gh *) sit in allow, and the only git push denies were the --mirror pair. Each
+# family below is asserted at the tier it is supposed to act at AND at a tier it is
+# supposed to stay quiet at, because a gate that fires everywhere is its own defect.
+
+echo "[keypair overwrite]"
+# The default wallet is the implied target when there is no -o, so the path never appears
+# in the command and the argument scan cannot see it. Every force spelling, including the
+# clustered short flag and the zero-gap forms a glob misses.
+for C in "solana-keygen new --force" \
+         "solana-keygen new -f" \
+         "solana-keygen new --no-bip39-passphrase --force" \
+         "solana-keygen new --no-bip39-passphrase -f" \
+         "solana-keygen new -sf" \
+         "solana-keygen new --force=true" \
+         "solana-keygen recover --force" \
+         "solana-keygen recover -f"; do
+  run_bash "$M_SECRETS" relaxed "$C"
+  assert_eq "deny" "$DECISION" "secrets guard blocks: $C"
+done
+run_bash "$M_SECRETS" relaxed "solana-keygen new --force"
+assert_contains "$ERR" "Drop --force" "the block says how to run it safely instead"
+# An explicit -o names its own target, so it is ordinary work: regenerating a program
+# keypair, or seeding a throwaway test wallet. --no-outfile writes nothing at all.
+for C in "solana-keygen new --force -o target/deploy/counter-keypair.json" \
+         "solana-keygen new -f -o ./test-wallet.json" \
+         "solana-keygen new --force --outfile=./ci-wallet.json" \
+         "solana-keygen new -fo ./w.json" \
+         "solana-keygen new --no-outfile --force" \
+         "solana-keygen new" \
+         "solana-keygen grind --starts-with dead:1" \
+         "git commit -m 'docs: solana-keygen new --force is blocked'" \
+         "echo 'run solana-keygen new --force yourself'" \
+         "rg -n 'solana-keygen new --force' docs/"; do
+  run_bash "$M_SECRETS" relaxed "$C"
+  assert_eq "silent" "$DECISION" "secrets guard stays silent: $C"
+done
+
+echo "[force push and gh pr merge by tier]"
+# Relaxed allows, Medium asks, High denies. The +refspec forms are the point of the hook:
+# `git push origin +main` force-pushes with no flag for a glob to match.
+for C in "git push --force origin main" \
+         "git push --force-with-lease origin main" \
+         "git push -f origin main" \
+         "git push origin -f" \
+         "git push origin +main" \
+         "git push origin +refs/heads/main:refs/heads/main" \
+         "gh pr merge 190 --squash"; do
+  run_bash "$M_EGRESS" relaxed "$C"; assert_eq "silent" "$DECISION" "relaxed allows: $C"
+  run_bash "$M_EGRESS" medium  "$C"; assert_eq "ask"    "$DECISION" "medium asks: $C"
+  run_bash "$M_EGRESS" high    "$C"; assert_eq "deny"   "$DECISION" "high denies: $C"
+done
+# A dry run contacts the remote and writes nothing.
+for C in "git push --dry-run --force origin main" "git push -n --force origin main"; do
+  run_bash "$M_EGRESS" high "$C"; assert_eq "silent" "$DECISION" "a dry-run force push is not gated: $C"
+done
+# Ordinary pushes, and prose that merely names one, at the tier that prompts.
+for C in "git push origin main" \
+         "git push -u origin feature/x" \
+         "git push --set-upstream origin fix/y" \
+         "git push --follow-tags origin main" \
+         "git push --tags" \
+         "git push -o ci.skip origin main" \
+         "gh pr create --title x --body y" \
+         "gh pr view 190 --json files" \
+         "gh pr comment 190 --body 'merge when green'" \
+         "git commit -m 'feat: gate git push --force at medium'" \
+         "echo 'never git push --force here'"; do
+  run_bash "$M_EGRESS" medium "$C"; assert_eq "silent" "$DECISION" "medium stays silent: $C"
+done
+
+echo "[publish by tier]"
+for C in "npm publish" "cargo publish" "yarn publish" "pnpm publish" "bun publish"; do
+  run_bash "$M_EGRESS" relaxed "$C"; assert_eq "ask"  "$DECISION" "relaxed asks: $C"
+  run_bash "$M_EGRESS" medium  "$C"; assert_eq "deny" "$DECISION" "medium denies: $C"
+done
+run_bash "$M_EGRESS" relaxed "npm publish --dry-run"
+assert_eq "silent" "$DECISION" "a dry-run publish is not gated"
+# The reason Relaxed can afford to ask at all: with no interactive user the ask goes
+# silent, so the kit's own Action is unaffected. Medium's deny does NOT go quiet.
+run_bash "$M_EGRESS" relaxed "npm publish" 1
+assert_eq "silent" "$DECISION" "relaxed's publish ask is silent headless (CI-safe)"
+run_bash "$M_EGRESS" medium "npm publish" 1
+assert_eq "deny" "$DECISION" "medium's publish deny holds headless"
+
+echo "[recoverable history rewrites: High only]"
+for C in "git rebase -i main" \
+         "git commit --amend --no-edit" \
+         "git stash drop" \
+         "git stash clear" \
+         "git branch -d feature/old" \
+         "git tag -d v2.1.0" \
+         "git tag --delete v2.1.0" \
+         "git filter-repo --path x"; do
+  run_bash "$M_EGRESS" high    "$C"; assert_eq "ask"    "$DECISION" "high asks: $C"
+  run_bash "$M_EGRESS" medium  "$C"; assert_eq "silent" "$DECISION" "medium leaves it alone: $C"
+done
+# Finishing a rebase already in progress must never prompt: the agent was told to resolve
+# the conflict. And -d must be a whole word -- `--sort=-date` is not a delete.
+for C in "git rebase --continue" "git rebase --abort" "git rebase --skip" \
+         "git branch --sort=-date --list" "git branch -a" "git tag --list 'v2*'" \
+         "git tag -a v2.2.0 -m release" "git stash list" "git stash push -m wip" \
+         "git commit -m 'fix: amend the docs'" "git log --oneline -d" "git status"; do
+  run_bash "$M_EGRESS" high "$C"; assert_eq "silent" "$DECISION" "high stays silent: $C"
+done
 
 print_summary
