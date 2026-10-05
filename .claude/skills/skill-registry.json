@@ -1041,7 +1041,7 @@
       "type": "skill",
       "tier": "extension",
       "domain": "testing-qa",
-      "path": ".claude/skills/ext/playwright",
+      "path": ".claude/skills/ext/playwright-skill",
       "commit": "dd47a6a023e249eb1b36e9e943eab89d0900865d",
       "description": "Browser automation and end-to-end webapp tests driven by Playwright: a test executor plus the selector, waiting and assertion patterns that keep a suite from going flaky. Layers above the core anthropic-skills webapp-testing skill rather than replacing it — reach for this one when a flow needs a persistent browser session, multiple contexts or a real CI suite rather than a one-off check.",
       "triggers": ["Playwright", "end-to-end test", "browser automation", "e2e suite", "flaky selector"],

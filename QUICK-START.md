@@ -228,7 +228,7 @@ your-project/
 │   │   │   │                      # superseo, expo, duckdb, crypto-legal, dune, circle,
 │   │   │   │                      # google, knowledge-work, mongodb, elevenlabs,
 │   │   │   │                      # light-protocol, gmgn, redis, resend, pulumi,
-│   │   │   │                      # meteora-invent, playwright
+│   │   │   │                      # meteora-invent, playwright-skill
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer

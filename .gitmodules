@@ -119,7 +119,7 @@
 	path = .claude/skills/ext/knowledge-work
 	url = https://github.com/anthropics/knowledge-work-plugins
 [submodule ".claude/skills/ext/playwright"]
-	path = .claude/skills/ext/playwright
+	path = .claude/skills/ext/playwright-skill
 	url = https://github.com/lackeyjb/playwright-skill
 [submodule ".claude/skills/ext/meteora-invent"]
 	path = .claude/skills/ext/meteora-invent

@@ -45,7 +45,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) (install: `bash .claude/bin/skills.sh add vercel`) |
 | Brand identity and a design system for the client: shadcn theme, design tokens, UI critique, WCAG audit | [get-shit-pretty](ext/get-shit-pretty/gsp/skills/) (install: `bash .claude/bin/skills.sh add get-shit-pretty`) — designs the client, not the program; wire none of its own `hooks.json` or `.mcp.json` (see its registry `safety`) |
 | UI design direction; Playwright tests of a local dApp | Anthropic's `frontend-design/SKILL.md` and `webapp-testing/SKILL.md`, core, so every install has them and loads them by description |
-| A real end-to-end browser suite: persistent sessions, multiple contexts, CI | [playwright-skill](ext/playwright/skills/playwright-skill/SKILL.md) (install: `bash .claude/bin/skills.sh add playwright-skill`). Use core `webapp-testing` for a one-off check; reach here when the suite has to live. Its `run.js` launches a real browser against whatever URL you give it, so a test pointed at production acts on production |
+| A real end-to-end browser suite: persistent sessions, multiple contexts, CI | [playwright-skill](ext/playwright-skill/skills/playwright-skill/SKILL.md) (install: `bash .claude/bin/skills.sh add playwright-skill`). Use core `webapp-testing` for a one-off check; reach here when the suite has to live. Its `run.js` launches a real browser against whatever URL you give it, so a test pointed at production acts on production |
 
 ## Tokens and NFTs
 
