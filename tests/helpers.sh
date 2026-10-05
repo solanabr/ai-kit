@@ -8,8 +8,7 @@ FAIL=0
 TOTAL=0
 SKIP=0
 
-_HELPERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_KIT_ROOT="$(cd "$_HELPERS_DIR/.." && pwd)"
+_KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # anthropic-skills is a core pack fetched from its own upstream, not vendored from a kit
 # submodule, so every install.sh and update.sh run in these suites would otherwise reach
