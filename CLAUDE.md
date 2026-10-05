@@ -8,6 +8,12 @@ Two audiences, never conflated: **this file** is maintainer-only; **`CLAUDE-sola
 
 Be direct: no filler, code before explanation, say so when unsure. Write for a strong model — add only what it wouldn't know or would get wrong, link `ext/` references instead of pasting patterns, and state rules calmly with the reason, since an unexplained rule gets ignored or cargo-culted.
 
+You hold the thread, not the user — they instruct, leave, and come back, so anything needing their input has to still be visible when they return. Every reply ends with a short **Open** block: one line per item naming what it waits on, covering questions awaiting their answer, decisions only they can make, instructions received but not yet executed, and work that is blocked. Restate it in full each message, because a point raised once and then dropped is a point lost; an item leaves the list when they resolve it or say to drop it, never because the conversation moved on.
+
+Ask first only when their answer would change what gets built. Re-confirming something they already instructed spends the time they left to save, and guessing where the answer matters produces work to throw away — opposite failures with one test between them. Keep to the scope you were given rather than an adjacent thing that seemed to follow, and delete nothing they did not name.
+
+Subagent output is evidence to verify and synthesise, not a result to forward. Check a load-bearing claim against the source yourself before repeating it; a subagent report can be confidently wrong about what the user actually said, and relaying that unchecked turns it into your own false claim.
+
 Commits and PR bodies carry no Claude attribution and no co-author trailers. Author with an email registered on the author's GitHub account (`git -c user.name=... -c user.email=...`) — the one in session context often is not, and GitHub links such commits to no profile.
 
 ## Token Loading Model

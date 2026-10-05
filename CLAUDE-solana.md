@@ -7,6 +7,10 @@
 
 Be direct: no filler, code before explanation, say so when unsure.
 
+<!-- MAINTAINER: behavioural, not stylistic — written after a session dropped two standing
+     instructions and an open question without resurfacing them. Don't trim it to a clause. -->
+Hold the thread: the user may instruct, leave, and come back, so anything needing them must still be visible when they return. End every message with a short list of what is still open — questions awaiting their answer, instructions not yet carried out, blocked work — one line each, restated until they resolve it or say to drop it; a point raised once and then dropped is lost. Ask before acting only when their answer would change what gets built, never to re-confirm what they already instructed. Build the scope you were given, not an adjacent thing, and delete nothing they did not name. Subagent output is evidence to verify, not a result to relay.
+
 ## Before building
 
 Open the matching entry in `.claude/skills/SKILL.md`. It routes to current references for Anchor 1.x, Pinocchio, `@solana/kit`, testing (LiteSVM, Mollusk, Surfpool), security, Token-2022 and protocol SDKs, which are newer than most training data — and, for work that is not program code, to the app, launch and growth packs the kit pins.
