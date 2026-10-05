@@ -363,7 +363,7 @@ bad = []
 for entry in json.load(open(path))["hooks"].get("PreToolUse", []):
     m = entry.get("matcher") or ""
     cmds = " ".join(h.get("command", "") for h in entry.get("hooks", []))
-    if not any(g in cmds for g in ("secrets-guard", "onchain-guard", "egress-guard")):
+    if not any(g in cmds for g in ("secrets-guard", "onchain-guard", "egress-guard", "fetch-exec-guard")):
         continue
     if m != want:
         bad.append(m or "(no matcher)")

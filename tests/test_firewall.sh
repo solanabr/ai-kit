@@ -416,7 +416,10 @@ assert_eq "" "$BAD" "high denies every self-protected config path"
 HOOK_PATHS=".claude/hooks/onchain-guard.sh
 .claude/hooks/secrets-guard.sh
 .claude/hooks/egress-guard.sh
+.claude/hooks/fetch-exec-guard.sh
 .claude/hooks/lib-headless.sh
+.claude/hooks/lib-tokenize.awk
+.claude/hooks/fetch-exec-guard.awk
 ~/.claude/hooks/my-hook.sh"
 for t in $TIERS; do
   BAD=""

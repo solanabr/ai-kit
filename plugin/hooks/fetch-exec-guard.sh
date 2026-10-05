@@ -1,0 +1,1 @@
+../../.claude/hooks/fetch-exec-guard.sh
