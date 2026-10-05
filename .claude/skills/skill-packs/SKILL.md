@@ -42,7 +42,7 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 | Browser QA of a dApp that is already running | `playwright-skill` (a suite that has to live: persistent sessions, multiple contexts, CI — core `webapp-testing` already covers a one-off check) | `dev-browser` |
 | An MCP server for your program or API | `cloudflare` (Agents SDK, MCP servers on Workers) | `anthropic-claude-code-plugins` (its mcp-server-dev plugin: deployment models, tool design, auth) |
 | Pitch deck, demo day, hackathon, competitive research | `frontend-slides` (the deck itself: 36 HTML templates, an intent→template selection index, PDF export and Vercel publish), `solana-new` | — |
-| Any slide deck, marketing graphic or social image | `frontend-slides` (HTML is the house format for these; pitch-deck and content-gen hand it the content) | — |
+| Any slide deck, marketing graphic or social image | `frontend-slides` (HTML is the house format for these; content-gen hands it the content) | — |
 | Getting a landing page, docs page or post found: SEO, keywords, search intent, ranking | `superseo` (page audit, content brief, E-E-A-T scoring, topic clusters, link building — markdown only, and it uses your own search tools rather than a paid SEO API) | — |
 | Charts, dashboards, on-chain data visualization | — | `claude-d3js-skill`, `scientific-agent-skills` |
 | Analysing or reporting on exported data: a Parquet or CSV dump, an airdrop snapshot, indexer output | `duckdb` (SQL over files with no database to stand up; `supabase` instead when the data has to live somewhere) | — |

@@ -59,9 +59,6 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   │   └── writer-style-skill/     # Prose in a named author's voice
     │   ├── skill-registry.json     # Pack tiers (core/extension) + opt-in add-on catalog
     │   ├── skill-packs/            # Work → pack index: which extension or add-on to offer (local)
-    │   ├── idea-sprint/             # Wrapper: find + validate crypto ideas (GTM)
-    │   ├── pitch-deck/              # Wrapper: pitch decks for crypto projects (GTM)
-    │   ├── hackathon/               # Wrapper: hackathon submissions + grants (GTM)
     │   ├── token-extensions/        # Token-2022 extensions: pick, combine, create (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
     │   └── deployment.md            # Deployment workflows (local)

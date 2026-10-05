@@ -232,9 +232,6 @@ your-project/
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer
-│   │   ├── idea-sprint/      # Wrapper: find + validate crypto ideas
-│   │   ├── pitch-deck/       # Wrapper: pitch decks for crypto projects
-│   │   ├── hackathon/        # Wrapper: hackathon submissions + grants
 │   │   ├── frontend-design/  # anthropic-skills (core), with webapp-testing/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
