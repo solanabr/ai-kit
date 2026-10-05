@@ -55,6 +55,9 @@ new_tmp() {
 # which catches a path an upstream pack renamed, and it is the point of the check.
 
 # skip <message> — record a check as skipped: not passed, not failed, not in TOTAL.
+# print_summary's note names the submodule remedy, so a skip for some other reason (the
+# ALLOW_OFFLINE network skip in tests/test_anthropic_skills.sh, say) must not go through
+# here, or the remedy it prints would be wrong.
 skip() {
   echo "  SKIP: ${1:-skipped}"
   SKIP=$((SKIP + 1))
