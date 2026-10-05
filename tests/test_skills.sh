@@ -13,21 +13,30 @@ echo "[test_skills] Checking SKILL.md links..."
 
 assert_file_exists "$SKILL_FILE" "SKILL.md exists"
 
-# Parse markdown links (excluding http links)
+# Parse markdown links (excluding http links). A link into an ext/ pack that is present
+# but empty is skipped: the submodule isn't checked out. A link into a pack that IS
+# checked out still fails if the file is gone, which is how an upstream path rename is
+# caught.
 BROKEN=0
 CHECKED=0
+NOT_CHECKED_OUT=0
 while IFS= read -r link; do
   link="$(echo "$link" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
   [ -z "$link" ] && continue
 
   target="$SKILLS_DIR/$link"
-  CHECKED=$((CHECKED + 1))
 
-  TOTAL=$((TOTAL + 1))
   if [ -e "$target" ] || [ -d "$target" ]; then
+    CHECKED=$((CHECKED + 1))
+    TOTAL=$((TOTAL + 1))
     echo "  PASS: $link exists"
     PASS=$((PASS + 1))
+  elif in_uninitialized_submodule "$target"; then
+    NOT_CHECKED_OUT=$((NOT_CHECKED_OUT + 1))
+    skip "$link (its pack is not checked out)"
   else
+    CHECKED=$((CHECKED + 1))
+    TOTAL=$((TOTAL + 1))
     echo "  FAIL: Broken link -> $link"
     FAIL=$((FAIL + 1))
     BROKEN=$((BROKEN + 1))
@@ -35,6 +44,6 @@ while IFS= read -r link; do
 done < <(grep -oE '\]\([^)]+\)' "$SKILL_FILE" | sed 's/\](//' | sed 's/)//' | grep -v '^http')
 
 echo ""
-echo "Checked $CHECKED links, $BROKEN broken."
+echo "Checked $CHECKED links, $BROKEN broken, $NOT_CHECKED_OUT into packs that are not checked out."
 
 print_summary
