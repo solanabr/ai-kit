@@ -35,7 +35,9 @@ probe() {
     printf '%s\n' "$2"
     printf 'echo "COUNTS $PASS $FAIL $TOTAL $SKIP"\n'
   } > "$f"
-  bash "$f" 2>&1 || true
+  # SAK_SKIP_REPORT cleared: a fixture's skips are the thing under test, not setup state
+  # for a user to fix, so they must not reach run_all.sh's run-wide report.
+  SAK_SKIP_REPORT= bash "$f" 2>&1 || true
 }
 
 # counts <name> <body> — just the counters that body left behind.
@@ -93,7 +95,7 @@ assert_file_not_contains "$TEMP_DIR/sum-none.out" "submodule update --init" \
 echo "[exit codes]"
 rc_of() {
   local rc=0
-  bash "$1" >/dev/null 2>&1 || rc=$?
+  SAK_SKIP_REPORT= bash "$1" >/dev/null 2>&1 || rc=$?
   printf '%s' "$rc"
 }
 write_suite() {
@@ -127,7 +129,7 @@ assert_eq "1" "$(rc_of "$TEMP_DIR/failing.sh")" \
 echo "[run_all]"
 run_suites() {
   local out rc=0
-  out="$(cd "$1" && bash ./run_all.sh 2>&1)" || rc=$?
+  out="$(cd "$1" && SAK_SKIP_REPORT= bash ./run_all.sh 2>&1)" || rc=$?
   printf '%s\nRUNALL_RC=%s\n' "$out" "$rc"
 }
 SKIPONLY_RUN="$(run_suites "$SUITES")"
@@ -154,6 +156,16 @@ assert_contains "$FAILING_RUN" "Suites: 2 passed, 1 failed (of 3)" \
 assert_contains "$FAILING_RUN" "RUNALL_RC=1" "...and the run fails"
 assert_contains "$FAILING_RUN" "Skipped 1 checks across 1 suite(s)" \
   "...while its skips are still reported"
+
+# run_all.sh collects the per-suite counts through SAK_SKIP_REPORT, which is why the
+# fixtures above run with it cleared. Assert the mechanism itself, so that clearing it
+# cannot be mistaken for breaking it.
+REPORT="$TEMP_DIR/skip-report"
+: > "$REPORT"
+write_suite "$TEMP_DIR/reports.sh" 'skip "one"; skip "two"'
+SAK_SKIP_REPORT="$REPORT" bash "$TEMP_DIR/reports.sh" >/dev/null 2>&1 || true
+assert_eq "$(printf 'reports\t2')" "$(cat "$REPORT")" \
+  "print_summary appends '<suite> <skips>' to run_all.sh's run-wide report"
 
 # A new suite needs no registration: run_all.sh globs the directory. If that ever
 # becomes a list, this suite has to be added to it.
@@ -242,7 +254,7 @@ cp "$SCRIPT_DIR/helpers.sh" "$SCRIPT_DIR/test_skills.sh" "$LINKS/tests/"
 : > "$LINKS/.claude/skills/local.md"
 printf '# hub\n\n- [local](local.md)\n- [not checked out](ext/emptypack/x.md)\n- [renamed upstream](ext/fullpack/x.md)\n' \
   > "$LINKS/.claude/skills/SKILL.md"
-LINKS_OUT="$(bash "$LINKS/tests/test_skills.sh" 2>&1 || true)"
+LINKS_OUT="$(SAK_SKIP_REPORT= bash "$LINKS/tests/test_skills.sh" 2>&1 || true)"
 assert_contains "$LINKS_OUT" "SKIP: ext/emptypack/x.md" \
   "test_skills.sh skips a link into a pack that is not checked out"
 assert_contains "$LINKS_OUT" "FAIL: Broken link -> ext/fullpack/x.md" \
