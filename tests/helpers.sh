@@ -178,6 +178,42 @@ assert_cmd_success() {
   fi
 }
 
+# assert_cmd_fails <cmd> [message] — the command must exit non-zero.
+assert_cmd_fails() {
+  local cmd="$1"
+  local message="${2:-Command fails: $cmd}"
+  TOTAL=$((TOTAL + 1))
+  if eval "$cmd" >/dev/null 2>&1; then
+    echo "  FAIL: $message (command succeeded)"
+    FAIL=$((FAIL + 1))
+  else
+    echo "  PASS: $message"
+    PASS=$((PASS + 1))
+  fi
+}
+
+# assert_cmd_fails_with <cmd> <substring> [message] — the command must exit non-zero AND
+# say why. Failing without naming the reason counts as a failure: the message is what
+# tells whoever hit it what to fix.
+assert_cmd_fails_with() {
+  local cmd="$1"
+  local needle="$2"
+  local message="${3:-Command fails naming '$needle': $cmd}"
+  local out rc=0
+  TOTAL=$((TOTAL + 1))
+  out="$(eval "$cmd" 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "  FAIL: $message (command succeeded)"
+    FAIL=$((FAIL + 1))
+  elif printf '%s\n' "$out" | grep -qF "$needle"; then
+    echo "  PASS: $message"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $message (failed without naming '$needle': $out)"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
 assert_file_not_exists() {
   local path="$1"
   local message="${2:-File does not exist: $path}"
