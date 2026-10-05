@@ -307,10 +307,15 @@ for suite in $CONVERTED; do
     "$suite decides to skip from a present-and-empty pack test"
 done
 # print_summary's note names the submodule remedy, so a skip for any other reason would
-# print the wrong fix. Keep the callers to the suites that mean that one.
-CALLERS="$( (grep -l 'skip "' "$SCRIPT_DIR"/test_*.sh || true) | xargs -n1 basename \
-  | sed 's/\.sh$//' | (grep -vx test_skip_accounting || true) | sort | tr '\n' ' ' | sed 's/ $//')"
-assert_eq "$(printf '%s\n' $CONVERTED | sort | tr '\n' ' ' | sed 's/ $//')" "$CALLERS" \
-  "Only the pack-gated suites call skip, since the remedy it prints is the submodule one"
+# print the wrong fix. Derived over the whole tree rather than listed, so a suite added
+# later is held to it too.
+UNGATED=""
+for suite in "$SCRIPT_DIR"/test_*.sh; do
+  grep -q 'skip "' "$suite" || continue
+  grep -qE 'in_uninitialized_submodule|ext_pack_empty|ext_packs_uninitialized|not_checked_out' \
+    "$suite" || UNGATED="$UNGATED $(basename "$suite" .sh)"
+done
+assert_eq "" "$UNGATED" \
+  "Every suite that calls skip decides it from a present-and-empty pack test, since the remedy it prints is the submodule one"
 
 print_summary
