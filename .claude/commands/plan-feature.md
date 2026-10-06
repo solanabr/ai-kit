@@ -2,7 +2,7 @@
 description: "Plan a Solana feature before coding: accounts, PDAs, instructions, risks, tests"
 ---
 
-Write an implementation plan for the feature described in `$ARGUMENTS`. Plan only; write no code. If `.claude/context/idea.md` exists (written by the idea-sprint skill), start from it instead of re-asking what it already answers.
+Write an implementation plan for the feature described in `$ARGUMENTS`. Plan only; write no code. If `.claude/context/idea.md` exists (written by the `startup-builder` pack's idea-sprint skill: `bash .claude/bin/skills.sh add startup-builder`), start from it instead of re-asking what it already answers.
 
 ## Steps
 

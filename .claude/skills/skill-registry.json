@@ -885,6 +885,25 @@
       "tags": ["pulumi", "iac", "devops", "infra", "secrets", "official"]
     },
     {
+      "id": "startup-builder",
+      "name": "Startup Builder Skill",
+      "type": "skill",
+      "tier": "extension",
+      "domain": "go-to-market",
+      "path": ".claude/skills/ext/startup-builder",
+      "commit": "e02c5c2e69fa6f264073eb45dcfc4616b4a1c6f7",
+      "description": "The startup work around a Solana project, in ten skills that hand off through .claude/context/*.md files: idea-sprint (find and validate an idea, writes idea.md), build-status (build and traction status, writes build.md), positioning (ICP and alternatives), pricing (fees, floor costs, willingness to pay), pitch-deck, hackathon (track choice, submission, demo script), fundraising (data room, investor updates, token vs equity), launch (launch-day runbook with go/no-go gates), incident-comms (severity, status page, postmortem) and ecosystem-bd (Jupiter and wallet listings, partner map, grants). idea-sprint, pitch-deck and hackathon used to ship in the kit. The skills link to each other's format files, so it installs as a set.",
+      "triggers": ["validate a startup idea", "pitch deck or demo day", "hackathon submission", "build or traction status", "positioning or ICP", "pricing an onchain product", "fundraising data room or investor update", "launch-day runbook", "incident comms or status page", "ecosystem BD or listings"],
+      "source": "https://github.com/solanabr/startup-builder-skill",
+      "install": { "method": "kit", "command": "bash .claude/bin/skills.sh add startup-builder", "env": [] },
+      "license": "MIT",
+      "maintainer": "solanabr",
+      "signal": { "stars": 0, "last_commit": "2026-10-06", "reputability": "first-party" },
+      "default_installed": false,
+      "safety": "Scanned at e02c5c2 (2026-10-06): 63 files (59 Markdown, 3 HTML templates, LICENSE), 127 blobs across 24 commits, and no file other than Markdown, HTML or LICENSE in its whole history; no executables, symlinks, scripts, package.json, hooks.json, .mcp.json or .claude/settings.json; no eval, atob, new Function, createRequire or child_process, no bidi or invisible Unicode, no IP literals, no env-var or keypair reads. 23 lines run over 500 characters, all Markdown table rows or prose with no whitespace padding. The three HTML templates (launch-post, status-page, postmortem) have no script tags and load nothing; status-page links status.solana.com. The skills write only .claude/context/*.md and drafts in the user's project and run no network or onchain write themselves: they tell the agent to run read-only checks (solana program show, solana-verify get-program-hash, spl-token display), and the authority and IDL-upload commands in the launch runbook are steps for the signers or /deploy, not for the skill. Content adapted from sendaifun/solana-new is credited in THIRD_PARTY_NOTICES.md with none of that pack's telemetry preambles, and the only live solana-new link left is the pinned superteam-ideas.json dataset. Legal, tax and token-classification questions route to crypto-legal, which is informational only. Dated facts (rent, Jupiter and wallet listing rules, Colosseum formats, grant sizes) carry a 2026-10-05 check date; re-check before acting on one. Pinned under ext/ rather than top-level because its ten descriptions total 2,729 characters, about 680 tokens in every session and subagent. MIT; first-party solanabr repo, so it needs no provenance-table row.",
+      "tags": ["startup", "go-to-market", "pitch", "hackathon", "fundraising", "launch", "pricing", "bd"]
+    },
+    {
       "id": "anthropic-claude-code-plugins",
       "name": "Anthropic Claude Code Plugins",
       "type": "plugin",

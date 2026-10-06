@@ -4,6 +4,9 @@ All notable changes to solana-ai-kit.
 
 ## [Unreleased]
 
+### Added
+- **`startup-builder` extension** (#218) — solanabr/startup-builder-skill pinned at `e02c5c2` under `go-to-market`: idea-sprint, pitch-deck and hackathon, which left the kit with no install route back, plus build-status, positioning, pricing, fundraising, launch, incident-comms and ecosystem-bd. Pinned under `ext/` so its 2,729 characters of descriptions (~680 tokens) cost nothing until read; routed from the hub and the `skill-packs` index, and `/plan-feature` now names it as the writer of `idea.md`.
+
 ## [2.4.0] - 2026-10-09
 
 ### Added
