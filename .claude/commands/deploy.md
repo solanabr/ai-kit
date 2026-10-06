@@ -25,6 +25,10 @@ Start only when the user asks for mainnet, and first report which preconditions 
 4. Publish the IDL (devnet step 5), then record `.program-id-mainnet`, `deployment-mainnet.json` (programId, deployedAt, deployer, upgradeAuthority, commit) and the production app env.
 5. Smoke-test read-only paths first, then writes with minimal amounts.
 
+## Record in build.md
+
+After a deploy, merge what it proved into the Build Status table of `.claude/context/build.md`: the program ID for the cluster, the mainnet deploy date and slot, the upgrade authority and the verified-build commit, each with its source. Follow [build-md-format.md](../skills/ext/startup-builder/skills/build-status/references/build-md-format.md) (install: `bash .claude/bin/skills.sh add startup-builder`): read the file first, touch only those rows, append milestones rather than rewriting them, and update `Updated`. Skip this when the project has no `build.md` and the pack is not installed.
+
 ## Upgrade authority staging
 
 <!-- Adapted from sendaifun/solana-new (deploy-to-mainnet), MIT -->
