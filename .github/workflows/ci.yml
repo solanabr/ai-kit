@@ -103,12 +103,21 @@ jobs:
           cd "$RUNNER_TEMP/proj"
           timeout 300 opencode debug skill > "$RUNNER_TEMP/opencode-skills.json"
           # Both skills the kit ships in-repo. skill-packs carries the pack routing,
-          # so an --agents install can surface a pack at all; a pack installed on top
-          # lands beside these and is not asserted here.
+          # so an --agents install can surface a pack at all.
           for s in skill-packs token-extensions; do
             grep -q "/\.agents/skills/$s/SKILL\.md" "$RUNNER_TEMP/opencode-skills.json" \
               || { echo "::error::opencode did not discover $s"; head -c 3000 "$RUNNER_TEMP/opencode-skills.json"; exit 1; }
           done
+          # An installed pack's skill, which reaches the project by a different route
+          # than the two above: a submodule checkout under skills/ext/ rather than
+          # install.sh's copy of the in-repo skills. auditor-skill is the pack to assert
+          # on — a core pack that is a submodule, so a failed fetch aborts the install
+          # and this cannot flake on an absent pack (anthropic-skills only warns), and
+          # the one core pack whose SKILL.md sits at its root, so the path does not
+          # encode the pack's inner layout. Not solana-dev: the hub SKILL.md declares
+          # that name too, and which of the two a client reports is scan-order dependent.
+          grep -q '/\.agents/skills/ext/auditor-skill/SKILL\.md' "$RUNNER_TEMP/opencode-skills.json" \
+            || { echo "::error::opencode did not discover the auditor-skill pack"; head -c 3000 "$RUNNER_TEMP/opencode-skills.json"; exit 1; }
 
       - name: Codex loads AGENTS.md and the kit skills
         run: |
@@ -118,3 +127,9 @@ jobs:
             || { echo "::error::Codex did not load AGENTS.md"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
           grep -q 'skill-packs' "$RUNNER_TEMP/codex-prompt.json" \
             || { echo "::error::Codex did not list the kit skills"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
+          # The same installed-pack check as the opencode step, by name rather than
+          # path: Codex splits one shared description budget across every registered
+          # skill and truncates each entry, so the name is the stable part. No false
+          # positive — CLAUDE-solana.md, which becomes AGENTS.md here, never names it.
+          grep -q 'auditor-skill' "$RUNNER_TEMP/codex-prompt.json" \
+            || { echo "::error::Codex did not list the auditor-skill pack"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
