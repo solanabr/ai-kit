@@ -240,7 +240,7 @@ your-project/
 │   │   │   │                      # huggingface-skills, dune, circle, google,
 │   │   │   │                      # knowledge-work, mongodb, elevenlabs, light-protocol,
 │   │   │   │                      # gmgn, redis, resend, pulumi, meteora-invent,
-│   │   │   │                      # playwright-skill, gsap-skills
+│   │   │   │                      # playwright-skill, gsap-skills, startup-builder
 │   │   ├── extensions.txt     # Extensions this project installed (kept by /update)
 │   │   ├── skill-registry.json # Pack tiers (core/extension) + opt-in add-on catalog
 │   │   ├── skill-packs/      # Work → pack index: which extension or add-on to offer

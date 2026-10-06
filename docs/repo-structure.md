@@ -56,7 +56,8 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   │   ├── alchemy/               # Official Alchemy (Solana RPC, DAS, gRPC)
     │   │   ├── position-manager-skill/ # CLMM LP lifecycle (Orca, Raydium, Meteora)
     │   │   ├── content-gen-skill/      # Educational content pipeline (courses, explainers)
-    │   │   └── writer-style-skill/     # Prose in a named author's voice
+    │   │   ├── writer-style-skill/     # Prose in a named author's voice
+    │   │   └── startup-builder/        # Idea, pitch, hackathon, pricing, fundraising, launch, BD
     │   ├── skill-registry.json     # Pack tiers (core/extension) + opt-in add-on catalog
     │   ├── skill-packs/            # Work → pack index: which extension or add-on to offer (local)
     │   ├── token-extensions/        # Token-2022 extensions: pick, combine, create (local)

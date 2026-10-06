@@ -133,3 +133,6 @@
 [submodule ".claude/skills/ext/gsap-skills"]
 	path = .claude/skills/ext/gsap-skills
 	url = https://github.com/greensock/gsap-skills
+[submodule ".claude/skills/ext/startup-builder"]
+	path = .claude/skills/ext/startup-builder
+	url = https://github.com/solanabr/startup-builder-skill
