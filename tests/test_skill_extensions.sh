@@ -308,7 +308,7 @@ echo "[add]"
 LIST_OUT=""
 AGAIN=""
 if packs_ready; then
-  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add solana-game) >/dev/null 2>&1
+  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add solana-game) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
   LIST_OUT="$(cd "$P1" && bash .claude/bin/skills.sh list)"
   AGAIN="$(cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add solana-game 2>&1)"
 fi
@@ -322,7 +322,7 @@ pack_check assert_cmd_fails "(cd \"$P1\" && SOLANA_AI_KIT_LOCAL_SRC=\"$REPO_ROOT
 # A partial pack counts as installed; add --force reinstalls it
 if packs_ready; then
   rm -f "$P1/.claude/skills/ext/solana-game/skill/SKILL.md"
-  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add --force solana-game) >/dev/null 2>&1
+  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add --force solana-game) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
 fi
 pack_check assert_file_exists "$P1/.claude/skills/ext/solana-game/skill/SKILL.md" "skills.sh add --force restores a truncated pack"
 pack_check assert_eq "1" "$(grep -cx solana-game "$P1/.claude/skills/extensions.txt" || true)" "...and records it once"
@@ -335,7 +335,7 @@ chmod +x "$SHIM/cp"
 # A function, not a command string: PATH has to be expanded when it runs, not when the
 # string is built.
 add_sendai_through_shim() {
-  (cd "$P1" && PATH="$SHIM:$PATH" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) >/dev/null 2>&1
+  (cd "$P1" && PATH="$SHIM:$PATH" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
 }
 pack_check assert_cmd_fails add_sendai_through_shim "skills.sh add fails when its copy fails"
 pack_check assert_dir_not_exists "$P1/.claude/skills/ext/sendai" "A failed copy leaves no ext/sendai"
@@ -348,7 +348,7 @@ if packs_ready; then
 fi
 pack_check assert_dir_not_exists "$P1/.claude/skills/ext/sendai" "A killed copy leaves no ext/sendai"
 if packs_ready; then
-  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) >/dev/null 2>&1
+  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/skills.sh add sendai) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
 fi
 pack_check assert_dir_exists "$P1/.claude/skills/ext/sendai" "The next add installs the pack a killed copy left out"
 pack_check assert_eq "" "$(ls -A "$P1/.claude/skills/ext" 2>/dev/null | grep partial || true)" "...and removes the staging folder the kill left"
@@ -381,7 +381,7 @@ echo "[--with]"
 P2="$TEMP_DIR/with"
 if packs_ready; then
   mkdir -p "$P2" && (cd "$P2" && git init -q)
-  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --with sendai,jupiter "$P2" >/dev/null 2>&1
+  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --with sendai,jupiter "$P2" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 fi
 pack_check assert_eq "$(sorted $KIT_CORE sendai jupiter)" "$(ext_dirs "$P2/.claude/skills/ext")" "install.sh --with a,b adds those extensions"
 pack_check assert_cmd_fails "SOLANA_AI_KIT_LOCAL_SRC=\"$REPO_ROOT\" bash \"$REPO_ROOT/install.sh\" --with no-such-pack \"$TEMP_DIR/bad\"" "install.sh rejects an unknown --with pack"
@@ -426,12 +426,12 @@ pack_check assert_contains "$HOSTILE_OUT" "ignoring '*'" "prune warns about a gl
 pack_check assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "A glob in extensions.txt adds no pack, even with a project folder named like one"
 if packs_ready; then
   vendor_ext "$P2/.claude/skills/ext"
-  (cd "$P2" && bash .claude/bin/skills.sh prune) >/dev/null 2>&1
+  (cd "$P2" && bash .claude/bin/skills.sh prune) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
 fi
 pack_check assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "...and the next update keeps the same subset"
 if packs_ready; then
   printf 'jupiter\n*\n' > "$P2/.claude/skills/extensions.txt"
-  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$P2" >/dev/null 2>&1
+  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$P2" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 fi
 pack_check assert_eq "jupiter" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')" "install.sh re-run (select) drops a glob line too"
 ADD_GLOB=""
@@ -446,11 +446,11 @@ echo "[--agents]"
 P3="$TEMP_DIR/agents"
 if packs_ready; then
   mkdir -p "$P3" && (cd "$P3" && git init -q)
-  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents --with=solana-mobile "$P3" >/dev/null 2>&1
+  SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents --with=solana-mobile "$P3" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 fi
 pack_check assert_eq "$(sorted $KIT_CORE solana-mobile)" "$(ext_dirs "$P3/.agents/skills/ext")" "--agents install carries core packs plus --with"
 if packs_ready; then
-  (cd "$P3" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/skills.sh add metaplex) >/dev/null 2>&1
+  (cd "$P3" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/skills.sh add metaplex) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
 fi
 pack_check assert_dir_exists "$P3/.agents/skills/ext/metaplex" ".agents/bin/skills.sh add installs into .agents/skills/ext"
 pack_check assert_dir_not_exists "$P3/.claude" "--agents skills.sh writes nothing under .claude/"

@@ -42,7 +42,7 @@ OLD="$(g -C "$UP" rev-parse HEAD)"
 SUP="$TEMP_DIR/kit"
 mkdir -p "$SUP"
 g -C "$SUP" init -q
-g -C "$SUP" submodule add -q "$UP" ext/pack >/dev/null 2>&1
+g -C "$SUP" submodule add -q "$UP" ext/pack > "$QUIET_LOG" 2>&1 || quiet_fail "submodule add"
 g -C "$SUP" commit -qm pin
 BASE="$(g -C "$SUP" rev-parse HEAD)"
 

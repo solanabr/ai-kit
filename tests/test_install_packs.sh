@@ -55,7 +55,7 @@ done
 cp "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.mcp.json" "$REPO_ROOT/.env.example" "$KIT/"
 G -C "$TEMP_DIR" init -q kit
 for id in $CORE jupiter sendai; do
-  G -C "$KIT" submodule add -q "file://$TEMP_DIR/packs/$id" ".claude/skills/ext/$id" >/dev/null 2>&1
+  G -C "$KIT" submodule add -q "file://$TEMP_DIR/packs/$id" ".claude/skills/ext/$id" > "$QUIET_LOG" 2>&1 || quiet_fail "submodule add"
 done
 # sendai's source is gone: fetching it fails the install, so a pass proves it was not fetched.
 G -C "$KIT" config -f .gitmodules submodule..claude/skills/ext/sendai.url "file://$TEMP_DIR/packs/missing"

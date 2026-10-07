@@ -18,11 +18,11 @@ echo ""
 
 # --- Setup: initial install ---
 (cd "$TEMP_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 # --- Run update ---
 echo "[basic update]"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 
 assert_dir_exists "$TEMP_DIR/.claude" ".claude/ still exists after update"
 assert_file_exists "$TEMP_DIR/CLAUDE.md" "CLAUDE.md still exists after update"
@@ -59,7 +59,7 @@ assert_eq "$VERSION_CONTENT" "$VERSION_AFTER" "VERSION unchanged after dry-run"
 # --- CLAUDE.md.upstream: modify CLAUDE.md, then update ---
 echo "[upstream detection]"
 echo "# My customized CLAUDE.md" > "$TEMP_DIR/CLAUDE.md"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 
 assert_file_exists "$TEMP_DIR/CLAUDE.md.upstream" "CLAUDE.md.upstream created when CLAUDE.md differs"
 assert_file_contains "$TEMP_DIR/CLAUDE.md" "My customized" "Original CLAUDE.md not overwritten"
@@ -67,7 +67,7 @@ assert_file_contains "$TEMP_DIR/CLAUDE.md" "My customized" "Original CLAUDE.md n
 # --- Protected files: .env not overwritten ---
 echo "[protected files]"
 echo "MY_SECRET=preserved" > "$TEMP_DIR/.env"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 assert_file_contains "$TEMP_DIR/.env" "MY_SECRET=preserved" ".env not overwritten by update"
 
 # --- Retired rules: the kit's old globs: copies go, rules the user wrote stay ---
@@ -78,7 +78,7 @@ printf -- '---\npaths:\n  - "src/**/*.ts"\n---\n# Team API rules\n' > "$TEMP_DIR
 DRY_RULES="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
 assert_contains "$DRY_RULES" "[would remove] .claude/rules/rust.md" "--dry-run reports the retired kit rule"
 assert_file_exists "$TEMP_DIR/.claude/rules/rust.md" "--dry-run leaves the retired kit rule in place"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 assert_file_not_exists "$TEMP_DIR/.claude/rules/rust.md" "Retired kit rule removed by update"
 assert_file_exists "$TEMP_DIR/.claude/rules/team-api.md" "User-written rule kept by update"
 
@@ -143,7 +143,7 @@ assert_eq "context-mode context7 helius my-server playwright solana-dev" "$MCP_L
 
 # Idempotent: a second run changes nothing
 cp "$SETTINGS" "$TEMP_DIR/settings.before"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 assert_cmd_success "cmp -s '$SETTINGS' '$TEMP_DIR/settings.before'" "second update leaves settings.json unchanged"
 
 # Only installs from kit <= 2.1.0 are migrated: a value set later is the user's choice
@@ -151,7 +151,7 @@ echo "solana-ai-kit 2.2.0" > "$TEMP_DIR/.claude/VERSION"
 python3 -c 'import json, sys
 s = json.load(open(sys.argv[1])); s["enableAllProjectMcpServers"] = True
 json.dump(s, open(sys.argv[1], "w"), indent=2)' "$SETTINGS"
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 assert_eq "true" "$(json_at "$SETTINGS" enableAllProjectMcpServers)" "newer installs keep the value (migration runs once)"
 
 # --- Only installs on the retired-defaults list are migrated ----------------
@@ -187,7 +187,7 @@ fi
 # whether the permissions block is still the one the kit shipped.
 echo "[firewall tier migration]"
 (cd "$FW_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$FW_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$FW_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 FW_SETTINGS="$FW_DIR/.claude/settings.json"
 FW_SECURITY="$FW_DIR/.claude/security.json"
 # A settings.json the kit really shipped, straight from its tag, so the baseline hash in
@@ -371,12 +371,12 @@ echo "[agents mode]"
 AGENTS_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR" "$FW_DIR" "$AGENTS_DIR"' EXIT
 (cd "$AGENTS_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 assert_dir_exists "$AGENTS_DIR/.agents" ".agents/ exists after --agents install"
 assert_file_exists "$AGENTS_DIR/.agents/bin/update.sh" ".agents/bin/update.sh exists"
 
-(cd "$AGENTS_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/update.sh) >/dev/null 2>&1
+(cd "$AGENTS_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .agents/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 assert_dir_exists "$AGENTS_DIR/.agents/agents" ".agents/agents/ valid after agents-mode update"
 assert_dir_exists "$AGENTS_DIR/.agents/commands" ".agents/commands/ valid after agents-mode update"
 

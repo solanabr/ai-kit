@@ -24,7 +24,7 @@ echo "mem1" > "$TEMP_DIR/.claude/memory/user_prefs.md"
 
 # Install over existing .claude/
 echo "[install over existing .claude/]"
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 # Assert: no nesting
 assert_dir_not_exists "$TEMP_DIR/.claude/.claude" "No .claude/.claude nesting"

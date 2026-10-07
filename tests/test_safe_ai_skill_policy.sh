@@ -27,7 +27,7 @@ yaml_json() {  # yaml_json <file>: the YAML as JSON; status 2 when no YAML parse
   fi
 }
 new_project() { mkdir -p "$TEMP_DIR/$1" && git -C "$TEMP_DIR/$1" init -q && echo "$TEMP_DIR/$1"; }
-install_kit() { SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$@" >/dev/null 2>&1; }
+install_kit() { SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$@" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh $*"; }
 update_kit() { (cd "$1" && shift && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh "$@" 2>&1); }
 config_block() { sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$1/.gitignore"; }
 
