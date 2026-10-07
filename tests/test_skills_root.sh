@@ -56,11 +56,17 @@ refute() {  # refute <message> <command...>: passes when the command fails
 
 APACHE="$(cat "$SCRIPT_DIR/fixtures/apache-2.0-LICENSE.txt" 2>/dev/null || true)"
 if [ -z "$APACHE" ]; then
-  # The suite's own Apache copy is the only text check_skill accepts; without it
-  # there is nothing to assert against.
-  echo "  SKIP: no tests/fixtures/apache-2.0-LICENSE.txt to build a passing fixture from"
+  # The suite's own Apache copy is the only text check_skill accepts; without it there is
+  # nothing to assert against. A FAILURE, not a skip: unlike an uninitialized ext/ pack,
+  # this fixture is a tracked file, so its absence is a broken checkout rather than a setup
+  # state a user can be told to fix. It used to echo an UNCOUNTED "SKIP:" and then
+  # print_summary + exit 0 with PASS=FAIL=SKIP=0 — "Results: 0 passed, 0 failed (of 0
+  # checks)", exit 0 — which run_all.sh counted as a passing suite and which #215's skip
+  # accounting could not see, because the raw echo never touched the skip counter.
+  assert_file_exists "$SCRIPT_DIR/fixtures/apache-2.0-LICENSE.txt" \
+    "tests/fixtures/apache-2.0-LICENSE.txt is present to build a passing fixture from"
   print_summary
-  exit 0
+  exit 1
 fi
 
 # --- A fixture repo with its skills nested, plus one at the default location ---

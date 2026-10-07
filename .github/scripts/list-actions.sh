@@ -26,10 +26,12 @@ if [ "${1:-}" != "--resolve" ]; then
 fi
 
 fail=0
+resolved=0
 while read -r ref; do
   case "$ref" in ./*|docker://*) continue ;; esac
   repo="$(printf '%s' "$ref" | cut -d@ -f1 | cut -d/ -f1-2)"
   ver="${ref##*@}"
+  resolved=$((resolved + 1))
   if gh api "repos/$repo/commits/$ver" --silent 2>/dev/null; then
     echo "ok       $ref"
   else
@@ -37,4 +39,13 @@ while read -r ref; do
     fail=1
   fi
 done < <(list | awk '{ print $2 }' | sort -u)
+# `fail` starts at 0 and the loop body is the only thing that can raise it, so zero refs
+# used to exit 0 — the ci.yml job "Every uses: under .github/ resolves" reporting green
+# having resolved nothing. Anything that empties list() (a directory move, an extension
+# change, a broken awk) is a silent loss of the whole check, so say so instead.
+if [ "$resolved" -eq 0 ]; then
+  echo "NONE     no remote action reference found under .github/ — nothing was resolved" >&2
+  exit 1
+fi
+echo "resolved $resolved remote action reference(s)"
 exit "$fail"

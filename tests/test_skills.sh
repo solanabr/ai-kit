@@ -45,5 +45,12 @@ done < <(grep -oE '\]\([^)]+\)' "$SKILL_FILE" | sed 's/\](//' | sed 's/)//' | gr
 
 echo ""
 echo "Checked $CHECKED links, $BROKEN broken, $NOT_CHECKED_OUT into packs that are not checked out."
+# The tally above is printed whatever happened, including "Checked 0 links, 0 broken",
+# which reads like a pass. The extraction is a grep for inline `](target)`, so a hub
+# rewritten with reference-style links empties it and the whole suite collapses to the
+# one assert_file_exists. Demonstrated: 284 checks became 1, with a broken route left in
+# the hub and the suite exiting 0.
+assert_cmd_success "[ $((CHECKED + NOT_CHECKED_OUT)) -gt 0 ]" \
+  "SKILL.md yielded relative links to check ($CHECKED checked, $NOT_CHECKED_OUT not checked out)"
 
 print_summary

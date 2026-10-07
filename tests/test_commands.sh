@@ -46,10 +46,19 @@ ENV_EXAMPLE="$REPO_ROOT/.env.example"
 SETUP_MCP="$CMDS_DIR/setup-mcp.md"
 
 if [ -f "$ENV_EXAMPLE" ] && [ -f "$SETUP_MCP" ]; then
+  # Counted, then asserted non-zero. Both files existing is not the same as the producer
+  # finding keys in one of them: the grep is anchored on `^KEY=`, so .env.example moving to
+  # the `export KEY=` form (or any other style change) empties the loop and every key is
+  # reported as covered without one being read. Demonstrated by rewriting .env.example to
+  # `export KEY=` with HELIUS_API_KEY stripped out of setup-mcp.md: 62 checks became 52
+  # and the suite stayed green.
+  ENV_KEYS=0
   while IFS= read -r key; do
     [ -z "$key" ] && continue
+    ENV_KEYS=$((ENV_KEYS + 1))
     assert_file_contains "$SETUP_MCP" "$key" "setup-mcp.md mentions .env.example key: $key"
   done < <(grep -oE '^[A-Z_][A-Z0-9_]*=' "$ENV_EXAMPLE" | sed 's/=$//')
+  assert_cmd_success "[ $ENV_KEYS -gt 0 ]" ".env.example has KEY= lines for the coverage check to read ($ENV_KEYS found)"
 else
   assert_eq "0" "1" ".env.example and setup-mcp.md both exist for drift check"
 fi
