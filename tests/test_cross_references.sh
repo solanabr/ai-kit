@@ -33,6 +33,45 @@ MCP_COUNT=$(python3 -c "import json; print(len(json.load(open('$REPO_ROOT/.mcp.j
 assert_eq "4" "$MCP_COUNT" "MCP server count in mcp.json is 4"
 assert_file_contains "$REPO_ROOT/README.md" "4 MCP server" "README.md references 4 MCP servers"
 
+# --- Every copy of those counts, not just the first one that matches ---
+# The assertions above prove *a* line carries the right number; a second line carrying a
+# stale one still passed, which is why these counts drift across the nine places the Ripple
+# Map lists. This reads every copy in the six files that row names and fails on any that
+# disagrees, printing the file:line that is wrong.
+#
+# Scoped to those six files on purpose: docs/configuration.md counts other plugins' agents
+# and docs/skill-packs.md counts third-party .mcp.json entries, and neither is this count.
+# The zero-hits guard is what keeps the check from going vacuous if the phrasing moves.
+echo "[count-copies]"
+COUNT_DRIFT="$(python3 - "$REPO_ROOT" "$AGENT_COUNT" "$CMD_COUNT" "$MCP_COUNT" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+TRACKED = ["README.md", "QUICK-START.md", "docs/README.md",
+           "docs/agents-and-commands.md", "docs/plugin.md", "docs/repo-structure.md"]
+COUNTS = {
+    "agent":      (sys.argv[2], re.compile(r"\b(\d+)\s+(?:specialized\s+)?(?:AI\s+)?agents\b", re.I)),
+    "command":    (sys.argv[3], re.compile(r"\b(\d+)\s+(?:workflow\s+|slash\s+)?commands\b", re.I)),
+    "MCP server": (sys.argv[4], re.compile(r"\b(\d+)\s+(?:default\s+)?MCP servers?\b", re.I)),
+}
+seen = dict.fromkeys(COUNTS, 0)
+for rel in TRACKED:
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        print(f"{rel}: tracked for counts by the Ripple Map, but missing")
+        continue
+    for n, line in enumerate(open(path, encoding="utf-8"), 1):
+        for name, (want, rx) in COUNTS.items():
+            for m in rx.finditer(line):
+                seen[name] += 1
+                if m.group(1) != want:
+                    print(f"{rel}:{n}: \"{m.group(0)}\" -- the kit ships {want} {name}s")
+for name, hits in seen.items():
+    if not hits:
+        print(f"no tracked file states the {name} count -- the phrasing drifted past this check")
+PY
+)"
+assert_eq "" "$COUNT_DRIFT" "Every agent, command and MCP server count in the tracked files matches the tree"
+
 # --- MCP servers appear in CLAUDE-solana.md ---
 echo "[mcp-in-claude-solana]"
 MCP_KEYS=$(python3 -c "import json; [print(k) for k in json.load(open('$REPO_ROOT/.mcp.json'))['mcpServers'].keys()]" 2>/dev/null)
@@ -79,12 +118,35 @@ echo "[versioning]"
 KIT_VERSION=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' "$REPO_ROOT/.claude/VERSION" | head -1)
 assert_file_contains "$REPO_ROOT/README.md" "version-$KIT_VERSION-blue" "README.md version badge matches .claude/VERSION ($KIT_VERSION)"
 
-# --- Submodule count matches ext/ directories ---
+# --- The ext/ checkout matches the .gitmodules submodule paths ---
+# Compare the SET of names, not two integers. Two integers name nothing when they differ,
+# and they counted dot-directories: Claude Code's own .cc-writes scratch dir lands at
+# ext/.claude/, which is empty and so invisible to git -- untracked, un-ignored, and absent
+# from a fresh CI clone. That made the gate red locally and green in CI, the worst way round.
+# A dot-directory under ext/ is never a submodule, so skip them; a missing one still shows up
+# on the declared-not-present side.
 echo "[submodules]"
 if [ -f "$REPO_ROOT/.gitmodules" ]; then
-  GITMODULE_COUNT=$(grep -c '\[submodule' "$REPO_ROOT/.gitmodules" | tr -d ' ')
-  EXT_DIR_COUNT=$(find "$REPO_ROOT/.claude/skills/ext" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-  assert_eq "$GITMODULE_COUNT" "$EXT_DIR_COUNT" "Submodule count ($GITMODULE_COUNT) matches ext/ dir count ($EXT_DIR_COUNT)"
+  SUBMODULE_DRIFT="$(python3 - "$REPO_ROOT" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+gitmodules = open(os.path.join(root, ".gitmodules"), encoding="utf-8").read()
+declared = set(re.findall(r"^\s*path\s*=\s*\.claude/skills/ext/(\S+)", gitmodules, re.M))
+total = len(re.findall(r"^\s*\[submodule", gitmodules, re.M))
+if total != len(declared):
+    print(f".gitmodules declares {total} submodules but only {len(declared)} under .claude/skills/ext/")
+ext = os.path.join(root, ".claude/skills/ext")
+present = set()
+if os.path.isdir(ext):
+    present = {n for n in os.listdir(ext)
+               if not n.startswith(".") and os.path.isdir(os.path.join(ext, n))}
+for name in sorted(declared - present):
+    print(f".gitmodules declares ext/{name}, which is not checked out")
+for name in sorted(present - declared):
+    print(f".claude/skills/ext/{name} is checked out but .gitmodules does not declare it")
+PY
+)"
+  assert_eq "" "$SUBMODULE_DRIFT" "The ext/ checkout matches the .gitmodules submodule paths"
 fi
 
 # --- Install from a clone: later steps read from the directory git clone creates ---

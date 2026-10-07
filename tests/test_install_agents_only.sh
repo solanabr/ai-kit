@@ -244,10 +244,37 @@ assert_eq "$BOTH_MODE_EXPECTED" "$(both_mode_files "$TEMP_DIR")" \
 # CLAUDE_REF only matches the .claude/ DIRECTORY. The bare instruction filename is a
 # separate class: a file telling Codex to read or write CLAUDE.md names a file that
 # mode never creates. Lines naming AGENTS.md too are fine; CLAUDE-solana.md is the source.
-assert_eq "" "$(grep -rn --exclude-dir=ext --exclude-dir=bin -E '(^|[^.~/[:alnum:]])CLAUDE(\.local)?\.md' \
-    "$TEMP_DIR/.agents" "$TEMP_DIR/AGENTS.md" 2>/dev/null \
-    | grep -v 'AGENTS\.md' | grep -v 'CLAUDE-solana\.md' || true)" \
-  "nothing points Codex at a bare CLAUDE.md without also naming AGENTS.md"
+#
+# skill-registry.json is exempt because it is data, not instructions. It catalogues
+# third-party packs and about twenty of them ship a root CLAUDE.md that an agent working
+# inside the pack directory picks up, so the safety prose has to be free to say so. #217
+# went red on exactly that and rewrote the two offending strings instead of this predicate,
+# which leaves the next pack scan that names the file red again for describing a hazard.
+#
+# Python rather than piped greps because the AGENTS.md exemption has to read the LINE, not
+# grep's "path:lineno:" prefix. It read the prefix: every hit inside AGENTS.md carried
+# AGENTS.md in its own path and was dropped unread, so that half of the check could not fail.
+BARE_CLAUDE_MD="$(python3 - "$TEMP_DIR" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+BARE = re.compile(r"(^|[^.~/A-Za-z0-9])CLAUDE(\.local)?\.md")
+targets = [os.path.join(root, "AGENTS.md")]
+for base, dirs, files in os.walk(os.path.join(root, ".agents")):
+    dirs[:] = [d for d in dirs if d not in ("ext", "bin")]
+    targets += [os.path.join(base, f) for f in files]
+for path in sorted(targets):
+    if os.path.basename(path) == "skill-registry.json":
+        continue
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError):
+        continue
+    for n, line in enumerate(text.splitlines(), 1):
+        if BARE.search(line) and "AGENTS.md" not in line and "CLAUDE-solana.md" not in line:
+            print(f"{os.path.relpath(path, root)}:{n}: {line.strip()}")
+PY
+)"
+assert_eq "" "$BARE_CLAUDE_MD" "nothing points Codex at a bare CLAUDE.md without also naming AGENTS.md"
 assert_eq "$SKIP_FILES_INSTALL" "$SKIP_FILES_UPDATE" \
   "AGENTS_SKIP_FILES is identical in install.sh and bin/update.sh"
 assert_file_not_exists "$TEMP_DIR/.agents/commands/cleanup.md" \
