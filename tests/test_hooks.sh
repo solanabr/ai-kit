@@ -254,6 +254,11 @@ if command -v jq >/dev/null 2>&1; then
     AC="$(printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext')"
     assert_contains "$SM" "SuperteamBR" "$V: the systemMessage still carries the banner"
     assert_contains "$SM" "🔗 https://mainnet.helius-rpc.com  👛 11111111111111111111111111111111" "$V: the user sees the cluster and wallet under the banner"
+    # The host prints the banner after its own "SessionStart:startup says:" prefix, which
+    # lands on the same line and shears the first row of the ASCII art. A leading blank
+    # line is the whole fix, and it is invisible in every content assertion above — so
+    # assert it on the raw JSON, for both hook copies, or they drift apart again.
+    assert_eq "true" "$(printf '%s' "$OUT" | jq -r '.systemMessage | startswith("\n")')" "$V: the banner leads with a blank line, clear of the host's SessionStart prefix"
     # Containment, not equality: additionalContext also carries the firewall-tier
     # clause wherever a .claude/security.json is readable. What has to hold is that
     # the banner and the context name the same cluster and wallet.
