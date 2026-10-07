@@ -26,7 +26,7 @@ A complete `.claude/` configuration that turns Claude into a Solana building par
 - **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands, egress and `context-mode`'s code executor — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
 - **Four standard plugins**, two steps at the end of the install: [memsearch](#persistent-memory-memsearch) for memory that outlives a session, and [`rust-analyzer-lsp`, `typescript-lsp`, `csharp-lsp`](#code-intelligence-language-server-plugins) so the agent reads your code through a compiler
-- **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — three installed by default, the rest on demand ([skill-packs.md](docs/skill-packs.md))
+- **Pinned skill packs** from Solana Foundation, Colosseum, Jupiter, Metaplex, MagicBlock, Helius, Alchemy, SendAI, Solana Mobile and more — four installed by default (three into `ext/`, plus Anthropic's own `frontend-design` and `webapp-testing` top-level), the rest on demand ([skill-packs.md](docs/skill-packs.md))
 - **Agent teams** (opt-in, experimental) for multi-step workflows (architect → engineer → QA)
 - **Progressive skill loading** that only loads context when needed (saves tokens)
 - **A small always-on CLAUDE.md** carrying only the house rules and workflow a strong model would not infer; everything else is on demand

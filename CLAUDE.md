@@ -78,7 +78,7 @@ When X changes, also update Y. A row that is wrong is worse than absent, because
 
 ## Plugin Layout
 
-`.claude-plugin/marketplace.json` is an in-repo marketplace; `plugin/` is the core-plugin subtree. Its `agents/`, `commands/`, `.mcp.json`, `VERSION` and the four local skills are **symlinks** into `.claude/` — only `hooks/hooks.json` and the plugin-variant `skills/solana-ai-kit/SKILL.md` are real files, and that hub must carry no `ext/` links, since submodules are absent in plugin installs. Every plugin skill lives at `plugin/skills/<name>/SKILL.md`; a `SKILL.md` placed directly in `plugin/skills/` loads as the only skill and hides the rest. Validate with `claude plugin validate .` and `./plugin`.
+`.claude-plugin/marketplace.json` is an in-repo marketplace; `plugin/` is the core-plugin subtree. Its `agents/`, `commands/`, `.mcp.json`, `VERSION`, `skills/skill-registry.json` and its one local skill (`token-extensions` — #210 deleted the other three) are **symlinks** into `.claude/` — only `hooks/hooks.json` and the plugin-variant `skills/solana-ai-kit/SKILL.md` are real files, and that hub must carry no `ext/` links, since submodules are absent in plugin installs. Every plugin skill lives at `plugin/skills/<name>/SKILL.md`; a `SKILL.md` placed directly in `plugin/skills/` loads as the only skill and hides the rest. Validate with `claude plugin validate .` and `./plugin`.
 
 ## Workflow
 
