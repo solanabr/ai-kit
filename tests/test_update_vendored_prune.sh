@@ -142,6 +142,20 @@ seed "$PROJ_DIR/escaped-by-registry/keep-me.md"
 # clean-pack: nothing nested at all; it must come through untouched.
 seed "$EXT/clean-pack/SKILL.md"
 
+# A real git project listing the packs the way install.sh leaves them: entries in
+# .gitmodules and no gitlink in the index, since the packs are vendored copies. update.sh
+# ends with `git submodule update --init --recursive`, long after the prune, so this is
+# what shows that line cannot fetch back what the prune just removed.
+(cd "$PROJ_DIR" && git init -q)
+cat > "$PROJ_DIR/.gitmodules" <<'GM'
+[submodule ".claude/skills/ext/unrecorded-pack"]
+	path = .claude/skills/ext/unrecorded-pack
+	url = https://example.invalid/unrecorded-pack.git
+[submodule ".claude/skills/ext/multi-line-pack"]
+	path = .claude/skills/ext/multi-line-pack
+	url = https://example.invalid/multi-line-pack.git
+GM
+
 # --- Guard: the fixture is actually there before the run --------------------
 # Without this the "removed" assertions below would pass against a fixture that never
 # got written, which is the failure mode that let the real defect sit unnoticed.
@@ -182,6 +196,12 @@ echo ""
 echo "[declared by the pack, recorded nowhere]"
 assert_dir_not_exists "$EXT/unrecorded-pack/skill/borrowed" "nested submodule with no registry record pruned"
 assert_dir_not_exists "$EXT/unrecorded-pack/eval-harness" "second nested submodule with no registry record pruned"
+
+# The prune runs long before update.sh's closing `git submodule update --init
+# --recursive`. Both packs above are named in the project's .gitmodules, so if that line
+# could act on them the assertions above would already have failed.
+assert_file_contains "$PROJ_DIR/.gitmodules" "ext/unrecorded-pack" \
+  "the project still lists the packs as submodules, so the closing update had something to try"
 
 # --- What must survive ------------------------------------------------------
 echo ""
