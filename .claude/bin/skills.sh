@@ -495,7 +495,7 @@ cmd_prune() {
   # on its own are stripped here rather than in that copy — which also cleans a project
   # installed before the kit stripped them at all.
   stripped="$(strip_pack_load_surfaces "$CONFIG_DIR/skills/ext"/*/)"
-  [ "$stripped" = 0 ] || echo "- Removed $stripped pack-local .claude/ (a pack's own skills are not this project's)"
+  [ "$stripped" = 0 ] || echo "- Removed $stripped pack-local instruction file(s) and .claude/ from skills/ext/"
   # Installed upstream packs move to the commit this kit version pins.
   for id in $(wanted_upstream "$reg" "$keep"); do
     if ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
@@ -528,8 +528,9 @@ copy_pack() {
   rm -rf "${dest:?}".partial.*
   STAGING="$(mktemp -d "$dest.partial.XXXXXX")" || return 1
   # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit
-  # checkout, and the pack's own .claude/, which Claude Code would load from here.
-  # Both on the staging folder, so the kit checkout <from> is never written to.
+  # checkout, and the surfaces the pack would load into a session from here — its own
+  # .claude/ and its instruction files. Both on the staging folder, so the kit
+  # checkout <from> is never written to.
   if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} + \
         && strip_pack_load_surfaces "$STAGING" >/dev/null; }; then
     rm -rf "$STAGING"; STAGING=""

@@ -314,7 +314,7 @@ fi
 # Claude-Code-only --agents files are removed from the target a few lines up.
 if [ -d "$TARGET_DIR/$CONFIG_DIR/skills/ext" ]; then
   STRIPPED="$(strip_pack_load_surfaces "$TARGET_DIR/$CONFIG_DIR/skills/ext"/*/)"
-  [ "$STRIPPED" = 0 ] || ok "Removed $STRIPPED pack-local .claude/ from $CONFIG_DIR/skills/ext/ (a pack's own skills are not this project's)"
+  [ "$STRIPPED" = 0 ] || ok "Removed $STRIPPED pack-local instruction file(s) and .claude/ from $CONFIG_DIR/skills/ext/"
 fi
 
 # VERSION: always overwrite (CHANGELOG stays in source repo only)
