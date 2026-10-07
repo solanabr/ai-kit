@@ -714,6 +714,188 @@ PY
       fi
     fi
   fi
+
+  # ── Kit hooks: the enforcement an existing install could not otherwise get ──
+  #
+  # install.sh copies settings.json only when absent, and nothing above rewrites the
+  # `hooks` block: the matcher patch edits an entry that is already there, and
+  # firewall.sh owns permissions and sandbox and nothing else. So a guard the kit added
+  # after a project was installed has its script on disk — the hooks/ copy near the top
+  # delivers that — and no line in settings.json running it. That is issue #91, and it
+  # is the structural reason a correction can land upstream and reach nobody.
+  #
+  # What this does: append a kit hook entry the project does not already run. Never
+  # rewrite, reorder or remove one — an entry the user wrote, or edited, is theirs, and
+  # an entry naming a kit script is taken as already handled whatever its matcher or
+  # shape. "A kit hook" means the command names a file the kit ships in hooks/, so a
+  # guard added later is carried over by this same code with no edit here; the SessionStart
+  # banner names no such file and is deliberately left out, being cosmetic and having no
+  # identity stable enough to avoid appending a second copy of it.
+  #
+  # Gate: HOOK_SET_VERSION below, bumped when the kit's hook set changes, compared with
+  # what the last run recorded — the same shape as the rule-set catch-up above. It is
+  # paired with a fingerprint of the shipped hooks block so a forgotten bump is caught
+  # too, because a missed bump here reproduces exactly the defect this fixes. Both are
+  # recorded in security.json, which firewall.sh carries through untouched. The work is
+  # also idempotent on content alone: a second run finds every script present and
+  # appends nothing, so a lost record costs a no-op, not a duplicate.
+  HOOK_SET_VERSION=1
+  cat > "$TEMP_DIR/kit_hooks.py" <<'PY'
+import hashlib, json, os, sys
+
+dry_run = sys.argv[1] == "true"
+target, config, upstream, security_path = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+want_version = int(sys.argv[6])
+
+SETTINGS = os.path.join(target, config, "settings.json")
+
+
+def report(tag, msg):
+    print("  [%s] %s" % (tag, msg))
+
+
+def load(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def write_json(path, data):
+    tmp = path + ".hooks.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, path)  # atomic: same directory
+
+
+upstream_settings = load(upstream)
+if not isinstance(upstream_settings, dict):
+    sys.exit(0)
+shipped = upstream_settings.get("hooks")
+if not isinstance(shipped, dict) or not shipped:
+    sys.exit(0)
+
+fingerprint = hashlib.sha256(
+    json.dumps(shipped, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+).hexdigest()[:16]
+
+security = load(security_path)
+if not isinstance(security, dict):
+    security = None
+have_version, have_fingerprint = 0, ""
+if security is not None:
+    try:
+        have_version = int(security.get("hookSetVersion") or 0)
+    except (TypeError, ValueError):
+        have_version = 0
+    have_fingerprint = security.get("hookSetFingerprint") or ""
+if have_version >= want_version and have_fingerprint == fingerprint:
+    sys.exit(0)
+
+# The kit's own hook scripts, read from the hooks/ directory just copied in rather than
+# listed here, so this never drifts from what ships.
+try:
+    kit_scripts = set(
+        name for name in os.listdir(os.path.join(os.path.dirname(upstream), "hooks"))
+        if name.endswith((".sh", ".awk", ".py"))
+    )
+except OSError:
+    kit_scripts = set()
+if not kit_scripts:
+    sys.exit(0)
+
+
+def scripts_of(entry):
+    """Kit scripts an entry's commands name. Empty means it is not a kit hook."""
+    found = set()
+    if isinstance(entry, dict):
+        for hook in entry.get("hooks") or []:
+            if isinstance(hook, dict):
+                command = hook.get("command") or ""
+                found |= set(name for name in kit_scripts if name in command)
+    return found
+
+
+if os.path.islink(SETTINGS):
+    sys.exit(0)
+settings = load(SETTINGS)
+if settings is None:
+    report("skipped", "%s/settings.json is missing or not plain JSON, so the kit's"
+                      " PreToolUse guards are not registered in this project. Re-run"
+                      " install.sh here, or copy the hooks block from the kit." % config)
+    sys.exit(0)
+if not isinstance(settings, dict):
+    sys.exit(0)
+
+hooks = settings.get("hooks")
+if hooks is None:
+    hooks = {}
+elif not isinstance(hooks, dict):
+    sys.exit(0)
+
+added = []
+for event, shipped_entries in shipped.items():
+    if not isinstance(shipped_entries, list):
+        continue
+    live = hooks.get(event)
+    if live is not None and not isinstance(live, list):
+        continue
+    present = set()
+    for entry in live or []:
+        present |= scripts_of(entry)
+    for entry in shipped_entries:
+        wanted = scripts_of(entry)
+        if not wanted or wanted & present:
+            continue  # not a kit hook, or this project already runs it
+        if live is None:
+            live = []
+            hooks[event] = live
+        live.append(json.loads(json.dumps(entry)))
+        present |= wanted
+        added.extend("%s/%s" % (event, name) for name in sorted(wanted))
+
+if added and not dry_run:
+    settings["hooks"] = hooks
+    try:
+        write_json(SETTINGS, settings)
+    except OSError as exc:
+        report("skipped", "%s/settings.json: could not write (%s)" % (config, exc.strerror))
+        sys.exit(0)
+if added:
+    report("would register" if dry_run else "registered",
+           "%s/settings.json: %d kit hook(s) an older install never got — %s"
+           % (config, len(added), ", ".join(added)))
+
+# The rest of what the kit puts in settings.json still reaches fresh installs only:
+# enabling a plugin fetches and runs a third-party binary, which is the user's call and
+# not something an update should make for them. Say so rather than let the absence read
+# as a choice already made.
+pending = [
+    key for key in ("extraKnownMarketplaces", "enabledPlugins")
+    if isinstance(upstream_settings.get(key), dict) and not settings.get(key)
+]
+if pending:
+    report("notice", "%s/settings.json has no %s: the kit's security plugin is not"
+                     " enabled here. Add it with /plugin, or copy those keys from the"
+                     " kit — an update will not enable a plugin for you."
+                     % (config, " or ".join(pending)))
+
+if dry_run:
+    sys.exit(0)
+if security is None:
+    sys.exit(0)  # no record to write; the content check keeps the next run a no-op
+security["hookSetVersion"] = want_version
+security["hookSetFingerprint"] = fingerprint
+try:
+    write_json(security_path, security)
+except OSError:
+    pass  # the merge already happened; re-running it costs nothing
+PY
+  KIT_HOOKS="$(python3 "$TEMP_DIR/kit_hooks.py" "$DRY_RUN" "$TARGET_DIR" "$CONFIG_NAME" \
+    "$TEMP_DIR/repo/.claude/settings.json" "$TARGET_DIR/$CONFIG_NAME/security.json" \
+    "$HOOK_SET_VERSION")" || KIT_HOOKS=""
+  [ -z "$KIT_HOOKS" ] || CHANGES="$CHANGES$KIT_HOOKS\n"
 fi
 
 # CHANGELOG.md stays in source repo — not shipped to user projects
