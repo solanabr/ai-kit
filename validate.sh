@@ -208,32 +208,78 @@ sys.exit(1 if bad else 0)
 PY
 check "Every core/extension registry entry records a 40-character commit" "$unpinned"
 
-# Two packs carry submodules of their own, pinned by their authors rather than by this
-# kit: auditor-skill -> trailofbits (CC-BY-SA-4.0) and solana-game -> a second solana-dev
-# at a different commit. The installers deliberately do not recurse into them, so neither
-# reaches a user project; "vendored" records the pins anyway so a bump of a pack moves a
-# third-party pin here, in review, instead of invisibly. Update it with the new SHA after
-# reading what changed. Skipped when the pack is not checked out.
+# Some packs carry submodules of their own, pinned by their authors rather than by this
+# kit: auditor-skill -> trailofbits (CC-BY-SA-4.0), solana-game -> a second solana-dev at
+# a different commit, google -> a tree of Google-owned repos. The installers
+# deliberately do not recurse into them, so none reaches a user project; "vendored"
+# records the pins anyway so a bump of a pack moves a third-party pin here, in review,
+# instead of invisibly. Update it with the new SHA after reading what changed.
+#
+# Checked BOTH ways, because a record only guards what it cannot omit. Reading the record
+# and comparing each entry to its gitlink says nothing about a pack whose pins were never
+# written down — which is how counterparty-gate and expo shipped two unrecorded
+# third-party pins. So: every recorded pin matches, AND every gitlink a pack carries is
+# recorded. A pack that is not checked out is skipped; a pack that is checked out but
+# vendored (no git metadata, as in a user project) has no index to read, so only its
+# .gitmodules declarations can be held against the record.
 nested_drift=0
 python3 - <<'PY' || nested_drift=1
-import json, os, subprocess, sys
+import json, os, re, subprocess, sys
+
+def gitlinks(pack):
+    """Every submodule pin in <pack>'s own index, or None when it is not its own checkout."""
+    if not os.path.exists(os.path.join(pack, ".git")):
+        return None
+    top = subprocess.run(["git", "-C", pack, "rev-parse", "--show-toplevel"],
+                         capture_output=True, text=True)
+    if top.returncode or os.path.realpath(top.stdout.strip()) != os.path.realpath(pack):
+        return None
+    links = {}
+    out = subprocess.run(["git", "-C", pack, "ls-files", "-s"],
+                         capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        meta, _, path = line.partition("\t")
+        f = meta.split()
+        if len(f) >= 2 and f[0] == "160000":
+            links[path] = f[1]
+    return links
+
+def declared(pack):
+    """The submodule paths <pack>/.gitmodules names."""
+    f = os.path.join(pack, ".gitmodules")
+    if not os.path.isfile(f):
+        return []
+    return re.findall(r"(?m)^\s*path\s*=\s*(.+?)\s*$", open(f, encoding="utf-8").read())
+
 bad = []
 for e in json.load(open(".claude/skills/skill-registry.json", encoding="utf-8"))["entries"]:
-    for sub, want in (e.get("vendored") or {}).items():
-        pack = e["path"]
-        if not os.path.isdir(pack) or not os.listdir(pack):
-            continue
-        out = subprocess.run(["git", "-C", pack, "ls-files", "-s", "--", sub],
-                             capture_output=True, text=True).stdout.split()
-        have = out[1] if len(out) > 2 and out[0] == "160000" else ""
-        if not have:
-            continue
-        if have != want:
+    pack = e.get("path", "")
+    if not pack or not os.path.isdir(pack) or not os.listdir(pack):
+        continue
+    record = e.get("vendored") or {}
+    links = gitlinks(pack)
+    if links is None:
+        for sub in declared(pack):
+            if sub not in record:
+                bad.append(f"  FAIL: {e['id']} declares a submodule at {sub} that \"vendored\" does not record")
+        continue
+    for sub, have in sorted(links.items()):
+        want = record.get(sub)
+        if want is None:
+            bad.append(f"  FAIL: {e['id']} pins {sub} at {have[:12]}, which \"vendored\" does not record "
+                       f"(read what that third party ships, then add it)")
+        elif have != want:
             bad.append(f"  FAIL: {e['id']} pins {sub} at {have[:12]}, the registry records {want[:12]}")
-print("\n".join(bad))
+    for sub in record:
+        if sub not in links:
+            bad.append(f"  FAIL: {e['id']} records a vendored pin for {sub}, which that pack no longer has")
+if bad:
+    print("\n".join(bad))
 sys.exit(1 if bad else 0)
 PY
-check "Every pack's own submodule pins match the registry's vendored record" "$nested_drift"
+# Derived, so adding a pack with its own submodules cannot leave a stale literal here.
+nested_packs="$(python3 -c 'import json; print(sum(1 for e in json.load(open(".claude/skills/skill-registry.json", encoding="utf-8"))["entries"] if e.get("vendored")))' 2>/dev/null || echo '?')"
+check "All $nested_packs packs with submodules of their own are recorded in \"vendored\", and match" "$nested_drift"
 echo ""
 
 # --- Versioning ---
