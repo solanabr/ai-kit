@@ -232,21 +232,65 @@ fi
 # A pack's own submodules are pinned by that pack's author, not by the kit. install.sh
 # does not fetch them, so a project should not receive them here either: the clone at the
 # top of this file uses --recurse-submodules and that line is inside the frozen region,
-# so the pruning happens after the copy instead of before the fetch. The registry's
-# "vendored" field lists the paths and the commits they were pinned at; the packs that use
-# one test for it and fall back when it is absent. To opt in, clone it yourself at the
-# recorded commit.
+# so the pruning happens after the copy instead of before the fetch. To opt in to one,
+# clone it yourself at the commit the registry records.
+#
+# The list is derived from each pack's own submodule file, which ships inside the pack and
+# is that author's own statement of what it vendors. That covers packs the registry's
+# hand-kept "vendored" record misses and a pack that gains a submodule upstream, which
+# makes the record a review artifact rather than the thing standing between a user and a
+# nested third-party tree. The record is still read, as a second source and a backstop,
+# but with python3: a "vendored" object spanning several lines is invisible to a
+# line-oriented parser, and that is how 16 of the 18 recorded paths went unpruned. The
+# per-pack pass needs no python3, so the primary list survives its absence.
 if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/$CONFIG_NAME/skills/ext" ]; then
+  EXT_DIR="$TARGET_DIR/$CONFIG_NAME/skills/ext"
   REG_FILE="$TARGET_DIR/$CONFIG_NAME/skills/skill-registry.json"
-  if [ -f "$REG_FILE" ]; then
-    while IFS= read -r nested; do
-      [ -n "$nested" ] || continue
-      case "$nested" in */*) ;; *) continue ;; esac
-      rm -rf "$TARGET_DIR/$CONFIG_NAME/skills/ext/${nested:?}"
-    done < <(awk -F'"' '
-      /^      "id": "/            { id = $4 }
-      /^      "vendored": \{/     { for (i = 4; i <= NF; i += 4) if ($i != "") print id "/" $i }
-    ' "$REG_FILE")
+  PRUNE_LIST="$TEMP_DIR/vendored-prune.txt"
+  {
+    for pack_modules in "$EXT_DIR"/*/.gitmodules; do
+      [ -f "$pack_modules" ] || continue
+      pack_dir="$(basename "$(dirname "$pack_modules")")"
+      sed -n 's/^[[:space:]]*path[[:space:]]*=[[:space:]]*//p' "$pack_modules" | tr -d '\r' \
+        | while IFS= read -r rel; do
+            [ -n "$rel" ] && printf '%s/%s\n' "$pack_dir" "$rel"
+          done
+    done
+    if [ -f "$REG_FILE" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$REG_FILE" <<'PY' || true
+import json, os, sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        entries = json.load(f).get("entries") or []
+except (OSError, ValueError):
+    sys.exit(0)
+for entry in entries:
+    if not isinstance(entry, dict):
+        continue
+    vendored = entry.get("vendored")
+    if not isinstance(vendored, dict):
+        continue
+    path = entry.get("path") or ""
+    pack = os.path.basename(path) if "/skills/ext/" in path else (entry.get("id") or "")
+    for rel in vendored:
+        if pack and rel:
+            print("%s/%s" % (pack, rel))
+PY
+    fi
+  } | sort -u > "$PRUNE_LIST" || true
+  PRUNED=0
+  while IFS= read -r nested; do
+    # pack/subpath only, and nothing that could climb out of ext/
+    case "$nested" in */*) ;; *) continue ;; esac
+    case "$nested" in /*) continue ;; esac
+    case "/$nested/" in */../*) continue ;; esac
+    [ -e "$EXT_DIR/$nested" ] || continue
+    rm -rf "${EXT_DIR:?}/${nested:?}"
+    PRUNED=$((PRUNED + 1))
+  done < "$PRUNE_LIST"
+  if [ "$PRUNED" -gt 0 ]; then
+    CHANGES="$CHANGES  [pruned] $PRUNED nested third-party tree(s) under $CONFIG_NAME/skills/ext/ — a pack's own submodules are not part of what the kit pins\n"
   fi
 fi
 
