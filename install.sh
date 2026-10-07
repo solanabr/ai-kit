@@ -163,13 +163,19 @@ fi
 # The packs about to be vendored must sit at the commits skill-registry.json records.
 # That record is the only pin the project keeps — the gitfiles go away just below — so a
 # checkout that drifted from it would deliver a commit nobody here wrote down. A clone is
-# checked where it was fetched; a local source in place. A source with no gitlinks (a
-# vendored checkout) has nothing to compare and says so.
+# checked where it was fetched; a local source in place. A source with no gitlinks for
+# some or all of the packs (a tarball, a mirror, a fork with ext/ as plain files) can
+# verify only part of them, or none: that is a warning, not a tick, because the gitlink
+# is the only evidence there is — nothing hashes a pack's content. skills.sh leads a
+# clean result with ✓ and everything else without one, which is the distinction below.
 if [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
   PIN_ROOT="$TEMP_DIR/repo"
   [ -n "$LOCAL_SRC" ] && PIN_ROOT="$LOCAL_SRC"
   if PIN_OUT="$(bash "$TEMP_DIR/repo/.claude/bin/skills.sh" pins "$PIN_ROOT" 2>&1)"; then
-    ok "${PIN_OUT#✓ }"
+    case "$PIN_OUT" in
+      "✓ "*) ok "${PIN_OUT#✓ }" ;;
+      *)     warn "$PIN_OUT" ;;
+    esac
   else
     printf '%s\n' "$PIN_OUT"
     fail "A skill pack is not at the commit skill-registry.json records for it"

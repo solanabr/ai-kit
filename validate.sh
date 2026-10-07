@@ -186,6 +186,12 @@ if [ -e .git ]; then
   pins_ok=0
   pins_out="$(bash .claude/bin/skills.sh pins 2>&1)" || pins_ok=1
   [ "$pins_ok" -eq 0 ] || printf '%s\n' "$pins_out" | sed 's/^/    /'
+  # skills.sh leads a clean result with ✓. Anything else passed only because it checked
+  # less than everything, and a pass that says so is the difference between "verified"
+  # and "nothing contradicted it" — print it rather than let the PASS line imply the first.
+  if [ "$pins_ok" -eq 0 ] && [ "${pins_out#✓ }" = "$pins_out" ]; then
+    printf '  NOTE: %s\n' "$pins_out"
+  fi
   check "Every submodule pack's registry commit matches its gitlink (skills.sh pins)" "$pins_ok"
 else
   echo "  SKIP: not a git checkout, so registry pins cannot be compared to gitlinks"
