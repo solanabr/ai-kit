@@ -10,24 +10,10 @@ Show or change the agentic firewall tier. `off`, `relaxed` (default), `medium`, 
 ## Show — bare `/firewall`
 
 ```bash
-python3 - <<'PY'
-import json, pathlib
-def load(p):
-    f = pathlib.Path(p)
-    return json.loads(f.read_text()) if f.is_file() else {}
-sec, cfg = load(".claude/security.json"), load(".claude/settings.json")
-perms = cfg.get("permissions") or {}
-live = {r for k in ("deny", "ask", "allow") for r in (perms.get(k) or [])}
-enf = sec.get("enforced") or {}
-rec = set(enf.get("ruleIds") or [])
-print("declared:", sec.get("tier") or "none")
-print("enforced:", enf.get("tier") or "none")
-print("live:", len(live), "recorded:", len(rec), "delta:", len(live) - len(rec))
-print("recorded_but_absent:", len(rec - live))
-PY
+bash .claude/bin/firewall.sh show
 ```
 
-Report the declared tier, the enforced tier, whether they agree, and the rule-count delta. `recorded_but_absent > 0` means `settings.json` lost rules the last apply wrote — re-apply. For local overrides, the sandbox state and the plugin case, run `/doctor` (check 9).
+Report the declared tier, the enforced tier, whether they agree, and the recorded rule count. Read the count from the script rather than tallying `settings.json` by hand: `enforced.ruleIds` records every list a tier generates, in `sandbox` as well as in `permissions`, and counting one half reports the other half as missing — on this repo, tallying `permissions` alone sees 378 of the 546 recorded rules and calls the other 168 absent. `absent` above zero is the real signal that the file lost rules the last apply wrote; the script names the fix. For local overrides, the sandbox state and the plugin case, run `/doctor` (check 9).
 
 ## Switch — `/firewall <tier>`
 

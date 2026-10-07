@@ -313,37 +313,69 @@ assert_contains "$DEAD_OUT" "CLAUDE.md:3 -> .claude/skills/ext/fullpack/x.md" \
 
 # --- Every skip in the suite tree is gated on a present-and-empty pack --------------
 echo "[every skip is gated]"
+GATES='in_uninitialized_submodule|ext_pack_empty|ext_packs_uninitialized|not_checked_out'
+# Naming one of those helpers is not gating on one, and a grep for the name anywhere in the
+# file passed on a mention in a comment or inside a string. What has to be there is a line
+# that BRANCHES on the test — `if`, `elif`, `&&` or `||` — so the skip decision really does
+# come from a present-and-empty pack. Full-line comments come off first; what is left has
+# to carry both the helper and the branch.
+branches_on_gate() {
+  local hits
+  hits="$(grep -vE '^[[:space:]]*#' "$1" | grep -E "$GATES" \
+    | grep -cE '(^[[:space:]]*(el)?if[^a-z_]|&&|[|][|])' || true)"
+  [ "${hits:-0}" -gt 0 ]
+}
+# calls_skip <file> — the file calls skip() outside a comment.
+calls_skip() {
+  [ "$(grep -vE '^[[:space:]]*#' "$1" | grep -cF 'skip "' || true)" != 0 ]
+}
 for suite in $CONVERTED; do
-  assert_cmd_success \
-    "grep -qE 'in_uninitialized_submodule|ext_pack_empty|ext_packs_uninitialized|not_checked_out' '$SCRIPT_DIR/$suite.sh'" \
-    "$suite decides to skip from a present-and-empty pack test"
+  assert_cmd_success "branches_on_gate '$SCRIPT_DIR/$suite.sh'" \
+    "$suite branches on a present-and-empty pack test to decide its skips"
 done
 # print_summary's note names the submodule remedy, so a skip for any other reason would
 # print the wrong fix. Derived over the whole tree rather than listed, so a suite added
-# later is held to it too.
+# later is held to it too. This suite is the one exception: its own skip calls sit inside
+# fixture strings that child shells run, which is the behaviour under test, not a gate.
 UNGATED=""
 for suite in "$SCRIPT_DIR"/test_*.sh; do
-  grep -q 'skip "' "$suite" || continue
-  grep -qE 'in_uninitialized_submodule|ext_pack_empty|ext_packs_uninitialized|not_checked_out' \
-    "$suite" || UNGATED="$UNGATED $(basename "$suite" .sh)"
+  case "$(basename "$suite")" in test_skip_accounting.sh) continue ;; esac
+  calls_skip "$suite" || continue
+  branches_on_gate "$suite" || UNGATED="$UNGATED $(basename "$suite" .sh)"
 done
 assert_eq "" "$UNGATED" \
-  "Every suite that calls skip decides it from a present-and-empty pack test, since the remedy it prints is the submodule one"
+  "Every suite that calls skip branches on a present-and-empty pack test, since the remedy it prints is the submodule one"
 
 # --- test_skill_extensions.sh's pack-gated region routes every check through one wrapper
 echo "[pack-gated region]"
 # What keeps that region's skip count equal to its check count is that every check goes
 # through pack_check. A check written straight into the region would run in a checked-out
 # tree and vanish from the accounting in an uninitialised one, which is the bug #211 left
-# and this says cannot come back.
+# and this says cannot come back. The guard is static, over the region's source text, so
+# the region's own full-line comments come off first: prose about assert_*, PASS or FAIL is
+# not a check. A trailing comment carrying one of those would still trip it; failing is the
+# safe direction.
 REGION="$TEMP_DIR/region.sh"
 awk '/^# --- From here on every check needs the ext\/ packs checked out/ {f = 1} f' \
   "$SCRIPT_DIR/test_skill_extensions.sh" > "$REGION"
 assert_cmd_success "[ -s '$REGION' ]" \
   "test_skill_extensions.sh still marks where its pack-gated region begins"
-assert_file_not_contains "$REGION" 'TOTAL=$((TOTAL + 1))' \
-  "...and counts no check there by hand, which would not be skipped with the rest"
-assert_eq "" "$(grep -c '^assert_' "$REGION" | grep -v '^0$' || true)" \
-  "...so every check in it goes through pack_check and is counted in either state"
+REGION_CODE="$TEMP_DIR/region-code.sh"
+grep -vE '^[[:space:]]*#' "$REGION" > "$REGION_CODE" || true
+# Everything below asserts an absence, which an empty region would satisfy for free.
+assert_cmd_success "grep -q '^pack_check assert_' '$REGION_CODE'" \
+  "...and still holds pack_check checks, so the guards below are not vacuous"
+# A check written by hand is the same defect in another shape: it counts itself, or prints
+# its own result line, instead of going through a helper. Matched on the counter prefix
+# rather than the whole `TOTAL=$((TOTAL + 1))` line, so a spacing variant is caught too.
+for literal in 'TOTAL=$((TOTAL' 'PASS=$((PASS' 'FAIL=$((FAIL' 'echo "  PASS' 'echo "  FAIL'; do
+  assert_file_not_contains "$REGION_CODE" "$literal" \
+    "...and counts no check there by hand ($literal)"
+done
+# '^assert_' alone missed an indented call — one inside an `if`, say — which is that same
+# defect again. Every assert_* in the region has to be the command word of a pack_check.
+assert_eq "" \
+  "$(grep -nE 'assert_[a-z_]+' "$REGION_CODE" | grep -vE '^[0-9]+:[[:space:]]*pack_check assert_' || true)" \
+  "...so every assert_* in it goes through pack_check and is counted in either state"
 
 print_summary

@@ -237,17 +237,70 @@ assert_cmd_fails "bash \"$SKILLS_SH\" select \"$P6/kit\" \"$P6/project/.claude\"
 # the same message. The region's own control flow then emits exactly one skip per check
 # it would have run — loop iterations included — so an uninitialised tree reports the
 # same total as a checked-out one, and there is no count to keep in step by hand.
+#
+# A pack_check call's arguments are expanded before pack_check runs, so every command
+# substitution in one executes even on the skipped path. Today's all tolerate the fixture
+# paths being absent (ext_dirs and the greps redirect stderr or end in `|| true`); one that
+# does not would run real commands against missing paths and fold their noise into the
+# check. It would not abort the suite — a failing substitution in an argument position is
+# not a `set -e` failure — but a bare assignment is, which is why the outputs captured
+# below are pre-set to "" and filled only inside `if packs_ready`.
 if ext_packs_uninitialized; then PACKS_READY=0; else PACKS_READY=1; fi
 packs_ready() { [ "$PACKS_READY" = 1 ]; }
 
 # pack_check <assert_*> <args...> — run one check of the region, or record it as skipped.
-# Every assert_* helper takes its message last, which is what the skip reports.
+# The skip text is the last argument, which is the message every assert_* helper takes
+# last. A helper called without its optional message would report its last argument
+# instead — still one skip, but the text would be a path rather than a sentence.
 pack_check() {
   if packs_ready; then
     "$@"
   else
     skip "${*: -1} (its ext/ pack is not checked out)"
   fi
+}
+
+# vendor_ext <ext-dir> — copy this repo's whole ext/ tree into a fixture the way a
+# pre-split install looked, minus the nested submodule content the registry records, which
+# is what update.sh drops after its own copy. install.sh never fetches a pack's submodules
+# (they are pinned by that pack's author, not here), so a fixture built from a developer's
+# --recursive checkout must not hand one back: one of google's nested packs carries three
+# symlinks named `skills`, and BSD cp refuses to copy a directory over one ("Not a
+# directory"), which killed this suite on macOS while GNU cp let CI pass.
+vendor_ext() {
+  cp -R "$REPO_ROOT/.claude/skills/ext/." "${1:?}/"
+  local nested
+  while IFS= read -r nested; do
+    [ -n "$nested" ] || continue
+    rm -rf "${1:?}/${nested:?}"
+  done < <(python3 - "$REGISTRY" <<'PY'
+import json, sys
+for e in json.load(open(sys.argv[1]))["entries"]:
+    for sub in e.get("vendored") or {}:
+        print(f"{e['id']}/{sub}")
+PY
+  )
+}
+
+# run_update <log> <project> — run update.sh, keeping its output and its exit code.
+# That output went to /dev/null, which also swallowed a `set -x` trace: a non-zero exit
+# here showed up only as a suite that stopped mid-section with no failing command named.
+# UPDATE_NOTE carries the log tail into the assertion message, since $TEMP_DIR is gone by
+# the time anyone reads the failure.
+UPDATE_RC=0
+UPDATE_NOTE=""
+run_update() {
+  local log="$TEMP_DIR/$1.log"
+  UPDATE_RC=0
+  UPDATE_NOTE=""
+  (cd "${2:?}" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) \
+    > "$log" 2>&1 || UPDATE_RC=$?
+  # `|| true` inside the substitution, not outside: an assignment carries its
+  # substitution's exit status, so a missing log would abort the suite here under set -e.
+  # A failing update.sh dies early and its last lines are the reason, 8 of them in the
+  # case this guards against.
+  [ "$UPDATE_RC" = 0 ] || UPDATE_NOTE=" — $(tail -6 "$log" 2>/dev/null \
+    | grep -v '^[[:space:]]*$' | tr '\n' '|' || true)"
 }
 
 # --- Installing an extension on demand ---
@@ -307,17 +360,19 @@ fi
 # --- update.sh keeps what the project has, adds no other extensions ---
 echo "[update]"
 if packs_ready; then
-  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+  run_update update "$P1"
 fi
+pack_check assert_eq "0" "$UPDATE_RC" "update.sh exits 0$UPDATE_NOTE"
 pack_check assert_eq "$(sorted $KIT_CORE solana-game)" "$(ext_dirs "$P1/.claude/skills/ext")" "update.sh keeps core packs and installed extensions, adds none"
 
 # An install from before the split has every pack and no list: update keeps them all
 echo "[legacy install]"
 if packs_ready; then
-  cp -R "$REPO_ROOT/.claude/skills/ext/." "$P1/.claude/skills/ext/"
+  vendor_ext "$P1/.claude/skills/ext"
   rm -f "$P1/.claude/skills/extensions.txt"
-  (cd "$P1" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) >/dev/null 2>&1
+  run_update legacy "$P1"
 fi
+pack_check assert_eq "0" "$UPDATE_RC" "update.sh exits 0 on a pre-split install$UPDATE_NOTE"
 pack_check assert_eq "$(sorted $KIT_CORE $KIT_EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
 pack_check assert_eq "$(sorted $KIT_EXTENSIONS)" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//')" "...and records them as its extensions"
 
@@ -362,7 +417,7 @@ HOSTILE_OUT=""
 if packs_ready; then
   mkdir -p "$P2/cloudflare"
   printf '# mine\n  jupiter  \nJUPITER\nSendAI\r\n*\nno-such-pack\n\n' > "$P2/.claude/skills/extensions.txt"
-  cp -R "$REPO_ROOT/.claude/skills/ext/." "$P2/.claude/skills/ext/"
+  vendor_ext "$P2/.claude/skills/ext"
   HOSTILE_OUT="$(cd "$P2" && bash .claude/bin/skills.sh prune 2>&1)"
 fi
 pack_check assert_eq "jupiter sendai" "$(grep -v '^#' "$P2/.claude/skills/extensions.txt" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')" "prune trims, lowercases and dedupes extensions.txt, and drops '*' and unknown ids"
@@ -370,7 +425,7 @@ pack_check assert_contains "$HOSTILE_OUT" "ignoring 'no-such-pack'" "prune warns
 pack_check assert_contains "$HOSTILE_OUT" "ignoring '*'" "prune warns about a glob line instead of expanding it"
 pack_check assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "A glob in extensions.txt adds no pack, even with a project folder named like one"
 if packs_ready; then
-  cp -R "$REPO_ROOT/.claude/skills/ext/." "$P2/.claude/skills/ext/"
+  vendor_ext "$P2/.claude/skills/ext"
   (cd "$P2" && bash .claude/bin/skills.sh prune) >/dev/null 2>&1
 fi
 pack_check assert_eq "$(sorted $KIT_CORE sendai jupiter my-pack)" "$(ext_dirs "$P2/.claude/skills/ext")" "...and the next update keeps the same subset"
