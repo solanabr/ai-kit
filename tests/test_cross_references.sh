@@ -236,4 +236,35 @@ assert_file_contains "$DEPLOY_MD" "anchor verify <PROGRAM_ID> --current-dir -- -
 assert_file_contains "$DEPLOYMENT_MD" "anchor legacy-idl close <PROGRAM_ID>" "deployment.md closes the legacy IDL with anchor legacy-idl close"
 assert_file_not_contains "$DEPLOYMENT_MD" "(\`anchor idl close <PROGRAM_ID>\`)" "deployment.md no longer sends legacy IDL closes to anchor idl close"
 
+# --- A retracted fact stays retracted, everywhere the kit ships text ---
+# #129 retracted "one #[error_code] enum per program": a second enum compiles green, and
+# the real hazard is that both default to ERROR_CODE_OFFSET 6000 and collide silently. The
+# correction reached six files and missed .claude/commands/debug-user-tx.md, because every
+# assertion written for it named one file (tests/test_agents.sh still does, by design -- it
+# checks the replacement wording is present, which is per-file by nature). This one names
+# no file: a retracted claim needs a repo-wide grep or the seventh copy survives.
+# "by convention" is the one true form of the sentence -- one enum is the house style, not
+# a compiler rule -- so a line saying that is not the retracted claim.
+echo "[retracted facts]"
+RETRACTED="$(python3 - "$REPO_ROOT" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+CLAIM = re.compile(r"(?:only\s+)?one\b[^.]{0,40}\bper program\b", re.I)
+targets = [os.path.join(root, "CLAUDE-solana.md")]
+for sub in (".claude/agents", ".claude/commands", ".claude/skills"):
+    for base, dirs, files in os.walk(os.path.join(root, sub)):
+        dirs[:] = [d for d in dirs if d != "ext"]
+        targets += [os.path.join(base, f) for f in files if f.endswith(".md")]
+for path in sorted(targets):
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError):
+        continue
+    for n, line in enumerate(text.splitlines(), 1):
+        if "error_code" in line and CLAIM.search(line) and "convention" not in line.lower():
+            print(f"{os.path.relpath(path, root)}:{n}: {line.strip()}")
+PY
+)"
+assert_eq "" "$RETRACTED" "No shipped file claims Anchor allows only one #[error_code] enum per program"
+
 print_summary
