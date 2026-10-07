@@ -40,6 +40,10 @@ CONFIG_NAME="$(basename "$CONFIG_DIR")"
 LIST_FILE="extensions.txt"
 PACKS_FILE="kit-packs.txt"
 
+# strip_pack_load_surfaces: what a vendored pack must not bring into a project.
+# shellcheck source=_pack_strip.sh
+source "$SCRIPT_DIR/_pack_strip.sh"
+
 # Never installed, whatever the registry lists: anthropics/skills' docx, pdf, pptx and
 # xlsx are proprietary (use only within Anthropic's services; no copies or
 # redistribution) and doc-coauthoring has no license. Claude users get the document
@@ -319,6 +323,9 @@ ensure_upstream() {
       echo "skills.sh: $id: could not copy $name into $(basename "$cfg")/skills/" >&2
       return 1
     fi
+    # An upstream skill installs where the host already discovers it, so a .claude/ of
+    # its own inside it would be a second, unasked-for load surface. Same rule as ext/.
+    strip_pack_load_surfaces "$cfg/skills/$name" >/dev/null
   done
   rm -rf "$tmp"
   write_lock "$lock" "$id" "$url" "$commit" $skills || return 1
@@ -478,12 +485,17 @@ cmd_select() {
 }
 
 cmd_prune() {
-  local reg="$CONFIG_DIR/skills/skill-registry.json" keep id
+  local reg="$CONFIG_DIR/skills/skill-registry.json" keep id stripped
   [ -f "$reg" ] || return 0
   check_registry "$reg"
   keep="$(recorded_extensions "$CONFIG_DIR" "$reg")"
   drop_others "$CONFIG_DIR" "$reg" "$keep"
   prune_orphans "$CONFIG_DIR" "$reg"
+  # update.sh copies the packs itself and then calls this, so the surfaces a pack loads
+  # on its own are stripped here rather than in that copy — which also cleans a project
+  # installed before the kit stripped them at all.
+  stripped="$(strip_pack_load_surfaces "$CONFIG_DIR/skills/ext"/*/)"
+  [ "$stripped" = 0 ] || echo "- Removed $stripped pack-local .claude/ (a pack's own skills are not this project's)"
   # Installed upstream packs move to the commit this kit version pins.
   for id in $(wanted_upstream "$reg" "$keep"); do
     if ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
@@ -515,8 +527,11 @@ copy_pack() {
   local from="$1" dest="$2" old
   rm -rf "${dest:?}".partial.*
   STAGING="$(mktemp -d "$dest.partial.XXXXXX")" || return 1
-  # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit checkout
-  if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} +; }; then
+  # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit
+  # checkout, and the pack's own .claude/, which Claude Code would load from here.
+  # Both on the staging folder, so the kit checkout <from> is never written to.
+  if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} + \
+        && strip_pack_load_surfaces "$STAGING" >/dev/null; }; then
     rm -rf "$STAGING"; STAGING=""
     return 1
   fi

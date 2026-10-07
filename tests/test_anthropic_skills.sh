@@ -268,7 +268,7 @@ echo "[anthropics/skills at the pin]"
 unset SOLANA_AI_KIT_PACK_MIRROR
 P5="$TEMP_DIR/upstream"
 mkdir -p "$P5/.claude/bin" "$P5/.claude/skills"
-cp "$SKILLS_SH" "$P5/.claude/bin/"
+cp "$SKILLS_SH" "$REPO_ROOT/.claude/bin/_pack_strip.sh" "$P5/.claude/bin/"
 cp "$REGISTRY" "$P5/.claude/skills/"
 upstream_add() { bash "$P5/.claude/bin/skills.sh" add "$PACK" >/dev/null 2>&1; }
 if upstream_add || upstream_add; then
