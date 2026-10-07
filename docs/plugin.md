@@ -41,13 +41,14 @@ If you use the plugin anyway, keep the exposure small:
    claude plugin update solana-ai-kit@stbr --scope local
    ```
 
-The plugin ships the **core kit**: the 15 agents, 32 commands (`/firewall` included, though a plugin install has no tier for it to set — see below), the local token-extensions and skill-packs skills, the 4 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](firewall.md#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
+The plugin ships the **core kit**: the 15 agents, 32 commands (`/firewall` included, though a plugin install has no tier for it to set — see below), the local token-extensions skill, the 4 default MCP servers, and the hooks (session banner, secrets gate, approval for on-chain writes; see [Permissions and Safety Gates](firewall.md#permissions-and-safety-gates)). Installing it also installs safe-ai-skill, which it declares as a dependency. Commands and skills are namespaced — `/deploy` becomes `/solana-ai-kit:deploy`.
 
 What the plugin **cannot** carry (Claude Code plugins are plain git clones — they can't init submodules or ship a permissions/sandbox policy), so these stay exclusive to the **full install** (`install.sh`):
 
 - the project `CLAUDE.md` with the program-code house rules
 - the curated permissions allowlist + sandbox policy — and therefore the [firewall tier](../README.md#firewall-tiers): a plugin's `settings` object honors only `agent` and `subagentStatusLine`, so its `permissions` and `sandbox` keys are dropped at load. A plugin install has hooks and no tier
 - the `ext/` skill packs: the core packs by default, extensions on demand (protocol, security, infra, ecosystem depth)
+- the `skill-packs` skill, left out on purpose: its install routes are `bash .claude/bin/skills.sh add <id>` and `/add-skill`, its key check is `bash .claude/bin/env-keys.sh`, and the packs it offers are the `ext/` submodules — none of which a plugin install has. Pack discovery here is the hub's `skill-registry.json` route plus Option A below
 
 The agents, commands and bundled skills are the files the full install uses, so they still link into those packs, and some name `bash .claude/bin/skills.sh add <id>`. Neither exists in a plugin install. The plugin's skill hub (the `solana-ai-kit` skill) gives the agent the next step: the solana-dev MCP, the same file from the [no-install route](install.md#no-install-read-the-kit-from-aikitsuperteamcodes), or the pack's upstream repository.
 
