@@ -123,7 +123,7 @@ These states look alike and are not. Read them in this order; stop at the first 
 
 Whatever the row, a tier change only binds the next session: permission rules are read at session start.
 
-**10. Fetch-and-execute guard.** `.claude/hooks/fetch-exec-guard.sh` gates `npx -y <stranger>`, `pnpm dlx`, `uvx`, `pipx run`, `cargo install` and `go install pkg@version` when the package is not a declared dependency — reporting at Relaxed and Medium, denying at High. It is the only implementation route for gating `cargo install`, which sits in `permissions.allow` at every tier. The script is enforcement, the `hooks` entry in `settings.json` is what runs it, and `/update` delivers the first without ever rewriting the second (issue #91), so the two can disagree.
+**10. Fetch-and-execute guard.** `.claude/hooks/fetch-exec-guard.sh` gates `npx -y <stranger>`, `pnpm dlx`, `uvx`, `pipx run`, `cargo install` and `go install pkg@version` when the package is not a declared dependency — reporting at Relaxed and Medium, denying at High. The exception at High is `KIT_FETCH_EXEC_ALLOW` in that script: the packages the kit's own commands invoke (`create-solana-dapp`, `codama`, `shank-cli`, `avm` from Anchor's git repo and four more) are reported there rather than denied, matched on the exact name within one ecosystem. It is the only implementation route for gating `cargo install`, which sits in `permissions.allow` at every tier. The script is enforcement, the `hooks` entry in `settings.json` is what runs it, and `/update` delivers the first without ever rewriting the second (issue #91), so the two can disagree.
 ```bash
 python3 - <<'PY'
 import json, pathlib

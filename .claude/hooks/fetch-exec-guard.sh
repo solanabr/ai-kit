@@ -73,12 +73,18 @@ VERDICT=$(printf '%s\n' "$KIT_CMD" |
 TIER=$(kit_tier)
 [ "$TIER" = "off" ] && exit 0
 
-# GATE|<ecosystem>|<runner>|<package>
+# GATE|<ecosystem>|<runner>|<name>|<package>
+# NAME is the package name normalised by the awk (scope kept, version dropped),
+# and is what the High allowlist below is matched against.  PKG is the spec as
+# written, for the message; it is free-form and therefore last, so stripping the
+# three fields in front of it leaves it whole.
 case $VERDICT in GATE\|*) ;; *) exit 0 ;; esac
 _r=${VERDICT#GATE|}
 ECO=${_r%%|*}
 _r=${_r#*|}
 RUNNER=${_r%%|*}
+_r=${_r#*|}
+NAME=${_r%%|*}
 PKG=${_r#*|}
 
 case $ECO in
@@ -99,6 +105,63 @@ REASON="\`$RUNNER\` downloads $PKG from the internet and executes it, and $PKG i
 kit_note() {
   printf 'solana-ai-kit firewall (%s tier, not blocked): %s\n' "$TIER" "$(_kit_reason "$1")"
   exit 0
+}
+
+# ╔═════════════════════════════════════════════════════════════════════════════╗
+# ║ THE KIT'S OWN FETCH-AND-EXECUTE ALLOWLIST.  Read at High, and only there.   ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+# High denies an undeclared package, and without this list it would deny the
+# kit's own documented commands: `/scaffold` IS `npx create-solana-dapp`,
+# `/generate-idl-client` IS `npx codama` plus `cargo install shank-cli`, and
+# `/doctor`'s only fix for a missing Anchor is `cargo install --git <anchor> avm`
+# — a form no manifest can ever satisfy, because a --git source is gated
+# whatever the manifests say.  A gate that blocks the product shipping it gets
+# switched off, so the packages the kit's own steps execute pass at High.
+# Nothing else does.
+#
+# EXACT NAME, PER ECOSYSTEM.  An entry is "<ecosystem>|<name>" between two
+# newlines and is matched whole, so `@stbr/safe-ai-skill` admits neither
+# `@stbr/safe-ai-skill-evil`, nor `@stbr/anything-else`, nor
+# `@other/safe-ai-skill`, and `rust|shank-cli` does not admit `npx shank-cli`.
+# A prefix or substring test here would hand the gate to whoever first registers
+# `create-solana-dapp-backdoor`.
+#
+# ONLY WHAT THE KIT RUNS ITSELF.  A package the kit merely suggests to the user
+# is not on it.  Nor is one the kit reaches only as `claude mcp add <name> --
+# npx <pkg>`: that command word is `claude`, which this guard never inspects and
+# which `Bash(claude *)` denies at every tier, so the MCP servers `/setup-mcp`
+# offers — @playwright/mcp, chrome-devtools-mcp, @supabase/mcp-server-supabase,
+# @phantom/mcp-server — are the user's to run, and an entry for them would
+# advertise a gate that does not exist here.  prettier, playwright and tsc are
+# absent for the opposite reason: each is a declared devDependency wherever the
+# kit runs it, so node_modules/.bin already passes it at every tier — and `tsc`
+# is not even TypeScript's package name, so blessing that npm name would bless a
+# squattable stranger rather than the compiler.
+KIT_FETCH_EXEC_ALLOW="
+node|create-solana-dapp
+node|create-next-app
+node|codama
+node|solana-mobile
+node|@colosseum-org/copilot-connect
+node|@stbr/safe-ai-skill
+rust|shank-cli
+rust|avm --git https://github.com/solana-foundation/anchor
+"
+
+NL='
+'
+# kit_allowlisted — exact match on one "<ecosystem>|<name>" record.  The needle
+# carries the newline on each side, which is what makes it a whole-record test
+# rather than a prefix one, and both substitutions are quoted inside the pattern
+# so a package name full of glob characters is matched literally.  Note the
+# direction: the LIST is the subject and the name is the pattern, so a glob
+# accidentally left in an entry is inert rather than wildcard-matching.
+kit_allowlisted() {
+  [ -n "$NAME" ] || return 1
+  case $KIT_FETCH_EXEC_ALLOW in
+    *"$NL$ECO|$NAME$NL"*) return 0 ;;
+  esac
+  return 1
 }
 
 case $TIER in
@@ -131,6 +194,15 @@ case $TIER in
     kit_note "$REASON"
     ;;
   high)
+    # The allowlist is read HERE and nowhere else, which is what keeps it a
+    # High-only change: Relaxed and Medium have already reported and exited
+    # above, and Off left before the verdict was even parsed, so none of them
+    # can be made quieter or noisier by an entry.  An allowlisted package still
+    # gets a note rather than silence — the fetch is real and belongs in the
+    # transcript, and the note is where a reader learns why it was not denied.
+    if kit_allowlisted; then
+      kit_note "\`$RUNNER\` downloads $PKG from the internet and executes it, and $PKG is not in this project's $MANIFEST — but $NAME is on this guard's allowlist of packages the kit's own commands invoke (KIT_FETCH_EXEC_ALLOW in .claude/hooks/fetch-exec-guard.sh), so High passes it."
+    fi
     kit_deny "$REASON At the High firewall tier fetching and running an undeclared package is denied; drop to Medium or run it yourself."
     ;;
 esac

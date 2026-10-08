@@ -4,7 +4,14 @@
 #   awk -f lib-tokenize.awk -f fetch-exec-guard.awk
 #
 # stdin : raw command text (one tool call)
-# stdout: "GATE|<ecosystem>|<runner>|<package>", or nothing.  First match wins.
+# stdout: "GATE|<ecosystem>|<runner>|<name>|<package>", or nothing.  First match
+#         wins.  <package> is the spec as written, for the message; <name> is it
+#         normalised to a bare package name, which is what the caller matches its
+#         High-tier allowlist against.  <name> is deliberately empty where there
+#         is no name to match — a URL, a git shorthand, a tarball — so such a
+#         fetch can never be allowlisted.  <name> comes BEFORE <package> because
+#         <package> is free-form (it can carry "x from <url>" and spaces), so it
+#         has to be the last field for the caller's split to leave it whole.
 # env   : KIT_PROJECT_DIR  where the manifests live (default ".")
 #
 # Decides on COMMAND position only.  `echo "run npx -y create-solana-dapp"` is
@@ -49,6 +56,10 @@ function node_name(s,   p) {
 function py_name(s) { sub(/[\[<>=!~;].*$/, "", s); return s }
 # rust_name — drop an @version: crate@1.2.3 -> crate
 function rust_name(s) { sub(/@.*$/, "", s); return s }
+# go_name — drop the @version that makes `go install` fetch at all.  Go spells
+# that suffix exactly as Cargo does, so it shares rust_name's body rather than
+# copying it; the separate name is so each call site reads as its own ecosystem.
+function go_name(s) { return rust_name(s) }
 
 # ---------------------------------------------------------------- manifests
 
@@ -143,16 +154,26 @@ function dep_python(name,   F, nf, i, t) {
 
 # ---------------------------------------------------------------- reporting
 
-function gate(eco, runner, pkg) { print "GATE|" eco "|" runner "|" pkg; return 1 }
+# gate — emit the verdict.  A "|" inside the NAME would corrupt the caller's
+# field split, and a name can come from quoted command text (`npx 'a|b'`), so
+# such a name is emitted empty: it is not a real package name, and an empty name
+# simply cannot match the allowlist.  pkg is last, so its own "|" survives.
+function gate(eco, runner, name, pkg) {
+  if (index(name, "|") > 0) name = ""
+  print "GATE|" eco "|" runner "|" name "|" pkg
+  return 1
+}
 
 function report(eco, runner, pkg,   name) {
   if (pkg == "" || is_localish(pkg)) return 0
-  if (is_remote_spec(pkg)) return gate(eco, runner, pkg)
-  if (eco == "node")   { if (dep_node(node_name(pkg))) return 0 }
-  if (eco == "python") { if (dep_python(py_name(pkg))) return 0 }
-  if (eco == "rust")   { if (dep_rust(rust_name(pkg))) return 0 }
-  if (eco == "go")     { if (dep_go(pkg)) return 0 }
-  return gate(eco, runner, pkg)
+  # A URL, git shorthand or tarball has no registry name to look up or to match:
+  # the code comes from that location, not from a named package.
+  if (is_remote_spec(pkg)) return gate(eco, runner, "", pkg)
+  if (eco == "node")   { name = node_name(pkg); if (dep_node(name)) return 0 }
+  if (eco == "python") { name = py_name(pkg);   if (dep_python(name)) return 0 }
+  if (eco == "rust")   { name = rust_name(pkg); if (dep_rust(name)) return 0 }
+  if (eco == "go")     { name = go_name(pkg);   if (dep_go(pkg)) return 0 }
+  return gate(eco, runner, name, pkg)
 }
 
 # ---------------------------------------------------------------- per-ecosystem
@@ -231,7 +252,14 @@ function rust_scan(T, n, i, runner,   a, pkg, git) {
     if (a ~ /^-/) { if (rust_optarg(a) && i < n) i++; i++; continue }
     pkg = a; break
   }
-  if (git != "") return gate("rust", runner, (pkg != "" ? pkg " from " git : git))
+  # A git source names the crate AND where the code comes from, so the allowlist
+  # key has to carry both — `avm` from the kit's pinned anchor repo is not the
+  # same act as `avm` from someone else's fork.  With no crate operand at all
+  # (`cargo install --git <url>` installs every binary in the repo) there is no
+  # name to key on, so that form carries none and can never be allowlisted.
+  if (git != "")
+    return gate("rust", runner, (pkg != "" ? rust_name(pkg) " --git " git : ""), \
+                (pkg != "" ? pkg " from " git : git))
   return report("rust", runner, pkg)
 }
 
