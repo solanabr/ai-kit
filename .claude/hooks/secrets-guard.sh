@@ -39,6 +39,11 @@ VERDICT=$(printf '%s\n' "$KIT_CMD" | KIT_VAULT_RE="$(kit_vault_re)" KIT_LANG="${
   awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/secrets-guard.awk" 2>/dev/null) || exit 0
 
 case $VERDICT in
+  WIPE*)
+    # Destroying key material, not reading it, so the "use solana address instead"
+    # trailer would be nonsense here. The route around is the flag, not the command.
+    kit_deny "${VERDICT#WIPE } overwrites the default wallet keypair at ~/.config/solana/id.json, and a Solana keypair cannot be recovered without its seed phrase. Drop --force to keep the existing wallet (solana-keygen refuses to overwrite one without it, so the command works unchanged where no wallet exists yet), or pass -o <path> to write somewhere else. If the user really means to replace their default wallet, they run it themselves."
+    ;;
   DENY*)
     kit_deny "${VERDICT#DENY } — reading private keys, wallet vaults or credentials is not allowed. Use \`solana address\` for the pubkey; ask the user to run anything that needs the secret."
     ;;

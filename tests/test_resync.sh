@@ -53,7 +53,7 @@ echo "[installed]"
 TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 (cd "$TEMP_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 assert_file_exists "$TEMP_DIR/.claude/bin/resync.sh" "resync.sh exists after install"
 
@@ -114,7 +114,7 @@ if ext_packs_uninitialized; then NO_CHECKOUT=1; else NO_CHECKOUT=0; fi
 AGENTS_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR" "$FAKE_ROOT" "$OTHER_DIR" "$AGENTS_DIR"' EXIT
 (cd "$AGENTS_DIR" && git init -q)
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" --agents "$AGENTS_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 HUB="$REPO_ROOT/.claude/skills/SKILL.md"
 CORE_LINK="$(grep -oE '\]\(ext/solana-dev/[^)]+\.md\)' "$HUB" | head -1 | sed 's/^](//; s/)$//')"
 CORE_LINK_COUNT="$(grep -oF "]($CORE_LINK)" "$HUB" | wc -l | tr -d ' ')"

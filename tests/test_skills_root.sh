@@ -22,6 +22,16 @@ source "$SCRIPT_DIR/helpers.sh"
 
 SKILLS_SH="$REPO_ROOT/.claude/bin/skills.sh"
 
+# install_skills_sh <bin dir> — skills.sh plus the sibling it sources (_pack_strip.sh,
+# as update.sh sources _env_merge.sh). A bin/ holding one of the two is an install
+# that cannot exist, and the fixtures below are meant to be real installs.
+# Named from the repo, not from $SKILLS_SH: the callers below repoint that at the
+# fixture they just built.
+install_skills_sh() {
+  mkdir -p "$1" \
+    && cp "$REPO_ROOT/.claude/bin/skills.sh" "$REPO_ROOT/.claude/bin/_pack_strip.sh" "$1/"
+}
+
 TEMP_DIR="$(new_tmp)" || exit 1
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -121,7 +131,7 @@ run_add() { bash "$SKILLS_SH" add nested-pack; }
 
 # 1. A nested root installs to skills/<name>/ anyway.
 CFG="$TEMP_DIR/p1/.claude"
-mkdir -p "$CFG/bin" && cp "$SKILLS_SH" "$CFG/bin/skills.sh"
+install_skills_sh "$CFG/bin"
 SKILLS_SH="$CFG/bin/skills.sh"
 write_registry $'\n      "skills_root": "providers/agent-plugins/plugin/skills",' deep-skill
 check "a nested skills_root fetches and installs" run_add
@@ -134,7 +144,7 @@ refute "nothing outside the skills subtree is copied" \
 
 # 2. No skills_root still means skills/.
 CFG="$TEMP_DIR/p2/.claude"
-mkdir -p "$CFG/bin" && cp "$REPO_ROOT/.claude/bin/skills.sh" "$CFG/bin/skills.sh"
+install_skills_sh "$CFG/bin"
 SKILLS_SH="$CFG/bin/skills.sh"
 write_registry "" shallow-skill
 check "an entry with no skills_root defaults to skills/" run_add

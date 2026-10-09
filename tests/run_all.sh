@@ -20,7 +20,13 @@ SKIPPED_NAMES=""
 SAK_SKIP_REPORT="${TMPDIR:-/tmp}/sak-run-all-skips.$$"
 : > "$SAK_SKIP_REPORT" 2>/dev/null || SAK_SKIP_REPORT=""
 export SAK_SKIP_REPORT
-trap 'rm -f "${SAK_SKIP_REPORT:-/dev/null}" 2>/dev/null || true' EXIT
+
+# Each suite's output is kept so the runner can check it reported at all. A suite that
+# dies under set -e before print_summary prints no "Results:" line, and on one OS that
+# read as silence rather than as a failure for two sessions (#216).
+SUITE_LOG="${TMPDIR:-/tmp}/sak-run-all-suite.$$"
+: > "$SUITE_LOG" 2>/dev/null || SUITE_LOG=/dev/null
+trap 'rm -f "${SAK_SKIP_REPORT:-/dev/null}" "$SUITE_LOG" 2>/dev/null || true' EXIT
 
 echo "========================================"
 echo " Solana AI Kit - Test Suite"
@@ -43,7 +49,13 @@ for test_file in "$SCRIPT_DIR"/test_*.sh; do
 
   echo "--- $test_name ---"
   RC=0
-  bash "$test_file" || RC=$?
+  bash "$test_file" 2>&1 | tee "$SUITE_LOG" || RC=$?
+  # No summary means the suite stopped somewhere it did not choose to. Treat that as a
+  # failure whatever it exited with, so it can never pass for having said nothing.
+  if [ "$SUITE_LOG" != /dev/null ] && ! grep -q '^Results:' "$SUITE_LOG"; then
+    echo "NO SUMMARY: $test_name exited $RC without reaching print_summary"
+    RC=1
+  fi
   # 2 means the suite checked nothing but skips: not a pass, not a failure either.
   if [ "$RC" -eq 0 ]; then
     PASSED_SUITES=$((PASSED_SUITES + 1))

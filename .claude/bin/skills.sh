@@ -40,6 +40,10 @@ CONFIG_NAME="$(basename "$CONFIG_DIR")"
 LIST_FILE="extensions.txt"
 PACKS_FILE="kit-packs.txt"
 
+# strip_pack_load_surfaces: what a vendored pack must not bring into a project.
+# shellcheck source=_pack_strip.sh
+source "$SCRIPT_DIR/_pack_strip.sh"
+
 # Never installed, whatever the registry lists: anthropics/skills' docx, pdf, pptx and
 # xlsx are proprietary (use only within Anthropic's services; no copies or
 # redistribution) and doc-coauthoring has no license. Claude users get the document
@@ -121,6 +125,25 @@ gitlink() {
 has_line() { printf '%s\n' "$1" | grep -qxF -- "$2"; }
 
 has_word() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
+
+# A bounded one-line rendering of a space-separated id list: every id when there are few,
+# the first five and a count when there are many. One line, because install.sh renders a
+# pin report as a single warning line.
+short_list() {
+  local n i=0 out="" item
+  # shellcheck disable=SC2086  # word splitting is the point here
+  set -- $1
+  n=$#
+  for item in "$@"; do
+    i=$((i + 1))
+    if [ "$n" -gt 6 ] && [ "$i" -gt 5 ]; then
+      out="$out and $((n - 5)) more"
+      break
+    fi
+    if [ -z "$out" ]; then out="$item"; else out="$out, $item"; fi
+  done
+  printf '%s' "$out"
+}
 
 # An Agent Skills name: lowercase letters and digits in hyphen-separated words. Also
 # keeps a registry or lock entry from naming a path outside skills/.
@@ -319,6 +342,9 @@ ensure_upstream() {
       echo "skills.sh: $id: could not copy $name into $(basename "$cfg")/skills/" >&2
       return 1
     fi
+    # An upstream skill installs where the host already discovers it, so a .claude/ of
+    # its own inside it would be a second, unasked-for load surface. Same rule as ext/.
+    strip_pack_load_surfaces "$cfg/skills/$name" >/dev/null
   done
   rm -rf "$tmp"
   write_lock "$lock" "$id" "$url" "$commit" $skills || return 1
@@ -326,9 +352,12 @@ ensure_upstream() {
 }
 
 # Pack <id> in the kit checkout <src> is at the commit the registry records for it.
-# A mismatch, or an entry with no commit, returns non-zero and says what to do. A source
-# with no gitlink for it cannot be checked (a vendored checkout, a test fixture): that
-# says so and passes, since the registry the project receives still carries the pin.
+# A mismatch, or an entry with no commit, returns non-zero and says what to do.
+#
+# A source with no gitlink for it cannot be checked at all: a tarball, a mirror, a fork
+# with ext/ committed as plain files, a test fixture. The gitlink comparison is the whole
+# mechanism — nothing here hashes a pack's content — so that case is a warning and the
+# copy proceeds on the registry's word alone. It must not read as a check that passed.
 check_pin() {
   local reg="$1" src="$2" id="$3" path want have
   path="$(entry_value "$reg" "$id" path)"
@@ -339,7 +368,7 @@ check_pin() {
   fi
   have="$(gitlink "$src" "$path")"
   if [ -z "$have" ]; then
-    echo "  note: could not verify $id's pin ($src has no gitlink for $path)" >&2
+    echo "skills.sh: warning: $id's pin is unverified ($src has no gitlink for $path); copying it on the registry's word alone" >&2
     return 0
   fi
   if [ "$have" != "$want" ]; then
@@ -478,12 +507,17 @@ cmd_select() {
 }
 
 cmd_prune() {
-  local reg="$CONFIG_DIR/skills/skill-registry.json" keep id
+  local reg="$CONFIG_DIR/skills/skill-registry.json" keep id stripped
   [ -f "$reg" ] || return 0
   check_registry "$reg"
   keep="$(recorded_extensions "$CONFIG_DIR" "$reg")"
   drop_others "$CONFIG_DIR" "$reg" "$keep"
   prune_orphans "$CONFIG_DIR" "$reg"
+  # update.sh copies the packs itself and then calls this, so the surfaces a pack loads
+  # on its own are stripped here rather than in that copy — which also cleans a project
+  # installed before the kit stripped them at all.
+  stripped="$(strip_pack_load_surfaces "$CONFIG_DIR/skills/ext"/*/)"
+  [ "$stripped" = 0 ] || echo "- Removed $stripped pack-local instruction file(s) and .claude/ from skills/ext/"
   # Installed upstream packs move to the commit this kit version pins.
   for id in $(wanted_upstream "$reg" "$keep"); do
     if ! ensure_upstream "$reg" "$CONFIG_DIR" "$id"; then
@@ -515,8 +549,12 @@ copy_pack() {
   local from="$1" dest="$2" old
   rm -rf "${dest:?}".partial.*
   STAGING="$(mktemp -d "$dest.partial.XXXXXX")" || return 1
-  # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit checkout
-  if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} +; }; then
+  # Vendored copy: drop submodule gitfiles, whose gitdir only exists in the kit
+  # checkout, and the surfaces the pack would load into a session from here — its own
+  # .claude/ and its instruction files. Both on the staging folder, so the kit
+  # checkout <from> is never written to.
+  if ! { cp -R "$from/." "$STAGING" && find "$STAGING" -name .git -prune -exec rm -rf {} + \
+        && strip_pack_load_surfaces "$STAGING" >/dev/null; }; then
     rm -rf "$STAGING"; STAGING=""
     return 1
   fi
@@ -589,8 +627,15 @@ cmd_add() {
 # commit from its gitlink, which is how a Dependabot bump becomes a registry change in
 # the same pull request. Nothing here touches an upstream pack's commit: that one is a
 # fetch target, not a gitlink, and skills.sh asserts it against FETCH_HEAD instead.
+#
+# Always reports "checked N of M", because a pack with no gitlink in <root> is not
+# verified by anything: there is no content hash of a pack anywhere, so the gitlink is
+# the only evidence that what is about to be copied is what the registry names. A source
+# with no gitlinks at all (a tarball, a mirror, a fork with ext/ as plain files) verifies
+# nothing. Both of those exit 0 — a pack-free tree is legitimate and must not fail a
+# build — but neither leads with the ✓ that callers key on for a clean result.
 cmd_pins() {
-  local write="" root="" arg reg id path want have tmp upstream drift=0 checked=0 pins=""
+  local write="" root="" arg reg id path want have tmp upstream drift=0 checked=0 total=0 skipped="" pins=""
   for arg in "$@"; do
     case "$arg" in
       -w|--write) write=write ;;
@@ -609,10 +654,14 @@ cmd_pins() {
   upstream="$(upstream_ids "$reg")"
   for id in $(registry_rows "$reg" | cut -f1); do
     has_line "$upstream" "$id" && continue
+    total=$((total + 1))
     path="$(entry_value "$reg" "$id" path)"
     want="$(entry_value "$reg" "$id" commit)"
     have="$(gitlink "$root" "$path")"
-    [ -n "$have" ] || continue
+    if [ -z "$have" ]; then
+      skipped="$skipped $id"
+      continue
+    fi
     checked=$((checked + 1))
     pins="$pins$path $have
 "
@@ -621,15 +670,19 @@ cmd_pins() {
     echo "$id: gitlink ${have:0:12}, registry ${want:0:12}"
   done
   if [ "$checked" = 0 ]; then
-    echo "No submodule gitlinks in $root: nothing to check against (a vendored install records its pins in the registry only)."
+    echo "Checked 0 of $total submodule pins: $root carries no gitlinks, so nothing verified what the packs hold — the registry's commits are a record here, not a check."
     return 0
   fi
   if [ "$drift" = 0 ]; then
+    if [ "$checked" != "$total" ]; then
+      echo "Checked $checked of $total submodule pins (all matching); the other $((total - checked)) have no gitlink in $root and are unverified: $(short_list "$skipped")."
+      return 0
+    fi
     echo "✓ All $checked submodule pins match the registry"
     return 0
   fi
   if [ "$write" != write ]; then
-    echo "$drift of $checked pins differ. Rewrite the registry from the gitlinks: bash $CONFIG_NAME/bin/skills.sh pins --write" >&2
+    echo "$drift of the $checked pins checked differ (of $total pinned). Rewrite the registry from the gitlinks: bash $CONFIG_NAME/bin/skills.sh pins --write" >&2
     return 1
   fi
   tmp="$(mktemp -d)" || return 1

@@ -26,7 +26,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          submodules: recursive
+          # One level: submodule-bump-review.sh inits and fetches each bumped pack itself
+          # (`submodule update --init --depth 1 -- <path>`) and diffs it between the two
+          # pinned commits. A pack's own submodules are not reviewed here, and no
+          # installer fetches them.
+          submodules: true
 
       - name: Diff each bumped pack
         id: review

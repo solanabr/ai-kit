@@ -17,7 +17,7 @@ echo ""
 
 # --- First install ---
 echo "[first install]"
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 assert_dir_exists "$TEMP_DIR/.claude" ".claude/ exists after 1st install"
 assert_file_exists "$TEMP_DIR/CLAUDE.md" "CLAUDE.md exists after 1st install"
@@ -32,7 +32,7 @@ echo "# my custom rule" >> "$TEMP_DIR/CLAUDE.md"
 
 # --- Second install ---
 echo "[second install]"
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 
 # Verify NO nesting (.claude/.claude should not exist)
 assert_dir_not_exists "$TEMP_DIR/.claude/.claude" "No .claude/.claude nesting on 2nd install"
@@ -61,7 +61,7 @@ assert_eq "1" "$LOCAL_DUPES" "No duplicate CLAUDE.local.md entries in .gitignore
 
 # --- Third install: CLAUDE.md now matches the kit's, so the backup of the user's copy must survive ---
 echo "[third install]"
-SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
 assert_file_contains "$TEMP_DIR/CLAUDE.md.bak" "my custom rule" "CLAUDE.md.bak still holds the user's copy after a 3rd install"
 
 print_summary

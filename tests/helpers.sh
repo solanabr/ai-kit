@@ -19,6 +19,27 @@ _KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # tests/test_anthropic_skills.sh does.
 export SOLANA_AI_KIT_PACK_MIRROR="${SOLANA_AI_KIT_PACK_MIRROR:-${TMPDIR:-/tmp}/sak-no-pack-mirror.$$}"
 
+# QUIET_LOG / quiet_fail — for a command whose output is noise right up until it fails.
+#
+# `cmd >/dev/null 2>&1` under set -e kills the suite with no trace of why: the output is
+# gone, and so is any `set -x` the command printed. A BSD-vs-GNU `cp` difference inside
+# update.sh cost two sessions to that in #216 — macOS red, Ubuntu green, and no failing
+# command named anywhere. Write `cmd > "$QUIET_LOG" 2>&1 || quiet_fail <label>` instead:
+# the exit status and the control flow are unchanged (set -e still stops on it, `|| true`
+# still swallows it), and the tail of the log goes out on the way past.
+#
+# One log, reused: only the latest matters, print_summary removes it, and a suite that
+# died before reaching print_summary is exactly when leaving it behind is useful.
+QUIET_LOG="${TMPDIR:-/tmp}/sak-quiet.$$"
+
+quiet_fail() {
+  local rc=$?
+  echo "  --- ${1:-command} exited $rc; last 20 lines of its output ---" >&2
+  tail -20 "$QUIET_LOG" 2>/dev/null | sed 's/^/      /' >&2 || true
+  echo "  --- end ($QUIET_LOG) ---" >&2
+  return "$rc"
+}
+
 # new_tmp — a writable temp dir, or exit 1 having said why.
 #
 # `mktemp -d` is itself denied under the Bash sandbox on some machines ("mkdtemp failed
@@ -292,6 +313,7 @@ assert_count() {
 # SKIP is 0 and both the output and the return value are what they always were, which is
 # why this is a no-op in CI.
 print_summary() {
+  rm -f "$QUIET_LOG" 2>/dev/null || true
   echo ""
   echo "========================================="
   if [ "$SKIP" -gt 0 ]; then
