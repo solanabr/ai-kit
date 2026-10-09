@@ -112,9 +112,17 @@ write_suite() {
 SUITES="$TEMP_DIR/suites"
 mkdir -p "$SUITES"
 cp "$SCRIPT_DIR/helpers.sh" "$SCRIPT_DIR/run_all.sh" "$SUITES/"
-# run_all.sh refuses to run at all without these two, so the fixture carries them.
-write_suite "$SUITES/test_firewall.sh" 'assert_eq a a "firewall stub"'
-write_suite "$SUITES/test_egress_guard.sh" 'assert_eq a a "egress stub"'
+# run_all.sh refuses to run at all without the suites named in its own `required`
+# list, so the fixture stubs exactly those — read out of run_all.sh rather than
+# mirrored here, because a mirrored list silently breaks every assertion below
+# the moment a suite joins the real one.
+REQUIRED="$(sed -n 's/^for required in \(.*\); do$/\1/p' "$SCRIPT_DIR/run_all.sh")"
+NREQ=0
+for r in $REQUIRED; do
+  write_suite "$SUITES/$r.sh" "assert_eq a a \"$r stub\""
+  NREQ=$((NREQ + 1))
+done
+assert_cmd_success "[ $NREQ -ge 2 ]" "run_all.sh's required-suite list was found and is non-trivial"
 write_suite "$SUITES/test_skiponly.sh" 'skip "the only thing this suite did"'
 
 assert_eq "2" "$(rc_of "$SUITES/test_skiponly.sh")" \
@@ -133,7 +141,7 @@ run_suites() {
   printf '%s\nRUNALL_RC=%s\n' "$out" "$rc"
 }
 SKIPONLY_RUN="$(run_suites "$SUITES")"
-assert_contains "$SKIPONLY_RUN" "Suites: 2 passed, 0 failed, 1 skipped (of 3)" \
+assert_contains "$SKIPONLY_RUN" "Suites: $NREQ passed, 0 failed, 1 skipped (of $((NREQ + 1)))" \
   "run_all.sh does not count a skip-only suite as a pass"
 assert_contains "$SKIPONLY_RUN" "Suites that checked nothing but skips:" \
   "run_all.sh says which suites checked nothing but skips"
@@ -147,11 +155,10 @@ assert_contains "$SKIPONLY_RUN" "RUNALL_RC=0" "A skip-only run is not a failed r
 FAILING="$TEMP_DIR/failing-suites"
 mkdir -p "$FAILING"
 cp "$SCRIPT_DIR/helpers.sh" "$SCRIPT_DIR/run_all.sh" "$FAILING/"
-write_suite "$FAILING/test_firewall.sh" 'assert_eq a a "firewall stub"'
-write_suite "$FAILING/test_egress_guard.sh" 'assert_eq a a "egress stub"'
+for r in $REQUIRED; do write_suite "$FAILING/$r.sh" "assert_eq a a \"$r stub\""; done
 write_suite "$FAILING/test_broken.sh" 'assert_eq a b "a real failure"; skip "and a skip"'
 FAILING_RUN="$(run_suites "$FAILING")"
-assert_contains "$FAILING_RUN" "Suites: 2 passed, 1 failed (of 3)" \
+assert_contains "$FAILING_RUN" "Suites: $NREQ passed, 1 failed (of $((NREQ + 1)))" \
   "A suite that failed is counted as failed even when it also skipped"
 assert_contains "$FAILING_RUN" "RUNALL_RC=1" "...and the run fails"
 assert_contains "$FAILING_RUN" "Skipped 1 checks across 1 suite(s)" \

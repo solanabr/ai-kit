@@ -41,6 +41,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash|mcp__context-mode__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/fetch-exec-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

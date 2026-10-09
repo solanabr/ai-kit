@@ -46,74 +46,14 @@ kit_parse
 # one of those made the gate silent — no cluster warning, and no exit 2 on the
 # irreversible set, which this hook is the only thing standing in front of.
 #
-# So each statement is normalised first: leading VAR= assignments and wrapper
-# binaries (with their own options and option arguments) are dropped, and
-# whitespace runs collapse, which is also what makes `solana  program  deploy`
-# match.  Statement separators are preserved so the anchors still mean what they
-# say, and $( ) becomes its own statement.
-#
-# What this deliberately does NOT do is understand quoting or heredocs: a
-# heredoc body line that starts with a gated verb still matches, and the
-# tokenizer that would fix it already exists in secrets-guard.sh.  Sharing it
-# is the open question on #138, not something to fork a second copy of here.
-KIT_NORM=$(printf '%s\n' "$KIT_CMD" | awk '
-function wrapper(b) {
-  return (b == "env" || b == "xargs" || b == "sudo" || b == "doas" || b == "nohup" \
-       || b == "time" || b == "nice" || b == "timeout" || b == "stdbuf" || b == "command" \
-       || b == "builtin" || b == "exec" || b == "setsid" || b == "flock" || b == "ionice" \
-       || b == "noglob" || b == "watch" || b == "eval" || b == "sh" || b == "bash" \
-       || b == "dash" || b == "zsh" || b == "ksh" || b == "ash")
-}
-# Options of those wrappers that swallow the next word, so the word is not
-# mistaken for the command: env -u HOME, xargs -I {}, nice -n 5, sudo -u me.
-function optarg(b, f) {
-  return (b == "env" && f ~ /^(-u|-C|--unset|--chdir)$/) \
-      || (b == "xargs" && f ~ /^(-I|-L|-n|-P|-s|-d|-E|-a|-J|-R|-S)$/) \
-      || ((b == "sudo" || b == "doas") && f ~ /^-[ugphCDrtTU]$/) \
-      || (b == "nice" && f == "-n") || (b == "timeout" && f ~ /^-[sk]$/) \
-      || (b == "stdbuf" && f ~ /^-[ioe]$/) || (b == "exec" && f == "-a") \
-      || (b == "time" && f ~ /^-[fo]$/)
-}
-function strip(st,   n, A, i, j, w, b, cur, hadw, keep, out) {
-  n = split(st, A, /[ \t\r]+/)
-  i = 1
-  while (i <= n && A[i] == "") i++
-  keep = ""; hadw = 0
-  while (i <= n) {
-    w = A[i]; b = w; sub(/.*\//, "", b)
-    # VAR=value is kept, not dropped: the cluster resolver below reads
-    # ANCHOR_PROVIDER_URL= out of this string, and the regex already allows a
-    # run of assignments in front of the verb.
-    if (w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { keep = keep w " "; i++; continue }
-    if (!wrapper(b)) break
-    cur = b; hadw = 1; i++
-    while (i <= n) {
-      if (A[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { keep = keep A[i] " "; i++; continue }
-      if (A[i] == "--") { i++; break }
-      if (A[i] ~ /^[-+]/) { if (optarg(cur, A[i]) && i < n) i++; i++; continue }
-      if (cur == "timeout" && A[i] ~ /^[0-9]/) { i++; continue }
-      break
-    }
-  }
-  out = ""
-  for (j = i; j <= n; j++) out = out (out == "" ? "" : " ") A[j]
-  # A wrapper was consumed, so a quote here opens its payload (sh -c "solana
-  # ...") rather than being part of the command word.
-  if (hadw) sub(/^["\047]/, "", out)
-  return keep out
-}
-{
-  line = $0; out = ""
-  while (length(line)) {
-    if (match(line, /(\|\||&&|\$\(|[;&|()])/)) {
-      st = substr(line, 1, RSTART - 1)
-      sep = substr(line, RSTART, RLENGTH)
-      line = substr(line, RSTART + RLENGTH)
-    } else { st = line; sep = ""; line = "" }
-    out = out strip(st) sep
-  }
-  print out
-}' 2>/dev/null) || KIT_NORM=
+# The normaliser is onchain-guard.awk; its header says why it keeps its own pass
+# instead of moving onto the shared tokenizer's split_cmd (#138).
+if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/onchain-guard.awk" ]; then
+  KIT_NORM=$(printf '%s\n' "$KIT_CMD" |
+    awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/onchain-guard.awk" 2>/dev/null) || KIT_NORM=
+else
+  KIT_NORM=
+fi
 [ -n "$KIT_NORM" ] || KIT_NORM=$KIT_CMD
 
 # Position-anchored: the verb has to start a statement, optionally behind env

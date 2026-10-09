@@ -101,7 +101,14 @@ import json, os, re, sys
 root = sys.argv[1]
 RUN = re.compile(r"(?:^|[;&|(]|\$\()[ \t]*(?:npm|pnpm|yarn|bun)[ \t]+(?:run|exec|dlx|x)\b", re.M)
 BIN = re.compile(r"(?:^|[;&|(]|\$\()[ \t]*(?:npx|bunx|pnpx|make|just|rake)[ \t]", re.M)
+def decomment(text):
+    # Full-line comments are prose, not delegation. fetch-exec-guard.sh's own header
+    # explains the hole it closes and quotes `Bash(npx *)` doing it; that is the corpus
+    # it matches on, not a command it runs. Only whole-line comments are dropped, so an
+    # inline `... && npm run x  # why` is still caught.
+    return "\n".join("" if re.match(r"[ \t]*#", ln) else ln for ln in text.split("\n"))
 def scan(where, text):
+    text = decomment(text)
     return [f"{where}: {m.group(0).strip()}"
             for rx in (RUN, BIN) for m in rx.finditer(text)]
 bad = []
@@ -414,7 +421,7 @@ bad = []
 for entry in json.load(open(path))["hooks"].get("PreToolUse", []):
     m = entry.get("matcher") or ""
     cmds = " ".join(h.get("command", "") for h in entry.get("hooks", []))
-    if not any(g in cmds for g in ("secrets-guard", "onchain-guard", "egress-guard")):
+    if not any(g in cmds for g in ("secrets-guard", "onchain-guard", "egress-guard", "fetch-exec-guard")):
         continue
     if m != want:
         bad.append(m or "(no matcher)")

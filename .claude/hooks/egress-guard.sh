@@ -209,11 +209,11 @@ if [ "$TIERN" -ge 3 ]; then
   fi
 fi
 
-[ -f "$HOOK_DIR/egress-guard.awk" ] || exit 0
+[ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ] || exit 0
 
 VERDICT=$(printf '%s\n' "$KIT_CMD" |
   KIT_SECRET_RE="$(kit_secret_re)" KIT_MAXCLASS="$TIERN" \
-  awk -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null) || exit 0
+  awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null) || exit 0
 [ -n "$VERDICT" ] || exit 0
 
 CLASS=${VERDICT%% *}

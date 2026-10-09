@@ -3,7 +3,7 @@ description: "Read-only check of toolchain and kit config, with one fix-it comma
 model: sonnet
 ---
 
-Run the nine checks below, then report. Status values: `OK` healthy, `WARN` works but fix soon, `FAIL` blocks workflows, `n/a` not applicable.
+Run the ten checks below, then report. Status values: `OK` healthy, `WARN` works but fix soon, `FAIL` blocks workflows, `n/a` not applicable.
 
 ## Checks
 
@@ -123,6 +123,44 @@ These states look alike and are not. Read them in this order; stop at the first 
 
 Whatever the row, a tier change only binds the next session: permission rules are read at session start.
 
+**10. Fetch-and-execute guard.** `.claude/hooks/fetch-exec-guard.sh` gates `npx -y <stranger>`, `pnpm dlx`, `uvx`, `pipx run`, `cargo install` and `go install pkg@version` when the package is not a declared dependency — reporting at Relaxed and Medium, denying at High. The exception at High is `KIT_FETCH_EXEC_ALLOW` in that script: the packages the kit's own commands invoke (`create-solana-dapp`, `codama`, `shank-cli`, `avm` from Anchor's git repo and four more) are reported there rather than denied, matched on the exact name within one ecosystem. It is the only implementation route for gating `cargo install`, which sits in `permissions.allow` at every tier. The script is enforcement, the `hooks` entry in `settings.json` is what runs it, and `/update` delivers the first without ever rewriting the second (issue #91), so the two can disagree.
+```bash
+python3 - <<'PY'
+import json, pathlib
+def load(p):
+    f = pathlib.Path(p)
+    return json.loads(f.read_text()) if f.is_file() else {}
+pre = ((load(".claude/settings.json").get("hooks") or {}).get("PreToolUse") or [])
+def has(name):
+    return any(name in (h.get("command") or "") for e in pre for h in (e.get("hooks") or []))
+print("registered:", has("fetch-exec-guard"))
+print("older_guards:", sum(has(g) for g in ("secrets-guard", "onchain-guard", "egress-guard")))
+print("script:", pathlib.Path(".claude/hooks/fetch-exec-guard.sh").is_file())
+print("full_install:", pathlib.Path(".claude/VERSION").is_file())
+PY
+```
+Read these in order; stop at the first that matches.
+- `n/a` `full_install: False`: the plugin path. The plugin's own `hooks/hooks.json` carries the guard, so there is nothing in the project to register and nothing wrong.
+- OK `registered: True`: the gate is live. Report the tier it is acting at (check 9).
+- WARN `registered: False` and `older_guards: 0` and `full_install: True`: no kit guard is registered at all, so the `hooks` array was emptied or rewritten by hand — **removed on purpose**. Report it and offer no fix; re-adding something the user deleted is not a repair.
+- WARN `registered: False`, `older_guards: 3`, `script: False`: an install predating the guard that has not updated yet. `bash .claude/bin/update.sh` first, then the fix below.
+- WARN `registered: False`, `older_guards: 3`, `script: True`: **this install predates the guard.** `/update` copied the script in but leaves `settings.json` alone, so the script is sitting there inert. Register it (this rewrites `settings.json` with standard JSON formatting, so hand-made spacing is lost):
+```bash
+python3 - <<'PY'
+import json
+p = ".claude/settings.json"
+d = json.load(open(p))
+cmd = 'H="${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/fetch-exec-guard.sh"; [ -r "$H" ] && exec sh "$H"; exit 0'
+d.setdefault("hooks", {}).setdefault("PreToolUse", []).append(
+    {"matcher": "Bash|mcp__context-mode__.*",
+     "hooks": [{"type": "command", "command": cmd, "timeout": 10}]})
+json.dump(d, open(p, "w"), indent=2)
+PY
+```
+- WARN anything else (`older_guards` 1 or 2): the array is partly hand-edited. Say which guards are missing and let the user decide; do not rewrite it.
+
+One ambiguity this check cannot resolve: `older_guards: 3` with this one guard surgically removed looks exactly like an install that predates it. It is reported as "predates", so if the removal was deliberate, ignore the row — or set the firewall tier to `off`, which disables every guard explicitly.
+
 ## Output
 
 One table, then fix-its for the non-OK rows only, in the order to run them:
@@ -141,6 +179,7 @@ One table, then fix-its for the non-OK rows only, in the order to run them:
 | 7 | MCP config         | OK     | 3 servers parsed                |
 | 8 | Dual-install guard | OK     | full install only (no plugin)   |
 | 9 | Firewall tier      | OK     | relaxed declared = enforced     |
+| 10| Fetch-exec guard   | OK     | registered; reports at relaxed  |
 
 ### Fix-its (run in order)
 1. `git submodule update --init --recursive`

