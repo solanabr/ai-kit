@@ -7,6 +7,8 @@
 # stdout: "<CLASS> <reason>", or nothing at all
 #   GITEXEC  a `git config` write that arms a later execution (alias.*,
 #            core.pager, core.hooksPath and the rest) — denied at every tier
+#   GITDESTRUCT  a destructive git subcommand reached behind a git-level option,
+#            where the glob rule anchored on the bare subcommand cannot see it
 #   DENY  a secret reaches a network command — as a body, as an argument, via a
 #         reader in the same statement, or named in inline interpreter code
 #   ASK1  a request body or upload sourced from a file or from stdin
@@ -219,12 +221,41 @@ function gc_opt_operand(o) {
        || o == "--default" || o == "--value" || o == "--comment")
 }
 
-# gc_git_operand — a git-LEVEL option, ahead of the subcommand, that eats the
-# next token.  `git -C *` and `git -c *` are denied whole at every tier, so
-# these keep the walk correct rather than catching anything on their own.
-function gc_git_operand(o) {
+# git_global_operand — a git-LEVEL option, ahead of the subcommand, that eats the
+# next token.  Verified by hand against the installed git: `--git-dir .git`,
+# `--namespace ns` and `--attr-source HEAD` all leave the subcommand running, so
+# they do consume one.  `--exec-path` does NOT: `git --exec-path /tmp rev-parse`
+# printed the exec path and ignored the rest, so it is left out and treated as a
+# plain flag.  Getting one wrong costs a MISS, never a false positive: the walk
+# lands on the wrong token, finds no subcommand it knows, and stays silent.
+function git_global_operand(o) {
   return (o == "-C" || o == "-c" || o == "--git-dir" || o == "--work-tree" \
-       || o == "--namespace")
+       || o == "--namespace" || o == "--attr-source" || o == "--super-prefix" \
+       || o == "--config-env")
+}
+
+# git_walk — the shared option walker.  Returns 1 on a real git invocation and
+# fills three globals: GW_SUB (the subcommand), GW_I (the index of the first
+# token after it) and GW_PREFIXED (1 when at least one git-level option came
+# first).  Both git passes below run off this one walk.
+function git_walk(T, n,   i, o) {
+  GW_SUB = ""; GW_I = 0; GW_PREFIXED = 0
+  # cmdword_x's fourth argument (skip a wrapper's positional operand) is asked
+  # for here where the egress passes below decline it: `timeout 5 git config
+  # alias.z '!x'` leaves "5" in command position otherwise, and the globs miss
+  # that spelling too, so there is no verdict to keep identical.
+  if (cmdword_x(T, n, 1, 1) != "git") return 0
+  i = CWI + 1
+  while (i <= n && substr(T[i], 1, 1) == "-" && T[i] != "-" && T[i] != "--") {
+    o = T[i]; sub(/=.*$/, "", o)
+    if (git_global_operand(o) && T[i] !~ /=/) i++
+    i++
+    GW_PREFIXED = 1
+  }
+  if (i > n) return 0
+  GW_SUB = T[i]
+  GW_I = i + 1
+  return 1
 }
 
 # gc_exec_key — does this key name a program git will run later?  Compared
@@ -251,23 +282,14 @@ function gc_exec_section(s,   P) {
 # gc_scan — one pipeline stage.  Returns the reason to deny, or "".
 function gc_scan(stage,   n, T, i, j, tok, o, mode, nop, OP, key) {
   n = tokenize(stage, T); if (n == 0) return ""
-  # cmdword_x's fourth argument (skip a wrapper's positional operand) is asked
-  # for here where the egress passes below decline it: `timeout 5 git config
-  # alias.z '!x'` leaves "5" in command position otherwise, and the globs miss
-  # that spelling too, so there is no verdict to keep identical.
-  if (cmdword_x(T, n, 1, 1) != "git") return ""
-  i = CWI + 1
-  while (i <= n && substr(T[i], 1, 1) == "-" && T[i] != "-") {
-    o = T[i]; sub(/=.*$/, "", o)
-    if (gc_git_operand(o) && T[i] !~ /=/) i++
-    i++
-  }
+  if (!git_walk(T, n)) return ""
   # Subcommand position, and nothing else.  `git commit -m "git config alias.z"`
-  # stops here: T[i] is "commit", so the message is data and never a command.
-  if (i > n || T[i] != "config") return ""
+  # stops here: GW_SUB is "commit", so the message is data and never a command.
+  if (GW_SUB != "config") return ""
+  i = GW_I
 
   mode = ""; nop = 0
-  for (i++; i <= n; i++) {
+  for (; i <= n; i++) {
     tok = T[i]
     if (substr(tok, 1, 1) == "-" && tok != "-") {
       o = tok; sub(/=.*$/, "", o)
@@ -306,6 +328,107 @@ function gc_scan(stage,   n, T, i, j, tok, o, mode, nop, OP, key) {
   if (mode == "" && nop < j + 1) return ""
   if (!gc_exec_key(key)) return ""
   return "writes git config " unmark(key) ", a key that names a command git runs later"
+}
+
+# ---- destructive git subcommands behind a git-level option -------------------
+#
+# Every destructive-git deny is a glob anchored on the literal subcommand, so a
+# git-level option in front of it sits where the glob expects `git`, and none of
+# them match.  `Bash(git -C *)` is the only one of those doors that is shut.
+# Measured against the live `Bash(git clean *)`:
+#
+#   git --no-pager clean --dry-run           ran
+#   git --git-dir=.git clean --dry-run       ran
+#   git -P clean --dry-run                   ran
+#   git --literal-pathspecs clean --dry-run  ran   (not even in git's synopsis)
+#   git -C . clean --dry-run                 DENIED
+#
+# `git --help` lists the whole set before <command> (the count varies by git
+# version, so read it there rather than trusting a number), and only `-C` and
+# `-c` are denied.  Some of them print and stop rather than reaching a
+# subcommand — `--version`, `--help`, the three path-printing ones, and a bare
+# `--exec-path`, which is also why `--exec-path` is out of git_global_operand
+# above.  The ones that do pass through — `--no-pager`, `-p`, `-P`, `--bare`,
+# `--git-dir`, `--work-tree`, `--namespace`, `--config-env`, the `--no-*`
+# switches and the undocumented `--literal-pathspecs` family — each take both
+# `--opt=v` and `--opt v` and repeat and combine freely, so there is no glob set
+# to enumerate.  There is one option walk, and git_walk above already had to do
+# it to find `config`.
+#
+# THE DESIGN RULE, and the reason this pass is this narrow: it MIRRORS the glob
+# rules and changes no tier's policy.  It fires only when GW_PREFIXED is set —
+# the unprefixed spelling is already decided at the permission layer, by a rule
+# that applies at every tier, and re-deciding it here would put a hook's
+# predicate in front of commands a glob is handling correctly today.  The hook
+# closes a bypass; it does not set policy.  Each predicate below is the glob it
+# mirrors, never wider: `--ha` and `--mirror` are matched as a token PREFIX where
+# the glob matches the substring anywhere, so a pathspec containing `--ha` fires
+# the rule but not the hook.  Narrower is allowed here; stricter is not.
+#
+# WHAT IS IN, and why each earns the parsing surface:
+#   reflog expire   FIREWALL-SPEC.md section 3.4 singles this out as the command
+#                   that makes history unrecoverable.  Strongest case in the set.
+#   clean, restore, checkout -- <path>, reset --hard
+#                   these destroy UNCOMMITTED work, which is in no reflog.
+#   push --mirror   overwrites every ref on the remote, for everyone, and is not
+#                   recoverable from anything local.
+#   --upload-pack / --receive-pack / --exec
+#                   these name a PROGRAM for git to run.  `git push/pull/fetch`
+#                   are three of the eight sandbox excludedCommands, so that
+#                   program runs with the OS sandbox lifted — arbitrary code
+#                   execution, which outranks everything else here.
+#
+# WHAT IS OUT, deliberately:
+#   branch -D / --delete / -f   reflog-recoverable, and the worst parsing surface
+#                   in the set: -D against a safe -d, -f clustered inside -Df,
+#                   and `--sort=-date` already tripped a `-d` matcher in this
+#                   same guard once.  Friction without safety.
+#   gc --prune, prune           reach only unreferenced objects.
+#
+# KNOWN MISSES, stated rather than papered over: a variable-indirected command
+# (`G=git; $G clean -fd`) is invisible to this walk, and so is git inside a
+# script the agent wrote — for both of those the OS sandbox is the only layer
+# left, and `.git` is in its allowWrite.  `git checkout <tree-ish> -- <path>`
+# and `git checkout --force -- .` are open in BOTH layers, because the glob is
+# `git checkout -- *` and this pass mirrors it rather than widening it.
+
+function gd_scan(stage,   n, T, i, nargs) {
+  n = tokenize(stage, T); if (n == 0) return ""
+  if (!git_walk(T, n)) return ""
+  if (!GW_PREFIXED) return ""          # the glob rules own the unprefixed form
+  i = GW_I
+  nargs = n - i + 1
+
+  if (GW_SUB == "clean" && nargs >= 1)
+    return "runs git clean behind a git-level option, deleting untracked files"
+  if (GW_SUB == "restore" && nargs >= 1)
+    return "runs git restore behind a git-level option, overwriting the working tree"
+  if (GW_SUB == "checkout" && T[i] == "--" && nargs >= 2)
+    return "runs git checkout -- <path> behind a git-level option, discarding uncommitted changes"
+  if (GW_SUB == "reset") {
+    for (; i <= n; i++)
+      if (T[i] ~ /^--ha/)             # --hard, and the --ha abbreviation git accepts
+        return "runs git reset --hard behind a git-level option, discarding uncommitted changes"
+    return ""
+  }
+  if (GW_SUB == "reflog" && T[i] == "expire" && nargs >= 2)
+    return "runs git reflog expire behind a git-level option, which is what makes history unrecoverable"
+  if (GW_SUB == "push") {
+    for (; i <= n; i++) {
+      if (T[i] ~ /^--mirror/)
+        return "runs git push --mirror behind a git-level option, overwriting every ref on the remote"
+      if (T[i] ~ /^--receive-pack/ || T[i] ~ /^--exec/)
+        return "names a program for git to run as the far end of a push, behind a git-level option"
+    }
+    return ""
+  }
+  if (GW_SUB == "pull" || GW_SUB == "fetch" || GW_SUB == "clone" || GW_SUB == "ls-remote") {
+    for (; i <= n; i++)
+      if (T[i] ~ /^--upload-pack/)
+        return "names a program for git to run as the far end of a " GW_SUB ", behind a git-level option"
+    return ""
+  }
+  return ""
 }
 
 BEGIN {
@@ -368,6 +491,8 @@ END {
     for (g = 1; g <= nstg; g++) {
       why = gc_scan(STG[g])
       if (why != "") { print "GITEXEC " why; exit }
+      why = gd_scan(STG[g])
+      if (why != "") { print "GITDESTRUCT " why; exit }
     }
   }
 

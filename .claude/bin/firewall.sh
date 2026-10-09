@@ -652,6 +652,10 @@ DENY_WRAPPERS = [
     # this one rule to High would make the whole destructive-git deny set advisory at the
     # default tier, `reflog expire` included (FIREWALL-SPEC.md section 3.4 singles that
     # one out as deny-at-every-tier because it is what makes history unrecoverable).
+    # `-C` was never the only door of its kind, only the only one shut — see the note on
+    # DENY_UNRECOVERABLE_GIT below for the 16 others and the hook pass that covers them.
+    # Both rules stay regardless: they decide at the permission layer, ahead of the hook,
+    # and a hook miss is a silent open door where a glob is a loud closed one.
     #
     # `git config alias.*` is the third git evasion, and the worst of the three, because
     # it is the only one that survives the command it was typed in. `git config
@@ -738,6 +742,20 @@ DENY_UNRECOVERABLE_GIT = [
     # Verified-live evasions, each with its zero-gap twin. Long options abbreviate in
     # git (not in the solana CLI, which is clap v2 with no InferLongArgs), so
     # `git reset --ha HEAD` walked straight past `git reset --hard *`.
+    #
+    # Every rule here is anchored on the literal subcommand, so a git-LEVEL option in
+    # front of it sits where the glob expects `git` and none of them match. `git -C` and
+    # `git -c` in DENY_WRAPPERS are two of the many option forms `git --help` lists
+    # before <command>, and the only two shut;
+    # measured live, `git --no-pager clean --dry-run`, `git --git-dir=.git clean
+    # --dry-run`, `git -P clean --dry-run` and `git --literal-pathspecs clean --dry-run`
+    # all ran. The rest is closed by egress-guard.awk's GITDESTRUCT pass, which walks the
+    # global options and classifies the subcommand; it mirrors these rules rather than
+    # extending them, firing only on the prefixed spelling, and covers `clean`,
+    # `restore`, `checkout -- <path>`, `reset --ha*`, `reflog expire`, `push --mirror`
+    # and the transport overrides below. `branch -D`/`-f` and `gc --prune`/`prune` are
+    # out of that pass on purpose (reflog-recoverable, or unreferenced objects only), so
+    # for those the rules here are the only layer and the prefixed form stays open.
     "Bash(git clean *)",            # git clean is never non-destructive; -xdf, -dfx, --f -d
     "Bash(git restore *)",          # the modern spelling of `git checkout -- .`
     "Bash(git checkout -- *)",
