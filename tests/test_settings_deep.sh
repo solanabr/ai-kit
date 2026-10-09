@@ -196,6 +196,21 @@ print('yes' if any(fnmatch.fnmatchcase(cmd, r[5:-1]) for r in deny
 for c in "git clean -fdx" "git clean -fX" "git clean -xdf" "git clean -dfx"; do
   assert_eq "yes" "$(deny_covers "$c")" "permissions.deny covers: $c"
 done
+# A git alias defeats every rule above it: `git config alias.z '!git clean -fdx'` is an
+# ordinary config write and the destruction happens later in `git z`, where the glob has
+# no verb to match. Checked here against the SHIPPED settings.json as well as against
+# generated output in test_firewall.sh, since this file is what install.sh copies.
+# `gh repo delete` is the other half of the pair `gh issue delete` already covers.
+for c in "git config alias.z '!git clean -fdx'" "git config --global alias.z '!x'" \
+         "git config --local alias.co checkout" "git config set alias.z '!x'" \
+         "gh repo delete owner/repo --yes" "gh repo delete"; do
+  assert_eq "yes" "$(deny_covers "$c")" "permissions.deny covers: $c"
+done
+# ...and the alias rules are narrow: an ordinary config key is not an alias.
+for c in "git config user.email dev@example.com" "git config --global user.name dev" \
+         "git config core.autocrlf false"; do
+  assert_eq "no" "$(deny_covers "$c")" "permissions.deny leaves ordinary git config alone: $c"
+done
 # permissions.ask is not a reliable control: verified in-session, `git clean -n` matched an
 # ask rule and ran with no prompt while a deny rule blocked `sudo -n true`, with the sandbox
 # on. So every prompt is a hook returning permissionDecision "ask" (see test_hooks.sh), and
