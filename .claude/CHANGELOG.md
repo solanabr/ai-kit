@@ -4,7 +4,7 @@ All notable changes to solana-ai-kit.
 
 ## [Unreleased]
 
-Merged to `main` after the 2.3.0 bump (#168); not yet in a tagged release.
+## [2.4.0] - 2026-10-09
 
 ### Added
 - **Three denies the previous rule set named in its own prose and left open** (`RULE_SET_VERSION` 6). Purely additive, and `/update`'s rule-set catch-up re-applies the declared tier, so existing installs receive all three.
