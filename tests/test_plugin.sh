@@ -78,10 +78,17 @@ else
 fi
 
 # --- Each plugin symlink target resolves on disk (-e follows symlinks) ---
+# Everything under skills/ is discovered rather than listed: a literal list is what let
+# a deleted plugin skill keep its documented claim (PR #210).
 echo "[plugin symlinks]"
-for link in agents commands .mcp.json VERSION \
-            skills/token-extensions \
-            skills/skill-registry.json; do
+PLUGIN_SKILL_LINKS=""
+for entry in "$PLUGIN_DIR"/skills/*; do
+  [ -L "$entry" ] || continue
+  PLUGIN_SKILL_LINKS="$PLUGIN_SKILL_LINKS skills/$(basename "$entry")"
+done
+assert_cmd_success "[ -n '$PLUGIN_SKILL_LINKS' ]" "plugin/skills/ carries symlinks into .claude/skills/"
+# shellcheck disable=SC2086 # word splitting is the iteration
+for link in agents commands .mcp.json VERSION $PLUGIN_SKILL_LINKS; do
   target="$PLUGIN_DIR/$link"
   TOTAL=$((TOTAL + 1))
   if [ -L "$target" ] && [ -e "$target" ]; then
@@ -98,25 +105,75 @@ done
 # there, so the skills in its subdirectories never register. The hub needs its own directory.
 echo "[plugin skills layout]"
 assert_file_not_exists "$PLUGIN_DIR/skills/SKILL.md" "no SKILL.md directly in plugin/skills/ (it would hide the bundled skills)"
-for skill in solana-ai-kit token-extensions; do
-  assert_file_exists "$PLUGIN_DIR/skills/$skill/SKILL.md" "plugin skill is discoverable: skills/$skill/SKILL.md"
+# Discovered, not listed. Every directory under skills/ must hold a SKILL.md, or it ships
+# a directory Claude Code will not register.
+PLUGIN_SKILLS=""
+for dir in "$PLUGIN_DIR"/skills/*/; do
+  name="$(basename "$dir")"
+  PLUGIN_SKILLS="$PLUGIN_SKILLS $name"
+  assert_file_exists "$dir/SKILL.md" "plugin skill is discoverable: skills/$name/SKILL.md"
 done
+assert_cmd_success "[ -n '$PLUGIN_SKILLS' ]" "plugin ships at least one skill"
 HUB_NAME="$(sed -n 's/^name:[[:space:]]*//p' "$PLUGIN_HUB" 2>/dev/null | head -1 || true)"
 assert_eq "solana-ai-kit" "$HUB_NAME" "plugin hub frontmatter name matches its directory"
-# The hub's links are relative to its own directory, so each one must resolve from there
-HUB_LINKS=0
-while IFS= read -r link; do
-  HUB_LINKS=$((HUB_LINKS + 1))
-  TOTAL=$((TOTAL + 1))
-  if [ -e "$(dirname "$PLUGIN_HUB")/$link" ]; then
-    echo "  PASS: plugin hub link resolves: $link"
-    PASS=$((PASS + 1))
-  else
-    echo "  FAIL: plugin hub link does not resolve from skills/solana-ai-kit/: $link"
-    FAIL=$((FAIL + 1))
-  fi
-done < <(grep -oE '\]\([^)]+\)' "$PLUGIN_HUB" 2>/dev/null | sed 's/^](//; s/)$//; s/#.*$//' | grep -vE '^(https?:|$)' | sort -u)
-assert_cmd_success "[ $HUB_LINKS -gt 0 ]" "plugin hub has relative links to check"
+# A skill's links are relative to its own directory, so each one must resolve from there —
+# and resolve to a path *inside* plugin/. The paths are normalised lexically, not with
+# stat(): a skill symlinked in from .claude/skills/ would otherwise have its `..` taken
+# from the real directory, so a link out to the full install's tree would look live here
+# and be dead for the reader. ext/ links are the one exception: the packs are absent by
+# construction and the hub's missing-link section is their next step ([ext fallback]).
+SKILL_LINK_REPORT="$(python3 - "$PLUGIN_DIR" <<'PY'
+import glob, os, re, sys
+plugin = os.path.abspath(sys.argv[1])
+checked, bad = 0, []
+for skill in sorted(glob.glob(os.path.join(plugin, "skills", "*", "SKILL.md"))):
+    name = os.path.basename(os.path.dirname(skill))
+    seen = set()
+    for link in re.findall(r"\]\(([^)\s]+)\)", open(skill, encoding="utf-8").read()):
+        link = link.split("#")[0]
+        if not link or link.startswith("http") or link in seen:
+            continue
+        seen.add(link)
+        if re.search(r"(^|/)ext/", link):
+            continue
+        checked += 1
+        target = os.path.normpath(os.path.join(plugin, "skills", name, link))
+        if not (target + os.sep).startswith(plugin + os.sep):
+            bad.append(f"skills/{name}: {link} escapes plugin/")
+        elif not os.path.exists(target):
+            bad.append(f"skills/{name}: {link} does not resolve inside plugin/")
+print(checked)
+print("\n".join(bad) or "OK")
+PY
+)"
+assert_eq "OK" "$(printf '%s\n' "$SKILL_LINK_REPORT" | tail -n +2)" "every non-ext link in a plugin skill resolves inside plugin/ ($(printf '%s\n' "$SKILL_LINK_REPORT" | head -1) links)"
+assert_cmd_success "[ $(printf '%s\n' "$SKILL_LINK_REPORT" | head -1) -gt 0 ]" "plugin skills have relative links to check"
+
+# --- docs/plugin.md's "ships the core kit" sentence names exactly the linked skills ---
+# #210 deleted three plugin skills and left the sentence claiming one of them. Compare the
+# doc against disk over every name .claude/skills/ offers, so a claim and a deletion cannot
+# drift apart again in either direction.
+echo "[plugin skills vs docs]"
+SKILLS_CLAIM="$(python3 - "$REPO_ROOT" "$PLUGIN_DIR" <<'PY'
+import os, re, sys
+root, plugin = sys.argv[1], sys.argv[2]
+sentence = next((l for l in open(os.path.join(root, "docs", "plugin.md"), encoding="utf-8")
+                 if "ships the **core kit**" in l), "")
+if not sentence:
+    print("docs/plugin.md has no 'ships the **core kit**' sentence to check")
+    raise SystemExit
+sentence = sentence.split("What the plugin")[0]
+candidates = {d for d in os.listdir(os.path.join(root, ".claude", "skills"))
+              if d != "ext" and os.path.isdir(os.path.join(root, ".claude", "skills", d))}
+shipped = {d for d in candidates
+           if os.path.islink(os.path.join(plugin, "skills", d))}
+claimed = {c for c in candidates if re.search(rf"\b{re.escape(c)}\b", sentence)}
+out = [f"docs claim a skill the plugin does not link: {', '.join(sorted(claimed - shipped))}"] if claimed - shipped else []
+out += [f"plugin links a skill the docs do not name: {', '.join(sorted(shipped - claimed))}"] if shipped - claimed else []
+print("\n".join(out) or "OK")
+PY
+)"
+assert_eq "OK" "$SKILLS_CLAIM" "docs/plugin.md names exactly the .claude/skills/ skills the plugin links"
 
 # --- Plugin hooks (real file, mirrors .claude/settings.json hooks) ---
 echo "[plugin hooks]"

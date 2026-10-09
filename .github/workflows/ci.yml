@@ -14,9 +14,16 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
+          # One level, not recursive. install.sh fetches the packs with
+          # `submodule update --init --depth 1` and deliberately never recurses, because a
+          # pack's own submodules are pinned by that pack's author and are not reviewed
+          # here. Checking them out gives CI a tree no install can produce, and with
+          # SOLANA_AI_KIT_LOCAL_SRC the smoke test below would copy those nested
+          # third-party trees straight into its fixture project. The registry's `vendored`
+          # pins are read from each pack's index, which one level provides.
+          submodules: true
           # Tags, not just the tip: tests/test_update.sh reads the v2.1.0 settings.json and
           # the frozen update.sh byte range straight from the tag, so the migration baseline
           # is matched by construction instead of by a vendored copy that drifts.
@@ -38,7 +45,7 @@ jobs:
   actions-resolve:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: "Every uses: under .github/ resolves"
         env:
@@ -49,9 +56,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
+          submodules: true
 
       - name: Smoke test — fresh install
         run: |
@@ -82,11 +89,11 @@ jobs:
       SOLANA_AI_KIT_LOCAL_SRC: ${{ github.workspace }}
       NO_COLOR: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          submodules: recursive
+          submodules: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 

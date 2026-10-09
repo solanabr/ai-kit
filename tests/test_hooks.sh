@@ -87,6 +87,52 @@ PY
 )"
 assert_eq "ok" "$SYNTAX" "every hook command parses with sh -n (and dash -n when present)"
 
+# No hook may reach its body through a package-manager script. The auto-review workflow
+# restores .claude/ from the BASE branch on a pull_request run, so a hook command and the
+# guard scripts it execs are the reviewed versions. `npm run x`, `make x` and friends
+# resolve their body from package.json or a Makefile instead -- files outside .claude/,
+# which come from the PR head. A PR would then supply code that runs inside the review.
+# Closed today and this keeps it closed. Matching is command-position only, so a guard
+# that names a package manager in a pattern or a comment is not a hit.
+# The scanner is a function so the negative control below runs the same code.
+pm_delegation() {
+  python3 - "$1" <<'PY'
+import json, os, re, sys
+root = sys.argv[1]
+RUN = re.compile(r"(?:^|[;&|(]|\$\()[ \t]*(?:npm|pnpm|yarn|bun)[ \t]+(?:run|exec|dlx|x)\b", re.M)
+BIN = re.compile(r"(?:^|[;&|(]|\$\()[ \t]*(?:npx|bunx|pnpx|make|just|rake)[ \t]", re.M)
+def scan(where, text):
+    return [f"{where}: {m.group(0).strip()}"
+            for rx in (RUN, BIN) for m in rx.finditer(text)]
+bad = []
+for rel in (".claude/settings.json", "plugin/hooks/hooks.json"):
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        continue
+    for event, entries in json.load(open(path, encoding="utf-8"))["hooks"].items():
+        for entry in entries:
+            for h in entry["hooks"]:
+                bad += scan(f"{rel} {event}", h.get("command", ""))
+hooks_dir = os.path.join(root, ".claude", "hooks")
+for name in sorted(os.listdir(hooks_dir)) if os.path.isdir(hooks_dir) else []:
+    path = os.path.join(hooks_dir, name)
+    if os.path.isfile(path):
+        bad += scan(f".claude/hooks/{name}", open(path, encoding="utf-8").read())
+print("; ".join(bad) or "ok")
+PY
+}
+assert_eq "ok" "$(pm_delegation "$REPO_ROOT")" "no hook command or guard script delegates to a package-manager script"
+
+# Negative control: the same scanner over a planted tree must report the delegation.
+PM_FIX="$WORK/pm-fixture"
+mkdir -p "$PM_FIX/.claude/hooks"
+python3 -c 'import json,sys; json.dump({"hooks":{"PreToolUse":[{"hooks":[{"command":"npm run guard"}]}]}}, open(sys.argv[1],"w"))' \
+  "$PM_FIX/.claude/settings.json"
+printf '#!/bin/sh\nmake check-secrets\n' > "$PM_FIX/.claude/hooks/planted-guard.sh"
+PM_CONTROL="$(pm_delegation "$PM_FIX")"
+assert_contains "$PM_CONTROL" "settings.json PreToolUse: npm run" "the delegation check reports a planted hook command"
+assert_contains "$PM_CONTROL" "planted-guard.sh: make" "the delegation check reports a planted guard script"
+
 for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.json"; do
   NAME="${FILE#"$REPO_ROOT"/}"
   echo "[$NAME]"
