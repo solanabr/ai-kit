@@ -124,7 +124,12 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           config) EXCEPT the hooks, which moved to DENY_POLICY_ESCAPE and stay denied
 #           at every tier; and its blanket Edit(~/.claude/**) was narrowed to the policy
 #           surface so agent memory and ~/.claude/CLAUDE.md are writable at High too.
-RULE_SET_VERSION = 4
+#   4 -> 5: the families three user-facing surfaces promised a gate for and no mechanism
+#           covered. DENY_UNRECOVERABLE_REMOTE at every tier (the --receive-pack /
+#           --upload-pack / --exec transport overrides, and `gh issue delete`), and
+#           DENY_GH_API at Medium and High. The rest of those promises are hooks, which
+#           arrive with the hooks/ copy rather than through this corpus at all.
+RULE_SET_VERSION = 5
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
@@ -622,6 +627,20 @@ DENY_WRAPPERS = [
     # Separately, `command` and `xargs` are allowed only in their read-only forms
     # (`command -v`, `xargs grep|rg|wc|ls`) rather than as blanket globs, because
     # `Bash(xargs *)` pre-approved `xargs -I{} solana program deploy …` outright.
+    #
+    # `git -c` and `git -C` are both here, and the reason for the second one is not the
+    # obvious one. `-c` is arbitrary code execution (`git -c core.fsmonitor=/tmp/x.sh
+    # status`). `-C` merely changes directory first -- but every destructive git rule
+    # below is a glob anchored on the literal subcommand, so a `git -C <dir>` prefix sits
+    # in front of it and NONE of them match: measured against the generated set,
+    # `git -C . clean -xdf`, `git -C . reset --hard HEAD~5`, `git -C . restore .`,
+    # `git -C . gc --prune=all`, `git -C . reflog expire --expire=now --all`,
+    # `git -C . push --mirror` and `git -C . fetch --upload-pack=/tmp/x.sh .` all walk
+    # straight through. The `-C .` spelling needs no second repository, so no sandbox
+    # write fence is behind it either. It looks like lazy breadth and is not: lowering
+    # this one rule to High would make the whole destructive-git deny set advisory at the
+    # default tier, `reflog expire` included (FIREWALL-SPEC.md section 3.4 singles that
+    # one out as deny-at-every-tier because it is what makes history unrecoverable).
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
@@ -696,6 +715,41 @@ DENY_UNRECOVERABLE_GIT = [
     "Bash(git push --mirror*)",
 ]
 
+# Every tier. Two halves, both flag- or subcommand-shaped, both with nothing to vary.
+#
+# 1. The transport overrides. `--upload-pack` and `--receive-pack` (and `--exec`, its
+#    alias on push) name a PROGRAM for git to run as the other end of the transfer, so
+#    `git fetch --upload-pack=/tmp/x.sh .` is arbitrary code execution that every
+#    `git <subcommand>` rule reads as an ordinary fetch. Two things make it worse here
+#    than a bare `sh -c`: the value is a path, not a command string, so none of the
+#    secret or on-chain corpora match it; and `git push *`, `git pull *` and
+#    `git fetch *` are three of the eight sandbox excludedCommands, so the program runs
+#    with the OS sandbox lifted for the whole command line. No tier has a reason to
+#    allow one, and no Solana toolchain emits one — the only legitimate use is reaching
+#    a git binary at a non-standard path on a server, which a human does by hand.
+#    Each carries its zero-gap twin: a mid-pattern * never matches the empty string.
+# 2. `gh issue delete`. GitHub does not undo it — not from the UI, not from the API.
+#    It is the one `gh` subcommand with no recoverable form, which is why it is a deny
+#    where `gh pr merge` next to it in the same promise is a hook ask: a merge can be
+#    reverted and the PR reopened. `gh repo delete` deserves the same rule and does not
+#    have one yet; `Bash(gh api *)` at Medium and High closes its `-X DELETE` spelling
+#    but not the gh subcommand itself.
+DENY_UNRECOVERABLE_REMOTE = [
+    "Bash(git push *--receive-pack*)",
+    "Bash(git push --receive-pack*)",
+    "Bash(git push *--exec*)",
+    "Bash(git push --exec*)",
+    "Bash(git pull *--upload-pack*)",
+    "Bash(git pull --upload-pack*)",
+    "Bash(git fetch *--upload-pack*)",
+    "Bash(git fetch --upload-pack*)",
+    "Bash(git clone *--upload-pack*)",
+    "Bash(git clone --upload-pack*)",
+    "Bash(git ls-remote *--upload-pack*)",
+    "Bash(git ls-remote --upload-pack*)",
+    "Bash(gh issue delete *)",
+]
+
 DENY_IRREVERSIBLE_ONCHAIN = [
     "Bash(solana program deploy *--final*)",
     "Bash(solana program deploy --final*)",
@@ -728,10 +782,30 @@ DENY_SUPPLY_CHAIN = [
     #
     # `npm run *deploy*` and `npm run *release*` are deliberately absent as well: they
     # matched an ordinary frontend deploy script, which is normal work at every tier.
-    # gh secret set evades as gh variable set. `gh api --method PUT .../secrets/NAME`
-    # stays reachable: see the open call in FIREWALL-SPEC.md section 7 item 2.
+    # gh secret set evades as gh variable set, and by API as
+    # `gh api --method PUT .../secrets/NAME` — closed at Medium and High by DENY_GH_API
+    # below, still reachable at Off and Relaxed (FIREWALL-SPEC.md section 7 item 2).
     "Bash(gh secret set *)",
     "Bash(gh variable set *)",
+]
+
+# Medium and High. The raw API escape hatch, which is how every narrower `gh` deny is
+# walked around: `gh repo delete` as `gh api -X DELETE /repos/O/R`, `gh secret set` as
+# `gh api --method PUT /repos/O/R/actions/secrets/NAME`.
+#
+# Why the whole subcommand and not just the mutating methods. A deny glob carries no
+# argument form, so it is this or a hook; and a hook would have to classify the method
+# correctly in every spelling (`-X`, `--method`, the implicit POST that `-f`/`--field`/
+# `--input` triggers, `gh api graphql`, which is always a POST and may or may not
+# mutate). One missed spelling in a hook is a silent hole, where one over-broad rule is
+# a visible inconvenience with a documented route around it: `gh pr`, `gh issue`,
+# `gh repo view`, `gh run` and `gh release view` cover the read cases and stay allowed.
+# For a security gate that is the right way round.
+#
+# Not at Off or Relaxed. Relaxed is the CI tier and the kit's own Action runs there, and
+# Relaxed's promise was never "the agent cannot change your repository".
+DENY_GH_API = [
+    "Bash(gh api *)",
 ]
 
 # The one tier-varying group in permissions.deny, and the reason it is allowed to be.
@@ -816,6 +890,7 @@ DENY = [
     DENY_WHOLE_BINARY,
     DENY_DESTRUCTIVE_SYSTEM,
     DENY_UNRECOVERABLE_GIT,
+    DENY_UNRECOVERABLE_REMOTE,
     DENY_IRREVERSIBLE_ONCHAIN,
     DENY_SUPPLY_CHAIN,
 ]
@@ -1113,6 +1188,15 @@ def plan(tier):
     medium_up = at >= RANK["medium"]
     high = tier == "high"
 
+    # Tier-varying permissions.deny groups, assembled in one place so the order the
+    # generator writes them in is fixed. One of these is a Bash rule, which every other
+    # Bash deny deliberately is not — see the note on permissions.deny below.
+    deny_extra = []
+    if high:
+        deny_extra.append(DENY_SELF_PROTECTION)
+    if medium_up:
+        deny_extra.append(DENY_GH_API)
+
     lists = {
         "permissions.allow": ALLOW,
         # No tier emits permissions.ask. Verified in-session: `git clean -n` matched
@@ -1123,10 +1207,16 @@ def plan(tier):
         # permissionDecision "ask"; every hard block is a deny rule or hook exit 2.
         # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
         "permissions.ask": [],
-        # Tier-varying deny groups are appended below: DENY_SELF_PROTECTION at High,
-        # DENY_MCP_ARBITRARY_EXECUTION at Medium and High, and
-        # DENY_MCP_CLOUDFLARE_EXECUTION at High.
-        "permissions.deny": DENY + ([DENY_SELF_PROTECTION] if high else []),
+        # Tier-varying deny groups, all of them: DENY_SELF_PROTECTION at High,
+        # DENY_GH_API at Medium and High, and the two MCP groups appended after the Off
+        # early-return below.
+        #
+        # DENY_GH_API is the ONLY Bash rule in the whole corpus that varies by tier, and
+        # it carries the residual the other tier-varying groups carry: /firewall subtracts
+        # exactly enforced.ruleIds from the one file it owns, so a descent really does
+        # lift it, but a generated block hand-copied into user or managed scope stops
+        # tracking the tier and then nothing can.
+        "permissions.deny": DENY + deny_extra,
         "sandbox.excludedCommands": [] if off else [EXCLUDED_COMMANDS],
         "sandbox.network.deniedDomains": [],
         "sandbox.filesystem.denyRead": [],
@@ -1158,7 +1248,7 @@ def plan(tier):
     # High additionally refuses the one opt-in executor, which is the only place the two
     # gated tiers differ: Medium respects an explicitly attached server, High does not.
     if medium_up:
-        extra = [DENY_SELF_PROTECTION] if high else []
+        extra = list(deny_extra)
         extra.append(DENY_MCP_ARBITRARY_EXECUTION)
         if high:
             extra.append(DENY_MCP_CLOUDFLARE_EXECUTION)
@@ -1309,13 +1399,13 @@ LEGACY_RULE_IDS = [
     "Bash(solana withdraw-from-vote-account *)",
     "Bash(spl-token transfer *)",
     "Bash(spl-token authorize *)",
+    # Force push, `gh pr merge` and the solana-keygen --force spellings stay retired:
+    # each is now a hook, which can read the tier and the arguments a glob cannot. The
+    # transport overrides and `gh issue delete` came OUT of this list in rule set 5 and
+    # are emitted again by DENY_UNRECOVERABLE_REMOTE, so listing them here too would
+    # only make the apply subtract a rule it immediately re-adds.
     "Bash(git push --force*)",
-    "Bash(git push *--receive-pack*)",
-    "Bash(git push *--exec*)",
-    "Bash(git pull *--upload-pack*)",
-    "Bash(git fetch *--upload-pack*)",
     "Bash(gh pr merge *)",
-    "Bash(gh issue delete *)",
     "Bash(solana-keygen new *--force*)",
     "Bash(solana-keygen new -f*)",
     "Bash(solana-keygen new * -f*)",

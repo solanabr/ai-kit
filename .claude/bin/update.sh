@@ -654,6 +654,13 @@ PY
 
   # Rule-set catch-up. Reads the shipped version out of the firewall.sh just copied in,
   # so there is one source for it and no literal here to drift.
+  #
+  # The mechanism is version-generic, so a bump needs no edit here. Worth naming once:
+  # `firewall.sh apply` subtracts exactly the strings in enforced.ruleIds before writing
+  # the new block, so a bump that DROPS a rule works the same way as one that adds — and
+  # the hook halves of a bump do not come through here at all. They arrive with the
+  # hooks/ copy above, which is why a hook gate reaches an install whose ruleSetVersion
+  # is already current (rule set 5 shipped four of those).
   FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
   SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
   if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then
