@@ -623,6 +623,13 @@ if [ "$BASH_VARY" != "Bash(gh api *)@medium,high" ]; then
   printf '    mcp denies per tier: %s\n' "$MCP_BY_TIER"
 fi
 # A few members of that set, spot-checked once (the full list lives in the generator).
+#
+# These six are the ones no user-facing table names, so nothing else would notice them
+# going: the wrapper and whole-binary denies live in docs/firewall.md's prose, not in its
+# gate table. The transport-override and `gh issue delete` pins that used to sit here are
+# gone, and deliberately not replaced — tests/test_doc_gates.sh reaches them from the
+# gate table row that promises them, which is a pin on the sentence a reader reads rather
+# than a second copy of the rule strings beside it.
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"

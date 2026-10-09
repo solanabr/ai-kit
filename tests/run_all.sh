@@ -33,10 +33,12 @@ echo " Solana AI Kit - Test Suite"
 echo "========================================"
 echo ""
 
-# The glob below picks up every test_*.sh. These three carry the firewall's security
+# The glob below picks up every test_*.sh. These four carry the firewall's security
 # properties, so a rename or a deletion has to fail loudly rather than silently
-# shrinking the suite.
-for required in test_firewall test_egress_guard test_fetch_exec_guard; do
+# shrinking the suite. test_doc_gates is here for a sharper reason than the others: it is
+# the only check that a gate the documentation promises has something enforcing it, so
+# its absence is the one thing nothing else would report.
+for required in test_firewall test_egress_guard test_fetch_exec_guard test_doc_gates; do
   if [ ! -f "$SCRIPT_DIR/$required.sh" ]; then
     echo "MISSING SUITE: tests/$required.sh (the firewall tiers ship with it)"
     exit 1
