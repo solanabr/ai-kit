@@ -597,14 +597,18 @@ if [ "$BASH_VARY" != "Bash(gh api *)@medium,high" ]; then
   printf '    mcp denies per tier: %s\n' "$MCP_BY_TIER"
 fi
 # A few members of that set, spot-checked once (the full list lives in the generator).
+#
+# These six are the ones no user-facing table names, so nothing else would notice them
+# going: the wrapper and whole-binary denies live in docs/firewall.md's prose, not in its
+# gate table. The transport-override and `gh issue delete` pins that used to sit here are
+# gone, and deliberately not replaced — tests/test_doc_gates.sh reaches them from the
+# gate table row that promises them, which is a pin on the sentence a reader reads rather
+# than a second copy of the rule strings beside it.
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
-         "Bash(git fetch *--upload-pack*)" "Bash(git fetch --upload-pack*)" \
-         "Bash(git push *--receive-pack*)" "Bash(git push --receive-pack*)" \
-         "Bash(git push *--exec*)" "Bash(git push --exec*)" \
-         "Bash(gh issue delete *)"; do
+for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" \
+         "Edit(/.safe-ai-skill/**)"; do
   TOTAL=$((TOTAL + 1))
   if printf '%s\n' "$DENY_LIVE" | grep -qxF "$r"; then
     echo "  PASS: the never-allowed set denies $r"
@@ -633,19 +637,12 @@ print('%s/%s' % ('deny' if 'Bash(git -c *)' in deny else 'allow',
   assert_eq "deny/deny" "$PAIR" "$t: git -c and git -C both denied (a -C prefix defeats every destructive git glob)"
 done
 
-# gh api: the raw API route around every narrower gh deny, closed only where a tier
-# promises the agent cannot change the repository.
-echo "[gh api by tier]"
-for t in $TIERS; do
-  GHAPI="$(python3 -c "
-import json
-deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
-print('deny' if 'Bash(gh api *)' in deny else 'allow')" 2>/dev/null)"
-  case $t in
-    medium | high) assert_eq "deny" "$GHAPI" "$t: gh api denied (it reaches gh repo delete and gh secret set by API)" ;;
-    *)             assert_eq "allow" "$GHAPI" "$t: gh api allowed (relaxed is the CI tier and makes no such promise)" ;;
-  esac
-done
+# gh api's per-tier assertion used to sit here, pinned as deny at medium|high and allow
+# at off|relaxed. It is gone because two checks already hold it from both directions: the
+# BASH_VARY assertion above pins the exact rule string to the exact tier set, and
+# tests/test_doc_gates.sh reads "deny rule, **Medium and High only**" out of the gate
+# table itself and requires the covered tier set to equal exactly that.
+#
 # Self-protection uses Edit(...), not Read(...): a Read deny also blocks Edit and Write
 # but leaves NotebookEdit open, and would stop the kit reading its own config. Checked
 # against High, the only tier that carries the self-protection group at all.
