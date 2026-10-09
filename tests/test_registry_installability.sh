@@ -172,6 +172,14 @@ for entry in entries:
 PY
 )"
 
+# How many packages the producer above actually found. The message below carries it,
+# because without it this check read "Every npx-method package resolves on the npm
+# registry" over an EMPTY set: the registry holds no `method: npx` entry at all today
+# (kit 46, submodule 14, git-clone 4, plugin-marketplace 2, plugin-install 1), so the one
+# check this suite exists for — its own header names the invented pyth-pro-mcp package as
+# the reason — has been printing green while verifying nothing. Counted, that is visible
+# in the output instead of latent.
+PKG_COUNT="$(printf '%s\n' "$PACKAGES" | awk 'NF' | wc -l | tr -d ' ')"
 if [ -n "${CI:-}" ] || curl -fsS --max-time 10 https://registry.npmjs.org/ -o /dev/null 2>/dev/null; then
   MISSING=""
   while IFS=$'\t' read -r entry_id package; do
@@ -182,9 +190,15 @@ if [ -n "${CI:-}" ] || curl -fsS --max-time 10 https://registry.npmjs.org/ -o /d
       MISSING="$MISSING$entry_id ($package) "
     fi
   done <<< "$PACKAGES"
-  assert_eq "" "$MISSING" "Every npx-method package resolves on the npm registry"
+  assert_eq "" "$MISSING" "Every npx-method package resolves on the npm registry ($PKG_COUNT checked)"
+  if [ "$PKG_COUNT" -eq 0 ]; then
+    echo "        NOTE: no npx-method entry in the registry, so this check covered nothing."
+    echo "              Remote artifacts behind the other methods (git-clone URLs,"
+    echo "              plugin-marketplace repos) are not existence-checked anywhere."
+  fi
 else
   echo "  SKIP: registry.npmjs.org is unreachable here; CI runs the existence check"
+  echo "        ($PKG_COUNT npx-method package(s) would have been resolved)"
 fi
 
 print_summary

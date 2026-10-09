@@ -15,10 +15,11 @@ echo "[test_mcp_config] Checking MCP configuration..."
 assert_file_exists "$MCP_FILE" ".mcp.json exists at project root"
 assert_json_valid "$MCP_FILE" ".mcp.json is valid JSON"
 
-# Ensure old location doesn't exist
-if [ -f "$REPO_ROOT/.claude/mcp.json" ]; then
-  assert_eq "0" "1" ".claude/mcp.json should not exist (wrong path — use .mcp.json at root)"
-fi
+# Ensure old location doesn't exist. Asserted rather than wrapped in an `if`: the
+# assertion used to live only in the failing branch, so in the correct case nothing was
+# recorded — not a pass, not a count — and the suite never said the property held.
+assert_file_not_exists "$REPO_ROOT/.claude/mcp.json" \
+  ".claude/mcp.json does not exist (wrong path — use .mcp.json at root)"
 
 # Check for mcpServers key
 MCP_CONTENT="$(cat "$MCP_FILE")"

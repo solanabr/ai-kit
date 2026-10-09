@@ -84,7 +84,14 @@ echo ""
 # them to routing essentials. Bodies load only when used.
 echo "[Descriptions]"
 long_desc=0
+# Counted, and asserted below. The producer is a python block with its own globs, so if
+# those ever match nothing — a moved directory, a crash, validate.sh run from the wrong
+# cwd — the loop body never runs, `long_desc` stays 0 and the budget is reported as
+# verified over zero files. Demonstrated: with .claude/agents and .claude/commands empty,
+# [Agents] and [Commands] go red on the literal glob while this block printed PASS.
+desc_checked=0
 while IFS=$'\t' read -r len limit file; do
+  desc_checked=$((desc_checked + 1))
   if [ "$len" -gt "$limit" ]; then
     echo "  FAIL: $file description is $len chars (limit $limit)"
     FAIL=$((FAIL + 1))
@@ -101,8 +108,11 @@ for pattern, limit in ((".claude/agents/*.md", 250), (".claude/commands/*.md", 1
         print(f"{len(desc)}\t{limit}\t{path}")
 PY
 )
-if [ "$long_desc" -eq 0 ]; then
-  check "Agent descriptions <= 250 chars, command descriptions <= 100 chars" 0
+if [ "$desc_checked" -eq 0 ]; then
+  echo "  FAIL: no agent or command description was read, so neither budget was checked"
+  FAIL=$((FAIL + 1))
+elif [ "$long_desc" -eq 0 ]; then
+  check "Agent descriptions <= 250 chars, command descriptions <= 100 chars ($desc_checked checked)" 0
 fi
 echo ""
 
@@ -111,12 +121,19 @@ echo "[Skills]"
 if [ -f .claude/skills/SKILL.md ]; then
   check "SKILL.md exists" 0
 
-  # Extract markdown links and check targets
+  # Extract markdown links and check targets.
+  # hub_links is counted and asserted below: the extraction is a grep for inline
+  # `](target)`, so a hub rewritten with reference-style links (or any other change that
+  # empties that grep) would leave broken=0 and report every link as resolving over an
+  # empty set. Demonstrated by rewriting the hub's 284 links to reference style with one
+  # broken route left in: this block printed "PASS: All SKILL.md links resolve".
   broken=0
+  hub_links=0
   while IFS= read -r link; do
     # Remove leading/trailing whitespace
     link="$(echo "$link" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
     [ -z "$link" ] && continue
+    hub_links=$((hub_links + 1))
 
     target=".claude/skills/$link"
     if [ ! -e "$target" ] && [ ! -d "$target" ]; then
@@ -130,8 +147,11 @@ if [ -f .claude/skills/SKILL.md ]; then
     fi
   done < <(grep -oE '\]\([^)]+\)' .claude/skills/SKILL.md | sed 's/\](//' | sed 's/)//' | grep -v '^http')
 
-  if [ "$broken" -eq 0 ]; then
-    check "All SKILL.md links resolve" 0
+  if [ "$hub_links" -eq 0 ]; then
+    echo "  FAIL: no relative link found in .claude/skills/SKILL.md, so none was checked"
+    FAIL=$((FAIL + 1))
+  elif [ "$broken" -eq 0 ]; then
+    check "All SKILL.md links resolve ($hub_links checked)" 0
   fi
 else
   check "SKILL.md exists" 1
@@ -144,10 +164,16 @@ echo ""
 # Anchors (#...) are stripped; the hub is checked above.
 echo "[Links]"
 broken=0
+# Same accounting as the hub block above: both the file list and the per-file link
+# extraction can come back empty, and the pass is reported outside both loops.
+kit_md=0
+kit_links=0
 while IFS= read -r f; do
+  kit_md=$((kit_md + 1))
   while IFS= read -r link; do
     link="${link%%#*}"
     [ -z "$link" ] && continue
+    kit_links=$((kit_links + 1))
     if [ ! -e "$(dirname "$f")/$link" ]; then
       if in_uninitialized_submodule "$(dirname "$f")/$link"; then
         SKIP=$((SKIP + 1))
@@ -159,8 +185,11 @@ while IFS= read -r f; do
     fi
   done < <(grep -oE '\]\([^)[:space:]]+\)' "$f" | sed 's/^](//; s/)$//' | grep -vE '^(https?|mailto):' || true)
 done < <(find .claude -maxdepth 1 -name '*.md'; find .claude/agents .claude/commands -name '*.md'; find .claude/skills -path .claude/skills/ext -prune -o -name '*.md' ! -path .claude/skills/SKILL.md -print)
-if [ "$broken" -eq 0 ]; then
-  check "Every relative link in .claude/ markdown (agents, commands, skills) resolves" 0
+if [ "$kit_md" -eq 0 ] || [ "$kit_links" -eq 0 ]; then
+  echo "  FAIL: $kit_md markdown files and $kit_links relative links found under .claude/, so none was checked"
+  FAIL=$((FAIL + 1))
+elif [ "$broken" -eq 0 ]; then
+  check "Every relative link in .claude/ markdown (agents, commands, skills) resolves ($kit_links in $kit_md files)" 0
 fi
 echo ""
 

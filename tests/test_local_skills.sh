@@ -13,19 +13,14 @@ echo "[test_local_skills] Kit-owned skills (.claude/skills/<name>/SKILL.md): fro
 # at 1024 chars). Relative links in the skill's files must resolve; a ../ext/ target in a
 # pack that is not checked out is skipped and counted, not called broken. The hub must
 # route to each skill.
-while IFS=$'\t' read -r status message; do
-  if [ "$status" = "PASS" ]; then
-    TOTAL=$((TOTAL + 1))
-    echo "  PASS: $message"
-    PASS=$((PASS + 1))
-  elif [ "$status" = "SKIP" ]; then
-    skip "$message"
-  else
-    TOTAL=$((TOTAL + 1))
-    echo "  FAIL: $message"
-    FAIL=$((FAIL + 1))
-  fi
-done < <(python3 - "$REPO_ROOT" <<'PY'
+#
+# Collected into a variable first, the way tests/test_pack_routing.sh does, rather than
+# read straight from `< <(python3 ...)`: a process substitution hides the producer's exit
+# code, so a crash in it used to leave the loop with nothing to read and the suite
+# reporting only the five token-extensions checks below — 5 passed, 0 failed, exit 0, with
+# whatever the skills were actually doing unexamined. Demonstrated by moving the hub
+# aside: 18 checks became 5 and a planted name mismatch went green.
+SKILL_REPORT="$(python3 - "$REPO_ROOT" <<'PY'
 import glob, os, re, sys
 
 root = sys.argv[1]
@@ -92,7 +87,27 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
     if uninit:
         report_skip(f"{name}: {uninit} links into ext/ packs that are not checked out")
 PY
-)
+)" || SKILL_REPORT="FAIL	the kit-skill checker crashed before reporting (see stderr above)"
+
+# The kit ships two skills under .claude/skills/<name>/, so a report with no PASS or FAIL
+# row means the producer stopped, not that there was nothing to check.
+if ! printf '%s\n' "$SKILL_REPORT" | grep -qE '^(PASS|FAIL)	'; then
+  SKILL_REPORT="FAIL	the kit-skill checker reported no checks at all"
+fi
+while IFS=$'\t' read -r status message; do
+  [ -n "$status" ] || continue
+  if [ "$status" = "PASS" ]; then
+    TOTAL=$((TOTAL + 1))
+    echo "  PASS: $message"
+    PASS=$((PASS + 1))
+  elif [ "$status" = "SKIP" ]; then
+    skip "$message"
+  else
+    TOTAL=$((TOTAL + 1))
+    echo "  FAIL: $message"
+    FAIL=$((FAIL + 1))
+  fi
+done <<< "$SKILL_REPORT"
 
 echo ""
 echo "[test_local_skills] token-extensions facts checked against source (issue #124)..."

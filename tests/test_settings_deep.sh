@@ -302,6 +302,32 @@ solana-keygen new -o target/deploy/x-keypair.json --force
 solana-keygen recover --force
 solana-keygen recover -f
 solana-keygen recover ASK --force"
+# permissions.ask is empty at every tier (firewall.sh:1125 — the --force rules were retired
+# into LEGACY_RULE_IDS so Relaxed could stay CI-safe), so ASK_LEN is 0 unconditionally and
+# the corpus above used to sit in an unreachable else. The if-branch printed
+#   "no ask rules at this tier; solana-keygen --force is gated by the secrets hook"
+# which is a claim this suite never tested AND is not true: replaying all three shipped
+# PreToolUse guards against `solana-keygen new --force`, `recover -f` and the -o form
+# returns exit 0 from each. Replacing the whole corpus with nonsense left the output
+# byte-identical, which is what made it worth finding.
+#
+# What is asserted instead is the drift property that holds at any tier and encodes no
+# policy: the rule surface treats every --force spelling the same way. A partial gate is
+# the real bug class — `solana-keygen new -f` escaping `Bash(solana-keygen new * -f*)`
+# because a mid-pattern * does not match an empty string is exactly how it shows up — and
+# this goes red the moment one spelling is covered and another is not, whether the rules
+# arrive in `ask` or in `deny`.
+KEYGEN_VERDICTS=""
+KEYGEN_FORMS=0
+while IFS= read -r c; do
+  [ -z "$c" ] && continue
+  KEYGEN_FORMS=$((KEYGEN_FORMS + 1))
+  KEYGEN_VERDICTS="$KEYGEN_VERDICTS$(gated "$c")
+"
+done <<< "$KEYGEN_FORCE"
+assert_eq "7" "$KEYGEN_FORMS" "every --force spelling in the corpus was evaluated"
+assert_eq "1" "$(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | wc -l | tr -d ' ')" \
+  "the rule surface treats every solana-keygen --force spelling alike (all $(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | tr -d '\n'), $KEYGEN_FORMS forms)"
 if [ "$ASK_LEN" = "0" ]; then
   # No ask rules at this tier, so the gate has to be the secrets hook — and until rule
   # set 5 it was not: this branch printed an unconditional PASS for a gate that did not
@@ -322,10 +348,6 @@ if [ "$ASK_LEN" = "0" ]; then
   fi
   TOTAL=$((TOTAL + 1))
 else
-  while IFS= read -r c; do
-    [ -z "$c" ] && continue
-    assert_eq "yes" "$(gated "$c")" "a rule gates: $c"
-  done <<< "$KEYGEN_FORCE"
   assert_eq "no" "$(gated "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" \
     "a new keypair at another path without --force stays prompt-free"
 fi

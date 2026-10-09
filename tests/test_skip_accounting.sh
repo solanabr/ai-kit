@@ -266,7 +266,10 @@ assert_contains "$LINKS_OUT" "SKIP: ext/emptypack/x.md" \
   "test_skills.sh skips a link into a pack that is not checked out"
 assert_contains "$LINKS_OUT" "FAIL: Broken link -> ext/fullpack/x.md" \
   "test_skills.sh FAILS a link into a pack that is checked out"
-assert_contains "$LINKS_OUT" "Results: 2 passed, 1 failed, 1 skipped (of 4 checks)" \
+# 3 passed: the hub exists, the local link resolves, and the non-empty guard on the link
+# count (test_skills.sh asserts that the hub yielded links at all, so "Checked 0 links,
+# 0 broken" cannot read as a pass).
+assert_contains "$LINKS_OUT" "Results: 3 passed, 1 failed, 1 skipped (of 5 checks)" \
   "...and the skip and the failure land in one total"
 assert_eq "1" "$(rc_of "$LINKS/tests/test_skills.sh")" "...and the suite fails"
 
