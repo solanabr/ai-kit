@@ -34,6 +34,20 @@
 # path whose destination is legitimately allowlisted and therefore cannot be
 # stopped by a domain layer.
 #
+# And `git config` writes to the keys that make git execute a command later —
+# alias.*, core.pager, core.editor, core.hooksPath, sequence.editor,
+# credential.helper, diff.external — plus `git config --edit`.  Denied at every
+# tier.  The pattern lives in egress-guard.awk (GITEXEC); the long rationale,
+# including why a permission glob cannot express the case-insensitive key match,
+# is in that file's own header.
+#
+# And the destructive git subcommands — clean, restore, checkout -- <path>,
+# reset --hard, reflog expire, push --mirror, and the transport overrides —
+# when they are reached behind a git-LEVEL option, where every deny rule is
+# anchored on the bare subcommand and therefore cannot see them.  That pass
+# (GITDESTRUCT) mirrors the rules and changes no tier's policy: it fires only on
+# the prefixed spelling.  Same file, same header.
+#
 # stdin: PreToolUse JSON.  Exit 0 = silent, exit 2 = blocked, stdout JSON = ask.
 
 set -u
@@ -220,6 +234,24 @@ CLASS=${VERDICT%% *}
 WHY=${VERDICT#* }
 
 case $CLASS in
+  GITEXEC)
+    # Deny at every active tier, matching the two glob rules this backs up and the
+    # blanket `git -c` deny next to them.  It does not ladder like the push and
+    # history gates above, because the thing being stopped is not a destructive act
+    # whose blast radius a tier can scale — it is a key that makes git execute an
+    # attacker-chosen command at some later, unrelated moment, in a session that may
+    # not be this one.  There is no legitimate agent workflow that needs
+    # core.hooksPath or an alias set on the user's behalf, so there is nothing for a
+    # lower tier to buy back.  Off still disables the hook, like every other gate.
+    kit_deny "$WHY. Denied at every tier: a config key naming a program git runs later is the one evasion that outlives the command that set it, so neither this hook nor any rule sees a dangerous verb when it fires. Reading config is not gated — use git config --get or --list. If the user wants the key set, they set it themselves."
+    ;;
+  GITDESTRUCT)
+    # The command itself is already denied at every tier by a permission rule; what this
+    # verdict adds is that the rule is anchored on the bare subcommand, so a git-level
+    # option in front of it walked past.  Same policy, one more spelling — see gd_scan's
+    # header for why it mirrors the rules instead of widening them.
+    kit_deny "$WHY. That command is denied at every tier by a permission rule anchored on the bare subcommand, and a git-level option in front of it is not a different command — this hook is what makes the rule mean what it says. If the user wants it run, they run it themselves."
+    ;;
   DENY)
     kit_deny "$WHY. Sending credentials or key material off the machine is not allowed at any tier. If the user needs this uploaded, they do it themselves."
     ;;

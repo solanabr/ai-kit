@@ -652,6 +652,10 @@ DENY_WRAPPERS = [
     # this one rule to High would make the whole destructive-git deny set advisory at the
     # default tier, `reflog expire` included (FIREWALL-SPEC.md section 3.4 singles that
     # one out as deny-at-every-tier because it is what makes history unrecoverable).
+    # `-C` was never the only door of its kind, only the only one shut — see the note on
+    # DENY_UNRECOVERABLE_GIT below for the 16 others and the hook pass that covers them.
+    # Both rules stay regardless: they decide at the permission layer, ahead of the hook,
+    # and a hook miss is a silent open door where a glob is a loud closed one.
     #
     # `git config alias.*` is the third git evasion, and the worst of the three, because
     # it is the only one that survives the command it was typed in. `git config
@@ -667,14 +671,21 @@ DENY_WRAPPERS = [
     # `git config set` subcommand, and the zero-gap twin covers the bare
     # `git config alias.z …`. Both leave `git config user.email …` and every other key
     # untouched, which is the point of not denying `git config` as a whole.
-    # Known misses, all narrower than the rule: git config section and variable names
-    # are case-insensitive while a permission glob is not, so `git config Alias.z`
-    # walks past (verified: `git config --file f Alias.Y x` is read back by
-    # `git config --file f --get alias.y`); writing the alias straight into
-    # `.git/config` with a shell redirect is not a `git config` command at all; and
-    # the other code-executing keys (`core.pager`, `core.editor`, `core.hooksPath`,
-    # `sequence.editor`, `credential.helper`) are not aliases and are not covered here,
-    # only in their one-shot `git -c` form above and as Edit denies on ~/.gitconfig.
+    # These two rules are deliberately partial, and the rest is a hook. What a glob
+    # cannot reach: git config section and variable names are case-insensitive while a
+    # permission glob is not, so `git config Alias.z` walks past both (verified:
+    # `git config --file f Alias.Y x` is read back by `git config --file f --get
+    # alias.y`), and `alias` alone has 32 case spellings; and the other code-executing
+    # keys (`core.pager`, `core.editor`, `core.hooksPath`, `sequence.editor`,
+    # `credential.helper`, `diff.external`) are not aliases at all. Both are now closed
+    # in egress-guard.awk's GITEXEC pass, which normalises the key before comparing and
+    # denies at every tier — see its header. These rules STAY: they catch the common
+    # spelling at the permission layer, before the hook runs, and a hook miss is a
+    # silent open door where a glob is a loud closed one.
+    # Still open, in both layers: writing straight into `.git/config` with a shell
+    # redirect is not a `git config` command, so no amount of subcommand parsing
+    # reaches it; `.git` is in sandbox allowWrite and carries no Edit deny the way
+    # ~/.gitconfig does.
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
@@ -731,6 +742,20 @@ DENY_UNRECOVERABLE_GIT = [
     # Verified-live evasions, each with its zero-gap twin. Long options abbreviate in
     # git (not in the solana CLI, which is clap v2 with no InferLongArgs), so
     # `git reset --ha HEAD` walked straight past `git reset --hard *`.
+    #
+    # Every rule here is anchored on the literal subcommand, so a git-LEVEL option in
+    # front of it sits where the glob expects `git` and none of them match. `git -C` and
+    # `git -c` in DENY_WRAPPERS are two of the many option forms `git --help` lists
+    # before <command>, and the only two shut;
+    # measured live, `git --no-pager clean --dry-run`, `git --git-dir=.git clean
+    # --dry-run`, `git -P clean --dry-run` and `git --literal-pathspecs clean --dry-run`
+    # all ran. The rest is closed by egress-guard.awk's GITDESTRUCT pass, which walks the
+    # global options and classifies the subcommand; it mirrors these rules rather than
+    # extending them, firing only on the prefixed spelling, and covers `clean`,
+    # `restore`, `checkout -- <path>`, `reset --ha*`, `reflog expire`, `push --mirror`
+    # and the transport overrides below. `branch -D`/`-f` and `gc --prune`/`prune` are
+    # out of that pass on purpose (reflog-recoverable, or unreferenced objects only), so
+    # for those the rules here are the only layer and the prefixed form stays open.
     "Bash(git clean *)",            # git clean is never non-destructive; -xdf, -dfx, --f -d
     "Bash(git restore *)",          # the modern spelling of `git checkout -- .`
     "Bash(git checkout -- *)",

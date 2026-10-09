@@ -5,6 +5,10 @@
 #
 # stdin : raw Bash command text (one Bash tool call)
 # stdout: "<CLASS> <reason>", or nothing at all
+#   GITEXEC  a `git config` write that arms a later execution (alias.*,
+#            core.pager, core.hooksPath and the rest) — denied at every tier
+#   GITDESTRUCT  a destructive git subcommand reached behind a git-level option,
+#            where the glob rule anchored on the bare subcommand cannot see it
 #   DENY  a secret reaches a network command — as a body, as an argument, via a
 #         reader in the same statement, or named in inline interpreter code
 #   ASK1  a request body or upload sourced from a file or from stdin
@@ -143,6 +147,290 @@ function cmdword(T, n) { return cmdword_x(T, n, 1, 0) }
 # does not call the library's strip_heredocs, as that keys on cmdword.
 function firstword(T, n,   ci) { ci = first_word(T, n); return (ci <= n) ? base(T[ci]) : "" }
 
+# ---- unwrap: reach inside `sh -c "<inner>"` / eval by appending the inner
+# string as a stage of its own.  Factored out of the statement loop below so the
+# git-config pass, which has to run over every statement BEFORE any egress pass
+# reaches a verdict, can see inside a wrapper too without a second copy.
+# Arrays pass by reference in awk, so STG is mutated in place and the new stage
+# count comes back as the return value.
+function unwrap(STG, nstg,   g, n, T, ci, i) {
+  for (g = 1; g <= nstg && nstg < 64; g++) {
+    n = tokenize(STG[g], T); if (n == 0) continue
+    ci = 1
+    while (ci <= n && T[ci] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ci++
+    if (ci > n) continue
+    # kit_wrapper, not the library's is_wrapper: this exists to reach inside
+    # `sh -c "<inner>"`, so it must look past shells too.
+    if (!kit_wrapper(base(T[ci]))) continue
+    for (i = ci + 1; i <= n; i++) if (T[i] ~ / / && T[i] !~ /^-/) { STG[++nstg] = split_cmd(T[i]); break }
+  }
+  return nstg
+}
+
+# ---- git config writes that arm an execution for later ----------------------
+#
+# `git config alias.z '!git clean -fdx'` is an ordinary config write.  The
+# destruction happens afterwards, in `git z`, where the dangerous verb never
+# appears on the command line any rule gets to read.  Two glob denies cover the
+# common spelling at the permission layer, before this hook runs
+# (`Bash(git config *alias.*)` and its zero-gap twin `Bash(git config alias.*)`),
+# and they stay: this pass is the second layer, not a replacement.
+#
+# What only a hook can do, which is why the rest of the hole is closed here:
+#
+#   * CASE.  Git's section and variable names are case-insensitive and a
+#     permission glob is not, so `git config Alias.z '!git clean -fdx'` walks
+#     straight past both globs — confirmed upstream by writing `Alias.Y` and
+#     reading it back with `--get alias.y`.  No glob can fix it: `alias` alone
+#     has 32 case spellings, and that is one key of seven.
+#   * THE OTHER CODE-EXECUTING KEYS.  core.pager, core.editor, core.hooksPath,
+#     sequence.editor, credential.helper and diff.external each name a program
+#     git runs later.  Before this pass they were covered only in the one-shot
+#     `git -c key=value` form, by the blanket `Bash(git -c *)` deny.
+#   * READS vs WRITES.  The globs gate `git config --get alias.z` as well,
+#     as collateral nobody minded.  A hook can tell the two apart, so this one
+#     does: --get, --get-all, --get-regexp, --list and -l stay silent, which
+#     narrows the shipped behaviour on purpose.
+#   * `git config --edit`, which opens an editor on the config and names no key.
+#
+# Ordinary keys are untouched — user.email, user.name, core.autocrlf,
+# remote.origin.url, push.default, init.defaultBranch — which is the whole
+# reason `git config` is not denied as a whole command.  A false positive here
+# breaks /quick-commit and every normal setup step.
+#
+# Not covered, stated rather than papered over:
+#   * a shell redirect into .git/config, which is not a `git config` command at
+#     all, so no amount of subcommand parsing reaches it;
+#   * GIT_CONFIG_COUNT / GIT_CONFIG_KEY_0 / GIT_CONFIG_VALUE_0 and
+#     GIT_CONFIG_GLOBAL in the environment, which are `git -c` by another name.
+
+# gc_silent_opt — the `git config` forms this pass does not gate: the readers,
+# which are ordinary work, and the removers, which can only take a key away.
+function gc_silent_opt(o) {
+  return (o == "--get" || o == "--get-all" || o == "--get-regexp" \
+       || o == "--get-urlmatch" || o == "--get-color" || o == "--get-colorbool" \
+       || o == "--list" || o == "-l" \
+       || o == "--unset" || o == "--unset-all" || o == "--remove-section")
+}
+
+# gc_opt_operand — a `git config` option that eats the NEXT token.  Missing one
+# is the bug that bites: `git config --file f core.pager x` puts `f` in key
+# position and the real key in value position, where nothing would look at it.
+function gc_opt_operand(o) {
+  return (o == "-f" || o == "--file" || o == "--blob" || o == "--type" \
+       || o == "--default" || o == "--value" || o == "--comment")
+}
+
+# git_global_operand — a git-LEVEL option, ahead of the subcommand, that eats the
+# next token.  Verified by hand against the installed git: `--git-dir .git`,
+# `--namespace ns` and `--attr-source HEAD` all leave the subcommand running, so
+# they do consume one.  `--exec-path` does NOT: `git --exec-path /tmp rev-parse`
+# printed the exec path and ignored the rest, so it is left out and treated as a
+# plain flag.  Getting one wrong costs a MISS, never a false positive: the walk
+# lands on the wrong token, finds no subcommand it knows, and stays silent.
+function git_global_operand(o) {
+  return (o == "-C" || o == "-c" || o == "--git-dir" || o == "--work-tree" \
+       || o == "--namespace" || o == "--attr-source" || o == "--super-prefix" \
+       || o == "--config-env")
+}
+
+# git_walk — the shared option walker.  Returns 1 on a real git invocation and
+# fills three globals: GW_SUB (the subcommand), GW_I (the index of the first
+# token after it) and GW_PREFIXED (1 when at least one git-level option came
+# first).  Both git passes below run off this one walk.
+function git_walk(T, n,   i, o) {
+  GW_SUB = ""; GW_I = 0; GW_PREFIXED = 0
+  # cmdword_x's fourth argument (skip a wrapper's positional operand) is asked
+  # for here where the egress passes below decline it: `timeout 5 git config
+  # alias.z '!x'` leaves "5" in command position otherwise, and the globs miss
+  # that spelling too, so there is no verdict to keep identical.
+  if (cmdword_x(T, n, 1, 1) != "git") return 0
+  i = CWI + 1
+  while (i <= n && substr(T[i], 1, 1) == "-" && T[i] != "-" && T[i] != "--") {
+    o = T[i]; sub(/=.*$/, "", o)
+    if (git_global_operand(o) && T[i] !~ /=/) i++
+    i++
+    GW_PREFIXED = 1
+  }
+  if (i > n) return 0
+  GW_SUB = T[i]
+  GW_I = i + 1
+  return 1
+}
+
+# gc_exec_key — does this key name a program git will run later?  Compared
+# lowercased, which is the entire point of the pass: git treats the section and
+# variable names as case-insensitive and only the middle subsection as
+# case-sensitive, so only the two ends are compared and
+# `credential.https://GitHub.com.HELPER` resolves like credential.helper.
+function gc_exec_key(key,   k, n, P) {
+  k = tolower(unmark(key))
+  n = split(k, P, /\./)
+  if (n < 2) return 0
+  if ((P[1] ".*") in GC_KEY) return 1          # alias.* — every variable runs
+  return ((P[1] "." P[n]) in GC_KEY)
+}
+
+# gc_exec_section — the section half alone, for --rename-section's destination.
+# `git config --rename-section foo core` turns an ungated `foo.pager` write into
+# core.pager, which is the same hole reached in two steps.
+function gc_exec_section(s,   P) {
+  split(tolower(unmark(s)), P, /\./)
+  return (P[1] in GC_SECTION)
+}
+
+# gc_scan — one pipeline stage.  Returns the reason to deny, or "".
+function gc_scan(stage,   n, T, i, j, tok, o, mode, nop, OP, key) {
+  n = tokenize(stage, T); if (n == 0) return ""
+  if (!git_walk(T, n)) return ""
+  # Subcommand position, and nothing else.  `git commit -m "git config alias.z"`
+  # stops here: GW_SUB is "commit", so the message is data and never a command.
+  if (GW_SUB != "config") return ""
+  i = GW_I
+
+  mode = ""; nop = 0
+  for (; i <= n; i++) {
+    tok = T[i]
+    if (substr(tok, 1, 1) == "-" && tok != "-") {
+      o = tok; sub(/=.*$/, "", o)
+      if (gc_silent_opt(o)) return ""
+      else if (o == "--edit" || o == "-e") mode = "edit"
+      else if (o == "--add" || o == "--replace-all") { if (mode == "") mode = "write" }
+      else if (o == "--rename-section") { if (mode == "") mode = "rename" }
+      else if (gc_opt_operand(o) && tok !~ /=/) i++
+      # Every other flag is a file selector or a modifier — --global, --local,
+      # --system, --worktree, --fixed-value, --show-origin, -z — and changes
+      # nothing about which key is being written.
+      continue
+    }
+    OP[++nop] = tok
+  }
+
+  j = 1
+  if (mode == "" && nop >= 1) {
+    # The subcommand form (git 2.46+): git config set|get|list|edit|unset|…
+    if (OP[1] == "set") { mode = "write"; j = 2 }
+    else if (OP[1] == "edit") { mode = "edit"; j = 2 }
+    else if (OP[1] == "rename-section") { mode = "rename"; j = 2 }
+    else if (OP[1] == "get" || OP[1] == "list" || OP[1] == "unset" \
+          || OP[1] == "unset-all" || OP[1] == "remove-section") return ""
+  }
+
+  if (mode == "edit") return "runs git config --edit, which opens an editor on the git config file"
+  if (mode == "rename") {
+    if (nop >= j + 1 && gc_exec_section(OP[j + 1]))
+      return "renames a git config section onto \"" unmark(OP[j + 1]) "\", where its existing variables would become keys git executes"
+    return ""
+  }
+  if (nop < j) return ""
+  key = OP[j]
+  # The bare form with no value is a READ: `git config core.pager` prints it.
+  if (mode == "" && nop < j + 1) return ""
+  if (!gc_exec_key(key)) return ""
+  return "writes git config " unmark(key) ", a key that names a command git runs later"
+}
+
+# ---- destructive git subcommands behind a git-level option -------------------
+#
+# Every destructive-git deny is a glob anchored on the literal subcommand, so a
+# git-level option in front of it sits where the glob expects `git`, and none of
+# them match.  `Bash(git -C *)` is the only one of those doors that is shut.
+# Measured against the live `Bash(git clean *)`:
+#
+#   git --no-pager clean --dry-run           ran
+#   git --git-dir=.git clean --dry-run       ran
+#   git -P clean --dry-run                   ran
+#   git --literal-pathspecs clean --dry-run  ran   (not even in git's synopsis)
+#   git -C . clean --dry-run                 DENIED
+#
+# `git --help` lists the whole set before <command> (the count varies by git
+# version, so read it there rather than trusting a number), and only `-C` and
+# `-c` are denied.  Some of them print and stop rather than reaching a
+# subcommand — `--version`, `--help`, the three path-printing ones, and a bare
+# `--exec-path`, which is also why `--exec-path` is out of git_global_operand
+# above.  The ones that do pass through — `--no-pager`, `-p`, `-P`, `--bare`,
+# `--git-dir`, `--work-tree`, `--namespace`, `--config-env`, the `--no-*`
+# switches and the undocumented `--literal-pathspecs` family — each take both
+# `--opt=v` and `--opt v` and repeat and combine freely, so there is no glob set
+# to enumerate.  There is one option walk, and git_walk above already had to do
+# it to find `config`.
+#
+# THE DESIGN RULE, and the reason this pass is this narrow: it MIRRORS the glob
+# rules and changes no tier's policy.  It fires only when GW_PREFIXED is set —
+# the unprefixed spelling is already decided at the permission layer, by a rule
+# that applies at every tier, and re-deciding it here would put a hook's
+# predicate in front of commands a glob is handling correctly today.  The hook
+# closes a bypass; it does not set policy.  Each predicate below is the glob it
+# mirrors, never wider: `--ha` and `--mirror` are matched as a token PREFIX where
+# the glob matches the substring anywhere, so a pathspec containing `--ha` fires
+# the rule but not the hook.  Narrower is allowed here; stricter is not.
+#
+# WHAT IS IN, and why each earns the parsing surface:
+#   reflog expire   FIREWALL-SPEC.md section 3.4 singles this out as the command
+#                   that makes history unrecoverable.  Strongest case in the set.
+#   clean, restore, checkout -- <path>, reset --hard
+#                   these destroy UNCOMMITTED work, which is in no reflog.
+#   push --mirror   overwrites every ref on the remote, for everyone, and is not
+#                   recoverable from anything local.
+#   --upload-pack / --receive-pack / --exec
+#                   these name a PROGRAM for git to run.  `git push/pull/fetch`
+#                   are three of the eight sandbox excludedCommands, so that
+#                   program runs with the OS sandbox lifted — arbitrary code
+#                   execution, which outranks everything else here.
+#
+# WHAT IS OUT, deliberately:
+#   branch -D / --delete / -f   reflog-recoverable, and the worst parsing surface
+#                   in the set: -D against a safe -d, -f clustered inside -Df,
+#                   and `--sort=-date` already tripped a `-d` matcher in this
+#                   same guard once.  Friction without safety.
+#   gc --prune, prune           reach only unreferenced objects.
+#
+# KNOWN MISSES, stated rather than papered over: a variable-indirected command
+# (`G=git; $G clean -fd`) is invisible to this walk, and so is git inside a
+# script the agent wrote — for both of those the OS sandbox is the only layer
+# left, and `.git` is in its allowWrite.  `git checkout <tree-ish> -- <path>`
+# and `git checkout --force -- .` are open in BOTH layers, because the glob is
+# `git checkout -- *` and this pass mirrors it rather than widening it.
+
+function gd_scan(stage,   n, T, i, nargs) {
+  n = tokenize(stage, T); if (n == 0) return ""
+  if (!git_walk(T, n)) return ""
+  if (!GW_PREFIXED) return ""          # the glob rules own the unprefixed form
+  i = GW_I
+  nargs = n - i + 1
+
+  if (GW_SUB == "clean" && nargs >= 1)
+    return "runs git clean behind a git-level option, deleting untracked files"
+  if (GW_SUB == "restore" && nargs >= 1)
+    return "runs git restore behind a git-level option, overwriting the working tree"
+  if (GW_SUB == "checkout" && T[i] == "--" && nargs >= 2)
+    return "runs git checkout -- <path> behind a git-level option, discarding uncommitted changes"
+  if (GW_SUB == "reset") {
+    for (; i <= n; i++)
+      if (T[i] ~ /^--ha/)             # --hard, and the --ha abbreviation git accepts
+        return "runs git reset --hard behind a git-level option, discarding uncommitted changes"
+    return ""
+  }
+  if (GW_SUB == "reflog" && T[i] == "expire" && nargs >= 2)
+    return "runs git reflog expire behind a git-level option, which is what makes history unrecoverable"
+  if (GW_SUB == "push") {
+    for (; i <= n; i++) {
+      if (T[i] ~ /^--mirror/)
+        return "runs git push --mirror behind a git-level option, overwriting every ref on the remote"
+      if (T[i] ~ /^--receive-pack/ || T[i] ~ /^--exec/)
+        return "names a program for git to run as the far end of a push, behind a git-level option"
+    }
+    return ""
+  }
+  if (GW_SUB == "pull" || GW_SUB == "fetch" || GW_SUB == "clone" || GW_SUB == "ls-remote") {
+    for (; i <= n; i++)
+      if (T[i] ~ /^--upload-pack/)
+        return "names a program for git to run as the far end of a " GW_SUB ", behind a git-level option"
+    return ""
+  }
+  return ""
+}
+
 BEGIN {
   SQ = sprintf("%c", 39)
   SECRETRE = ENVIRON["KIT_SECRET_RE"]
@@ -151,6 +439,16 @@ BEGIN {
   HD_DQ = "<<-?[ \t]*\"[A-Za-z_][A-Za-z0-9_]*\""
   HD_SQ = "<<-?[ \t]*" SQ "[A-Za-z_][A-Za-z0-9_]*" SQ
   HD_BARE = "<<-?[ \t]*[A-Za-z_][A-Za-z0-9_]*"
+  # The code-executing config keys, in their canonical spellings so the set a
+  # reader checks against the docs is the set the code compares.  Matched
+  # lowercased; `alias.*` means every variable in the section.
+  GC_EXEC = "alias.* core.pager core.editor core.hooksPath sequence.editor credential.helper diff.external"
+  gcn = split(GC_EXEC, GCK, " ")
+  for (gci = 1; gci <= gcn; gci++) {
+    GC_KEY[tolower(GCK[gci])] = 1
+    gcs = tolower(GCK[gci]); sub(/\..*$/, "", gcs)
+    GC_SECTION[gcs] = 1
+  }
 }
 { raw = raw $0 "\n" }
 END {
@@ -180,22 +478,31 @@ END {
   text = split_cmd(text)
   nst = split(text, ST, "\001")
 
+  # ---- pass 0, over EVERY statement before any other pass reaches a verdict:
+  # a git config write that arms an execution for later.  Ahead of the egress
+  # passes on purpose — those exit on their first match, so a `curl` in an
+  # earlier statement that only ASKs would otherwise shadow a deny here, and an
+  # approved prompt runs the whole Bash call, this write included.
+  for (q = 1; q <= nst; q++) {
+    stmt = ST[q]
+    if (stmt !~ /[^ \t\002]/) continue
+    nstg = split(stmt, STG, "\002")
+    nstg = unwrap(STG, nstg)
+    for (g = 1; g <= nstg; g++) {
+      why = gc_scan(STG[g])
+      if (why != "") { print "GITEXEC " why; exit }
+      why = gd_scan(STG[g])
+      if (why != "") { print "GITDESTRUCT " why; exit }
+    }
+  }
+
   for (q = 1; q <= nst; q++) {
     stmt = ST[q]
     if (stmt !~ /[^ \t\002]/) continue
     nstg = split(stmt, STG, "\002")
 
     # unwrap one level of `sh -c "<inner>"` / eval: the inner string is code
-    for (g = 1; g <= nstg && nstg < 64; g++) {
-      n = tokenize(STG[g], T); if (n == 0) continue
-      ci = 1
-      while (ci <= n && T[ci] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) ci++
-      if (ci > n) continue
-      # kit_wrapper, not the library's is_wrapper: this loop exists to reach
-      # inside `sh -c "<inner>"`, so it must look past shells too.
-      if (!kit_wrapper(base(T[ci]))) continue
-      for (i = ci + 1; i <= n; i++) if (T[i] ~ / / && T[i] !~ /^-/) { STG[++nstg] = split_cmd(T[i]); break }
-    }
+    nstg = unwrap(STG, nstg)
 
     # ---- pass 1: a secret reaching a network command
     leak = ""; sender = 0
