@@ -21,10 +21,24 @@ trap 'rm -rf "$FAKE"' EXIT
 cp "$SCRIPT_DIR/run_all.sh" "$FAKE/tests/run_all.sh"
 
 summary() { printf '#!/usr/bin/env bash\necho "checking"\necho "Results: 1 passed, 0 failed (of 1 checks)"\n' > "$1"; }
-# run_all.sh refuses to run without these two, so they are stubs that do report.
-summary "$FAKE/tests/test_firewall.sh"
-summary "$FAKE/tests/test_egress_guard.sh"
+# run_all.sh refuses to run at all without the suites named in its own `required` list,
+# so the fixture stubs exactly those -- read out of run_all.sh rather than mirrored here,
+# because a mirrored list silently breaks every assertion below the moment a suite joins
+# the real one. (It did: the fetch-and-execute guard became required and this fixture,
+# written in parallel, still named two.) Same derivation as test_skip_accounting.sh.
+REQUIRED="$(sed -n 's/^for required in \(.*\); do$/\1/p' "$SCRIPT_DIR/run_all.sh")"
+NREQ=0
+for r in $REQUIRED; do
+  summary "$FAKE/tests/$r.sh"
+  NREQ=$((NREQ + 1))
+done
+assert_cmd_success "[ $NREQ -ge 2 ]" "run_all.sh's required-suite list was found and is non-trivial"
 summary "$FAKE/tests/test_aa_reports.sh"
+
+# The fixture holds the required stubs plus test_aa_reports (all reporting) and the two
+# offenders below, so the counts follow from NREQ rather than from a literal.
+EXP_PASS=$((NREQ + 1))
+EXP_TOTAL=$((NREQ + 3))
 
 # Dies under set -e the way the real failure did: a command fails, the shell exits, and
 # print_summary is never reached.
@@ -54,7 +68,7 @@ assert_contains "$FAILED_BLOCK" "test_bb_dies_early" "the dying suite is listed 
 assert_contains "$FAILED_BLOCK" "test_cc_silent_pass" "the silent suite is listed under Failed suites"
 assert_eq "0" "$(printf '%s\n' "$OUT" | grep -c 'NO SUMMARY: test_aa_reports' || true)" \
   "a suite that does report is not flagged"
-assert_contains "$OUT" "3 passed, 2 failed (of 5)" "the runner counts both offenders as failures"
+assert_contains "$OUT" "$EXP_PASS passed, 2 failed (of $EXP_TOTAL)" "the runner counts both offenders as failures"
 
 # Control: with only reporting suites the same runner is green, so the rule above is not
 # simply failing everything.
