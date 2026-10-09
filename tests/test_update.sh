@@ -343,8 +343,9 @@ bad = [e for e in hooks
 print(len(bad))" 2>/dev/null)" \
   "every kit guard now matches Bash and context-mode's MCP tools"
 # The rule-set catch-up has to have re-applied High, which is what adds the tool denies:
-# context-mode's five, plus mcp__cloudflare__execute, which only High carries.
-assert_eq "6" "$(python3 -c "
+# context-mode's five and Playwright's two, plus mcp__cloudflare__execute and
+# mcp__playwright__browser_evaluate, which only High carries.
+assert_eq "9" "$(python3 -c "
 import json
 p = json.load(open('$FW_SETTINGS')).get('permissions') or {}
 print(len([r for r in (p.get('deny') or []) if r.startswith('mcp__')]))" 2>/dev/null)" \

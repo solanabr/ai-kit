@@ -650,8 +650,12 @@ assert_eq "deny" "$DECISION" "headless relaxed: a mainnet write through ctx_exec
 # --- The second layer: tool-name denies at Medium and High only. A hook is one pattern
 # --- layer, and for MCP there is no sandbox underneath it, so the tiers that promise no
 # --- arbitrary executor have to refuse the tools outright.
-MCP_DENIED='mcp__context-mode__ctx_execute mcp__context-mode__ctx_execute_file mcp__context-mode__ctx_batch_execute mcp__context-mode__ctx_fetch_and_index mcp__context-mode__ctx_index'
-MCP_KEPT='mcp__context-mode__ctx_search mcp__context-mode__ctx_stats mcp__context-mode__ctx_doctor mcp__context-mode__ctx_purge mcp__context-mode__ctx_insight mcp__context-mode__ctx_upgrade'
+MCP_DENIED='mcp__context-mode__ctx_execute mcp__context-mode__ctx_execute_file mcp__context-mode__ctx_batch_execute mcp__context-mode__ctx_fetch_and_index mcp__context-mode__ctx_index mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_network_request'
+MCP_KEPT='mcp__context-mode__ctx_search mcp__context-mode__ctx_stats mcp__context-mode__ctx_doctor mcp__context-mode__ctx_purge mcp__context-mode__ctx_insight mcp__context-mode__ctx_upgrade mcp__playwright__browser_navigate mcp__playwright__browser_snapshot'
+# High only: an in-page JS evaluator is the same arbitrary-JS class as the two Playwright
+# tools above, but reading state out of a running dApp is ordinary testing, so Medium
+# keeps it.
+MCP_DENIED_HIGH='mcp__playwright__browser_evaluate'
 for TIER in off relaxed medium high; do
   printf '{"tier":"%s"}\n' "$TIER" > "$MCP_PROJ/.claude/security.json"
   printf '{}\n' > "$MCP_PROJ/.claude/settings.json"
@@ -671,7 +675,19 @@ print(" ".join((d.get("permissions") or {}).get("deny") or []))' "$MCP_PROJ/.cla
       assert_eq "no" "$HAS" "$TIER leaves $T callable (the hooks gate it there)"
     fi
   done
-  # The context-compression tools survive at every tier, or the server is pointless.
+  for T in $MCP_DENIED_HIGH; do
+    case " $DENY_LIST " in
+      *" $T "*) HAS=yes ;;
+      *)        HAS=no ;;
+    esac
+    if [ "$TIER" = high ]; then
+      assert_eq "yes" "$HAS" "$TIER denies $T by name"
+    else
+      assert_eq "no" "$HAS" "$TIER keeps $T callable (reading dApp state is ordinary testing)"
+    fi
+  done
+  # The context-compression tools and the two browser tools the kit's own flows drive
+  # survive at every tier, or the servers are pointless.
   for T in $MCP_KEPT; do
     case " $DENY_LIST " in
       *" $T "*) HAS=yes ;;

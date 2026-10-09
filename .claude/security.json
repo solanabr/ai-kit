@@ -14,9 +14,9 @@
 
   "enforced": {
     "tier": "relaxed",
-    "ruleSetVersion": 5,
+    "ruleSetVersion": 6,
     "target": ".claude/settings.json",
-    "sha256": "b1cf48ab4cb011ee0ea891fa30450a472d6fbba671e7e82c5ca9d44eee8a1353",
+    "sha256": "88a0d55e77fede07c6ccfb439e9c7921ed97ee29380a23964603b3aff10aceb9",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -324,6 +324,8 @@
       "Bash(zsh -c *)",
       "Bash(git -c *)",
       "Bash(git -C *)",
+      "Bash(git config *alias.*)",
+      "Bash(git config alias.*)",
       "Bash(flock *)",
       "Bash(watch *)",
       "Bash(setsid *)",
@@ -388,6 +390,8 @@
       "Bash(git ls-remote *--upload-pack*)",
       "Bash(git ls-remote --upload-pack*)",
       "Bash(gh issue delete *)",
+      "Bash(gh repo delete *)",
+      "Bash(gh repo delete)",
       "Bash(solana program deploy *--final*)",
       "Bash(solana program deploy --final*)",
       "Bash(solana program set-upgrade-authority *--final*)",
