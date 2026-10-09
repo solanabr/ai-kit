@@ -752,7 +752,12 @@ PY
   # recorded in security.json, which firewall.sh carries through untouched. The work is
   # also idempotent on content alone: a second run finds every script present and
   # appends nothing, so a lost record costs a no-op, not a duplicate.
-  HOOK_SET_VERSION=1
+  # 1 -> 2: egress-guard grew the GITEXEC pass (git config keys that make git run a
+  # command later). The guard SCRIPT reaches every install through the hooks/ copy near
+  # the top of this file regardless of this number — the bump forces one more
+  # registration pass, which matters for a project whose settings.json is missing a kit
+  # guard entry, since the fingerprint beside this gate would otherwise match and skip.
+  HOOK_SET_VERSION=2
   cat > "$TEMP_DIR/kit_hooks.py" <<'PY'
 import hashlib, json, os, sys
 

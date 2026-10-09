@@ -667,14 +667,21 @@ DENY_WRAPPERS = [
     # `git config set` subcommand, and the zero-gap twin covers the bare
     # `git config alias.z …`. Both leave `git config user.email …` and every other key
     # untouched, which is the point of not denying `git config` as a whole.
-    # Known misses, all narrower than the rule: git config section and variable names
-    # are case-insensitive while a permission glob is not, so `git config Alias.z`
-    # walks past (verified: `git config --file f Alias.Y x` is read back by
-    # `git config --file f --get alias.y`); writing the alias straight into
-    # `.git/config` with a shell redirect is not a `git config` command at all; and
-    # the other code-executing keys (`core.pager`, `core.editor`, `core.hooksPath`,
-    # `sequence.editor`, `credential.helper`) are not aliases and are not covered here,
-    # only in their one-shot `git -c` form above and as Edit denies on ~/.gitconfig.
+    # These two rules are deliberately partial, and the rest is a hook. What a glob
+    # cannot reach: git config section and variable names are case-insensitive while a
+    # permission glob is not, so `git config Alias.z` walks past both (verified:
+    # `git config --file f Alias.Y x` is read back by `git config --file f --get
+    # alias.y`), and `alias` alone has 32 case spellings; and the other code-executing
+    # keys (`core.pager`, `core.editor`, `core.hooksPath`, `sequence.editor`,
+    # `credential.helper`, `diff.external`) are not aliases at all. Both are now closed
+    # in egress-guard.awk's GITEXEC pass, which normalises the key before comparing and
+    # denies at every tier — see its header. These rules STAY: they catch the common
+    # spelling at the permission layer, before the hook runs, and a hook miss is a
+    # silent open door where a glob is a loud closed one.
+    # Still open, in both layers: writing straight into `.git/config` with a shell
+    # redirect is not a `git config` command, so no amount of subcommand parsing
+    # reaches it; `.git` is in sandbox allowWrite and carries no Edit deny the way
+    # ~/.gitconfig does.
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
