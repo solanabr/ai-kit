@@ -324,3 +324,8 @@ bower_components
 
 # agent git worktrees (transient)
 .claude/worktrees/
+
+# Claude Code's own write-tracking scratch dir, which lands inside the pinned packs.
+# It is empty, so git never saw it, but `find` did -- that is how the ext/ count check
+# went red locally and green in CI.
+.claude/skills/ext/.claude/
