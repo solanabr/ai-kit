@@ -258,9 +258,21 @@ assert_contains "$FW_OUT" "tier off (permissions were tuned here)" \
 assert_contains "$FW_OUT" "Run /firewall relaxed to adopt the kit set" \
   "the notice says how to opt in"
 assert_eq "off" "$(fw_tier)" "security.json records tier off"
-assert_cmd_success "cmp -s '$FW_DIR/tuned.before' '$FW_SETTINGS'" \
-  "a tuned permissions block is left byte-identical"
+# What tier off promises is the permission policy, not the whole file: the same run also
+# registers the kit hooks this pre-firewall install never had (issue #91), which is a
+# different surface and an append rather than a rewrite. So compare the two blocks the
+# notice is actually about, and assert the hooks landed beside them.
+fw_policy() {  # fw_policy <settings file> — the permissions + sandbox blocks, canonical
+  python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(json.dumps({k: d.get(k) for k in ('permissions', 'sandbox')}, sort_keys=True))" "$1"
+}
+assert_eq "$(fw_policy "$FW_DIR/tuned.before")" "$(fw_policy "$FW_SETTINGS")" \
+  "a tuned permissions and sandbox policy is left byte-identical"
 assert_file_contains "$FW_SETTINGS" "Bash(my-own-tool *)" "the user's own rule survives"
+assert_file_contains "$FW_SETTINGS" "secrets-guard.sh" \
+  "the kit's guards are registered even where the tier backs off to off"
 
 # (3) symlinked settings.json -> skipped, nothing written
 fw_reset "$FW_DIR/pre-firewall.json"
