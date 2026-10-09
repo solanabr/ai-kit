@@ -309,11 +309,15 @@ if [ "$ASK_LEN" = "0" ]; then
   # denied, every -o spelling silent) is exercised in test_hooks.sh; this only checks
   # that the mechanism the message names is present, which is what makes that PASS mean
   # something when read here.
-  if grep -q 'c0 == "solana-keygen"' "$REPO_ROOT/.claude/hooks/secrets-guard.sh" 2>/dev/null; then
-    echo "  PASS: no ask rules at this tier, and secrets-guard.sh carries the solana-keygen --force gate"
+  # The detector lives wherever the secrets guard keeps its awk: inline in the .sh
+  # before the shared-tokenizer refactor, in secrets-guard.awk after it. Look in both,
+  # so moving the awk cannot read as removing the gate.
+  if grep -qh 'c0 == "solana-keygen"' "$REPO_ROOT/.claude/hooks/secrets-guard.sh" \
+       "$REPO_ROOT/.claude/hooks/secrets-guard.awk" 2>/dev/null; then
+    echo "  PASS: no ask rules at this tier, and the secrets guard carries the solana-keygen --force gate"
     PASS=$((PASS + 1))
   else
-    echo "  FAIL: no ask rules at this tier and secrets-guard.sh has no solana-keygen gate — --force is unguarded"
+    echo "  FAIL: no ask rules at this tier and the secrets guard has no solana-keygen gate — --force is unguarded"
     FAIL=$((FAIL + 1))
   fi
   TOTAL=$((TOTAL + 1))
