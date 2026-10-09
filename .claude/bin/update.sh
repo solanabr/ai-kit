@@ -705,6 +705,12 @@ PY
   # the hook halves of a bump do not come through here at all. They arrive with the
   # hooks/ copy above, which is why a hook gate reaches an install whose ruleSetVersion
   # is already current (rule set 5 shipped four of those).
+  #
+  # Rule set 6 is entirely in the corpus, so this catch-up is the ONLY route by which it
+  # reaches an install that already has a security.json: `gh repo delete` and
+  # `git config alias.*` denied at every tier, and Playwright's executors denied by name
+  # at Medium and High (`browser_evaluate` at High only). Purely additive, like v5's
+  # Bash half, so the re-apply adds rules and removes none.
   FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
   SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
   if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then

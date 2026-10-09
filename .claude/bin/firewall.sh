@@ -129,7 +129,15 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           --upload-pack / --exec transport overrides, and `gh issue delete`), and
 #           DENY_GH_API at Medium and High. The rest of those promises are hooks, which
 #           arrive with the hooks/ copy rather than through this corpus at all.
-RULE_SET_VERSION = 5
+#   5 -> 6: three holes the rule set named in its own prose and left open.
+#           `gh repo delete` joins DENY_UNRECOVERABLE_REMOTE at every tier (only its
+#           `gh api -X DELETE` spelling was closed, and only at Medium and High);
+#           `git config alias.*` joins DENY_WRAPPERS at every tier, because an alias
+#           makes the dangerous verb vanish from the command line every destructive-git
+#           rule and every subcommand-classifying hook matches on; and Playwright's
+#           executors are denied by name — browser_run_code_unsafe and
+#           browser_network_request at Medium and High, browser_evaluate at High only.
+RULE_SET_VERSION = 6
 TIERS = ("off", "relaxed", "medium", "high")
 RANK = {t: i for i, t in enumerate(TIERS)}
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
@@ -340,13 +348,14 @@ ALLOW = [
 # a tier cannot take it back out. Most tier variation therefore lives in a
 # sandbox.filesystem path or a hook decision.
 #
-# Three groups are exceptions, and they are safe for the same reason: firewall.sh owns
+# Five groups are exceptions, and they are safe for the same reason: firewall.sh owns
 # one file and subtracts exactly the strings recorded in enforced.ruleIds, so a descent
 # does remove them. The relaxed -> high -> relaxed and high -> medium byte-identity
 # tests are the proof. The groups are DENY_SELF_PROTECTION (High only),
-# DENY_MCP_ARBITRARY_EXECUTION (Medium and High) and DENY_MCP_CLOUDFLARE_EXECUTION
-# (High only). The residual is unchanged: a block hand-copied into user or managed
-# scope stops tracking the tier, and those denies then cannot be lifted.
+# DENY_MCP_ARBITRARY_EXECUTION and DENY_MCP_PLAYWRIGHT_EXECUTION (Medium and High), and
+# DENY_MCP_CLOUDFLARE_EXECUTION and DENY_MCP_PLAYWRIGHT_EVALUATE (High only). The
+# residual is unchanged: a block hand-copied into user or managed scope stops tracking
+# the tier, and those denies then cannot be lifted.
 #
 # Two matcher facts the patterns below are built around:
 #   * A mid-pattern `*` does not match the empty string: Bash(anchor * --final*) did
@@ -613,7 +622,9 @@ DENY_SECRET_READS_VIA_BASH = [
 ]
 
 DENY_WRAPPERS = [
-    # Rules cannot see past these, so the wrapper itself is denied.
+    # Rules cannot see past these, so the form itself is denied — a wrapper standing in
+    # front of the real command, or an alias definition that makes the real command word
+    # stop appearing on any later command line.
     # `git -c core.fsmonitor=/tmp/x.sh status` is arbitrary code execution that evades
     # every `git <subcommand>` rule.
     # NOT evasions, deliberately absent: leading VAR=value assignments, subshells,
@@ -641,6 +652,29 @@ DENY_WRAPPERS = [
     # this one rule to High would make the whole destructive-git deny set advisory at the
     # default tier, `reflog expire` included (FIREWALL-SPEC.md section 3.4 singles that
     # one out as deny-at-every-tier because it is what makes history unrecoverable).
+    #
+    # `git config alias.*` is the third git evasion, and the worst of the three, because
+    # it is the only one that survives the command it was typed in. `git config
+    # alias.z '!git clean -fdx'` is an ordinary config write; the destruction happens
+    # later, in `git z`, where nothing has a verb to match — not the `git clean *` deny,
+    # and not a hook classifying subcommands, since the subcommand is now a name this
+    # policy has never heard of. It is `gh alias *`
+    # in DENY_WHOLE_BINARY (aliases expand inside gh, invisible to the matcher) with
+    # one extra turn of the screw: a gh alias has to be re-expanded by gh, while a git
+    # alias is persisted in a config file and applies to every later session.
+    # Two rules because a mid-pattern * never matches the empty string: the gapped form
+    # covers `--global`, `--local`, `--file F`, `--add`, `--replace-all` and the newer
+    # `git config set` subcommand, and the zero-gap twin covers the bare
+    # `git config alias.z …`. Both leave `git config user.email …` and every other key
+    # untouched, which is the point of not denying `git config` as a whole.
+    # Known misses, all narrower than the rule: git config section and variable names
+    # are case-insensitive while a permission glob is not, so `git config Alias.z`
+    # walks past (verified: `git config --file f Alias.Y x` is read back by
+    # `git config --file f --get alias.y`); writing the alias straight into
+    # `.git/config` with a shell redirect is not a `git config` command at all; and
+    # the other code-executing keys (`core.pager`, `core.editor`, `core.hooksPath`,
+    # `sequence.editor`, `credential.helper`) are not aliases and are not covered here,
+    # only in their one-shot `git -c` form above and as Edit denies on ~/.gitconfig.
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -c *)",
@@ -648,6 +682,8 @@ DENY_WRAPPERS = [
     "Bash(zsh -c *)",
     "Bash(git -c *)",
     "Bash(git -C *)",
+    "Bash(git config *alias.*)",
+    "Bash(git config alias.*)",
     "Bash(flock *)",
     "Bash(watch *)",
     "Bash(setsid *)",
@@ -728,12 +764,15 @@ DENY_UNRECOVERABLE_GIT = [
 #    allow one, and no Solana toolchain emits one — the only legitimate use is reaching
 #    a git binary at a non-standard path on a server, which a human does by hand.
 #    Each carries its zero-gap twin: a mid-pattern * never matches the empty string.
-# 2. `gh issue delete`. GitHub does not undo it — not from the UI, not from the API.
-#    It is the one `gh` subcommand with no recoverable form, which is why it is a deny
-#    where `gh pr merge` next to it in the same promise is a hook ask: a merge can be
-#    reverted and the PR reopened. `gh repo delete` deserves the same rule and does not
-#    have one yet; `Bash(gh api *)` at Medium and High closes its `-X DELETE` spelling
-#    but not the gh subcommand itself.
+# 2. `gh issue delete` and `gh repo delete`. GitHub does not undo either — not from the
+#    UI, not from the API. They are the two `gh` subcommands with no recoverable form,
+#    which is why they are denies where `gh pr merge` in the same promise is a hook ask:
+#    a merge can be reverted and the PR reopened. `gh repo delete` was the one gap the
+#    rule set named in its own comment and left open: `Bash(gh api *)` closed the
+#    `gh api -X DELETE /repos/O/R` spelling at Medium and High, and nothing covered the
+#    subcommand itself at any tier. It carries its zero-gap twin for the same reason
+#    `Bash(claude)` sits next to `Bash(claude *)` — the trailing-space form does match
+#    the bare command when it is a rule's only wildcard, and the twin costs nothing.
 DENY_UNRECOVERABLE_REMOTE = [
     "Bash(git push *--receive-pack*)",
     "Bash(git push --receive-pack*)",
@@ -748,6 +787,8 @@ DENY_UNRECOVERABLE_REMOTE = [
     "Bash(git ls-remote *--upload-pack*)",
     "Bash(git ls-remote --upload-pack*)",
     "Bash(gh issue delete *)",
+    "Bash(gh repo delete *)",
+    "Bash(gh repo delete)",
 ]
 
 DENY_IRREVERSIBLE_ONCHAIN = [
@@ -877,6 +918,49 @@ DENY_MCP_ARBITRARY_EXECUTION = [
 # the token's scopes remain the only boundary there.
 DENY_MCP_CLOUDFLARE_EXECUTION = [
     "mcp__cloudflare__execute",
+]
+
+# Medium and High. Playwright's two arbitrary primitives, in the same class as
+# context-mode's executor and Cloudflare's `execute`: `browser_run_code_unsafe` runs
+# caller-supplied code in the Playwright process (the name is upstream's own warning),
+# and `browser_network_request` issues an arbitrary HTTP request with an arbitrary
+# method, body and URL. Either one makes "no arbitrary executor is reachable" false at
+# High and takes the deniedDomains list to zero layers at both gated tiers — the server
+# is a local process, so its fetches never pass the Bash sandbox, and the guards'
+# PreToolUse matcher is `Bash|mcp__context-mode__.*`, so no hook pattern reaches them.
+#
+# Medium and not only High, unlike Cloudflare's `execute`: the opt-in-versus-default
+# split that spared Cloudflare at Medium turns on the user having scoped an API token,
+# which bounds what that executor can reach. Attaching Playwright creates no credential
+# and bounds nothing — `browser_network_request` reaches whatever the host can reach —
+# so being opt-in is not the same kind of decision here.
+#
+# Residuals, as for every MCP rule: the `mcp__playwright__` prefix is the local server
+# NAME from /setup-mcp's documented `claude mcp add playwright` line, so a server added
+# under another name is not matched, and `chrome-devtools-mcp` is a different server
+# with its own tool names that no tier gates. The kit's own browser flows name only
+# `browser_navigate` and `browser_snapshot` (/test-ts, /product-review), so nothing the
+# kit ships stops working at any tier.
+DENY_MCP_PLAYWRIGHT_EXECUTION = [
+    "mcp__playwright__browser_run_code_unsafe",
+    "mcp__playwright__browser_network_request",
+]
+
+# High only. `browser_evaluate` runs arbitrary JavaScript in the page and returns its
+# value, which is the same arbitrary-JS class as the two above — the earlier review of
+# this server missed it, and a rule set that denied `browser_run_code_unsafe` while
+# leaving this callable would have been gating the name rather than the capability.
+#
+# Why it is High-only where the other two are denied at Medium: reading state out of a
+# running dApp is ordinary testing, and `browser_evaluate` is how it is done when a
+# snapshot does not carry the value (a wallet adapter's connection state, a balance
+# rendered by a canvas). Losing it at Medium is real friction, and Medium's job is to
+# make reading unfamiliar code safe rather than to make browser testing impossible.
+# High's claim is the stronger one and does not survive an in-page JS evaluator: the
+# page is a remote, attacker-influenced document, so what it hands back is an arbitrary
+# read and an arbitrary fetch away from the whole read fence.
+DENY_MCP_PLAYWRIGHT_EVALUATE = [
+    "mcp__playwright__browser_evaluate",
 ]
 
 DENY = [
@@ -1208,7 +1292,7 @@ def plan(tier):
         # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
         "permissions.ask": [],
         # Tier-varying deny groups, all of them: DENY_SELF_PROTECTION at High,
-        # DENY_GH_API at Medium and High, and the two MCP groups appended after the Off
+        # DENY_GH_API at Medium and High, and the four MCP groups appended after the Off
         # early-return below.
         #
         # DENY_GH_API is the ONLY Bash rule in the whole corpus that varies by tier, and
@@ -1245,13 +1329,17 @@ def plan(tier):
     # Medium and High both state that an arbitrary executor is not reachable, and a
     # default-on MCP server with one makes that false unless the tool itself is refused.
     # Relaxed keeps every context-mode tool and relies on the hooks; see the group above.
-    # High additionally refuses the one opt-in executor, which is the only place the two
-    # gated tiers differ: Medium respects an explicitly attached server, High does not.
+    # Playwright's two arbitrary primitives go with it at both gated tiers. High
+    # additionally refuses Cloudflare's `execute` and Playwright's in-page JS evaluator:
+    # the tiers' deny sets are identical apart from those two groups, and both are there
+    # because High's claim is the stronger one rather than because Medium forgot.
     if medium_up:
         extra = list(deny_extra)
         extra.append(DENY_MCP_ARBITRARY_EXECUTION)
+        extra.append(DENY_MCP_PLAYWRIGHT_EXECUTION)
         if high:
             extra.append(DENY_MCP_CLOUDFLARE_EXECUTION)
+            extra.append(DENY_MCP_PLAYWRIGHT_EVALUATE)
         lists["permissions.deny"] = DENY + extra
 
     domains = [DOMAINS_EXFIL_SINKS, DOMAINS_TUNNELS, DOMAINS_PASTE_AND_DROPS]
