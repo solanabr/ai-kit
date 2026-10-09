@@ -183,6 +183,16 @@ if [ -d "$TEMP_DIR/repo/.claude/skills/ext" ]; then
   find "$TEMP_DIR/repo/.claude/skills/ext" -name .git -type f -exec rm -f {} +
 fi
 
+# …and the surfaces a pack loads into an agent on its own. Stripped here, on the
+# staging copy, so they never reach the project — and after the pin check above, which
+# reads the gitlinks of the source rather than this tree. The kit's own ext/ checkout
+# is never touched: with a local source this tree is a cp -R of it.
+# shellcheck source=.claude/bin/_pack_strip.sh
+source "$TEMP_DIR/repo/.claude/bin/_pack_strip.sh"
+if [ -d "$TEMP_DIR/repo/.claude/skills/ext" ]; then
+  strip_pack_load_surfaces "$TEMP_DIR/repo/.claude/skills/ext"/*/ >/dev/null
+fi
+
 # --agents: the kit ships .claude/ paths in its docs, skills, settings and
 # .gitmodules. Point them at .agents/ so nothing references a directory this
 # mode never creates. Left alone: ~/.claude/ (user-global), paths inside the
@@ -297,6 +307,14 @@ if [ -d "$TARGET_DIR/$CONFIG_DIR/skills/ext" ]; then
       *) if [ -n "$GIT_COMMON" ] && [ "${gitdir_abs#"$GIT_COMMON"/}" != "$gitdir_abs" ]; then :; else rm -f "$gitfile"; fi ;;
     esac
   done < <(find "$TARGET_DIR/$CONFIG_DIR/skills/ext" -name .git -type f)
+fi
+
+# And in the target as well as the staging copy: the directory copy above merges, so a
+# surface an older kit left in a pack is still there afterwards. Same reason the
+# Claude-Code-only --agents files are removed from the target a few lines up.
+if [ -d "$TARGET_DIR/$CONFIG_DIR/skills/ext" ]; then
+  STRIPPED="$(strip_pack_load_surfaces "$TARGET_DIR/$CONFIG_DIR/skills/ext"/*/)"
+  [ "$STRIPPED" = 0 ] || ok "Removed $STRIPPED pack-local instruction file(s) and .claude/ from $CONFIG_DIR/skills/ext/"
 fi
 
 # VERSION: always overwrite (CHANGELOG stays in source repo only)

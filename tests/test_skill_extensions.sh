@@ -216,7 +216,9 @@ assert_eq "OK" "$(printf '%s\n' "$DEAD" | tail -n +2)" "Core-only install: every
 echo "[registry layout]"
 P5="$TEMP_DIR/reformatted"
 mkdir -p "$P5/.claude/bin" "$P5/.claude/skills/ext"
-cp "$SKILLS_SH" "$P5/.claude/bin/"
+# _pack_strip.sh travels with it: skills.sh sources its sibling, as update.sh does
+# _env_merge.sh, and a bin/ holding one of the two is an install that cannot exist.
+cp "$SKILLS_SH" "$REPO_ROOT/.claude/bin/_pack_strip.sh" "$P5/.claude/bin/"
 python3 -c 'import json, sys; json.dump(json.load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=4)' "$REGISTRY" "$P5/.claude/skills/skill-registry.json"
 for cmd in list prune uninstalled "add jupiter"; do
   assert_cmd_fails_with "(cd \"$P5\" && bash .claude/bin/skills.sh $cmd)" "lost the layout" \
