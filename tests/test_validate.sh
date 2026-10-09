@@ -52,6 +52,24 @@ assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/solana-dev/moved
 assert_contains "$OUT" "FAIL: .claude/skills/zz-links.md -> ext/no-such-pack/SKILL.md" "link into a pack that does not exist still fails"
 rm "$TEMP_DIR/.claude/skills/zz-links.md" "$TEMP_DIR/.claude/skills/ext/solana-dev/README.md"
 
+# A pack's own submodules are third-party pins nobody here chose, and the registry's
+# "vendored" field is the only place they are written down. Reading that record and
+# comparing it to the gitlinks says nothing about a pack whose pins were never recorded
+# at all — which is how two of them shipped unwatched — so validate.sh checks the inverse
+# too. A vendored pack has no index to read, so its .gitmodules is what gets held against
+# the record. Asserted by line rather than by exit code: filling a pack dir also dangles
+# every hub link into it, so the run fails for that reason as well.
+echo "[unrecorded nested submodule]"
+NESTED="$TEMP_DIR/.claude/skills/ext/counterparty-gate"
+printf '[submodule "vendor/unrecorded"]\n\tpath = vendor/unrecorded\n\turl = https://example.invalid/x\n' > "$NESTED/.gitmodules"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" || true
+assert_contains "$OUT" 'counterparty-gate declares a submodule at vendor/unrecorded that "vendored" does not record' \
+  "a nested submodule with no vendored record fails validation"
+rm -f "$NESTED/.gitmodules"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" || true
+assert_contains "$OUT" 'packs with submodules of their own are recorded in "vendored", and match' \
+  "...and the check passes once the pack declares nothing the record misses"
+
 # The shipped VERSION must sit outside update.sh's retired-defaults migration case
 echo "[migration gate]"
 UPDATE_SH="$TEMP_DIR/.claude/bin/update.sh"

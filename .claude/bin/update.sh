@@ -232,21 +232,65 @@ fi
 # A pack's own submodules are pinned by that pack's author, not by the kit. install.sh
 # does not fetch them, so a project should not receive them here either: the clone at the
 # top of this file uses --recurse-submodules and that line is inside the frozen region,
-# so the pruning happens after the copy instead of before the fetch. The registry's
-# "vendored" field lists the paths and the commits they were pinned at; the packs that use
-# one test for it and fall back when it is absent. To opt in, clone it yourself at the
-# recorded commit.
+# so the pruning happens after the copy instead of before the fetch. To opt in to one,
+# clone it yourself at the commit the registry records.
+#
+# The list is derived from each pack's own submodule file, which ships inside the pack and
+# is that author's own statement of what it vendors. That covers packs the registry's
+# hand-kept "vendored" record misses and a pack that gains a submodule upstream, which
+# makes the record a review artifact rather than the thing standing between a user and a
+# nested third-party tree. The record is still read, as a second source and a backstop,
+# but with python3: a "vendored" object spanning several lines is invisible to a
+# line-oriented parser, and that is how 16 of the 18 recorded paths went unpruned. The
+# per-pack pass needs no python3, so the primary list survives its absence.
 if [ "$DRY_RUN" = false ] && [ -d "$TARGET_DIR/$CONFIG_NAME/skills/ext" ]; then
+  EXT_DIR="$TARGET_DIR/$CONFIG_NAME/skills/ext"
   REG_FILE="$TARGET_DIR/$CONFIG_NAME/skills/skill-registry.json"
-  if [ -f "$REG_FILE" ]; then
-    while IFS= read -r nested; do
-      [ -n "$nested" ] || continue
-      case "$nested" in */*) ;; *) continue ;; esac
-      rm -rf "$TARGET_DIR/$CONFIG_NAME/skills/ext/${nested:?}"
-    done < <(awk -F'"' '
-      /^      "id": "/            { id = $4 }
-      /^      "vendored": \{/     { for (i = 4; i <= NF; i += 4) if ($i != "") print id "/" $i }
-    ' "$REG_FILE")
+  PRUNE_LIST="$TEMP_DIR/vendored-prune.txt"
+  {
+    for pack_modules in "$EXT_DIR"/*/.gitmodules; do
+      [ -f "$pack_modules" ] || continue
+      pack_dir="$(basename "$(dirname "$pack_modules")")"
+      sed -n 's/^[[:space:]]*path[[:space:]]*=[[:space:]]*//p' "$pack_modules" | tr -d '\r' \
+        | while IFS= read -r rel; do
+            [ -n "$rel" ] && printf '%s/%s\n' "$pack_dir" "$rel"
+          done
+    done
+    if [ -f "$REG_FILE" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$REG_FILE" <<'PY' || true
+import json, os, sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        entries = json.load(f).get("entries") or []
+except (OSError, ValueError):
+    sys.exit(0)
+for entry in entries:
+    if not isinstance(entry, dict):
+        continue
+    vendored = entry.get("vendored")
+    if not isinstance(vendored, dict):
+        continue
+    path = entry.get("path") or ""
+    pack = os.path.basename(path) if "/skills/ext/" in path else (entry.get("id") or "")
+    for rel in vendored:
+        if pack and rel:
+            print("%s/%s" % (pack, rel))
+PY
+    fi
+  } | sort -u > "$PRUNE_LIST" || true
+  PRUNED=0
+  while IFS= read -r nested; do
+    # pack/subpath only, and nothing that could climb out of ext/
+    case "$nested" in */*) ;; *) continue ;; esac
+    case "$nested" in /*) continue ;; esac
+    case "/$nested/" in */../*) continue ;; esac
+    [ -e "$EXT_DIR/$nested" ] || continue
+    rm -rf "${EXT_DIR:?}/${nested:?}"
+    PRUNED=$((PRUNED + 1))
+  done < "$PRUNE_LIST"
+  if [ "$PRUNED" -gt 0 ]; then
+    CHANGES="$CHANGES  [pruned] $PRUNED nested third-party tree(s) under $CONFIG_NAME/skills/ext/ — a pack's own submodules are not part of what the kit pins\n"
   fi
 fi
 
@@ -654,6 +698,13 @@ PY
 
   # Rule-set catch-up. Reads the shipped version out of the firewall.sh just copied in,
   # so there is one source for it and no literal here to drift.
+  #
+  # The mechanism is version-generic, so a bump needs no edit here. Worth naming once:
+  # `firewall.sh apply` subtracts exactly the strings in enforced.ruleIds before writing
+  # the new block, so a bump that DROPS a rule works the same way as one that adds — and
+  # the hook halves of a bump do not come through here at all. They arrive with the
+  # hooks/ copy above, which is why a hook gate reaches an install whose ruleSetVersion
+  # is already current (rule set 5 shipped four of those).
   FW_SH="$TARGET_DIR/$CONFIG_NAME/bin/firewall.sh"
   SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
   if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then
@@ -670,6 +721,188 @@ PY
       fi
     fi
   fi
+
+  # ── Kit hooks: the enforcement an existing install could not otherwise get ──
+  #
+  # install.sh copies settings.json only when absent, and nothing above rewrites the
+  # `hooks` block: the matcher patch edits an entry that is already there, and
+  # firewall.sh owns permissions and sandbox and nothing else. So a guard the kit added
+  # after a project was installed has its script on disk — the hooks/ copy near the top
+  # delivers that — and no line in settings.json running it. That is issue #91, and it
+  # is the structural reason a correction can land upstream and reach nobody.
+  #
+  # What this does: append a kit hook entry the project does not already run. Never
+  # rewrite, reorder or remove one — an entry the user wrote, or edited, is theirs, and
+  # an entry naming a kit script is taken as already handled whatever its matcher or
+  # shape. "A kit hook" means the command names a file the kit ships in hooks/, so a
+  # guard added later is carried over by this same code with no edit here; the SessionStart
+  # banner names no such file and is deliberately left out, being cosmetic and having no
+  # identity stable enough to avoid appending a second copy of it.
+  #
+  # Gate: HOOK_SET_VERSION below, bumped when the kit's hook set changes, compared with
+  # what the last run recorded — the same shape as the rule-set catch-up above. It is
+  # paired with a fingerprint of the shipped hooks block so a forgotten bump is caught
+  # too, because a missed bump here reproduces exactly the defect this fixes. Both are
+  # recorded in security.json, which firewall.sh carries through untouched. The work is
+  # also idempotent on content alone: a second run finds every script present and
+  # appends nothing, so a lost record costs a no-op, not a duplicate.
+  HOOK_SET_VERSION=1
+  cat > "$TEMP_DIR/kit_hooks.py" <<'PY'
+import hashlib, json, os, sys
+
+dry_run = sys.argv[1] == "true"
+target, config, upstream, security_path = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+want_version = int(sys.argv[6])
+
+SETTINGS = os.path.join(target, config, "settings.json")
+
+
+def report(tag, msg):
+    print("  [%s] %s" % (tag, msg))
+
+
+def load(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def write_json(path, data):
+    tmp = path + ".hooks.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    os.replace(tmp, path)  # atomic: same directory
+
+
+upstream_settings = load(upstream)
+if not isinstance(upstream_settings, dict):
+    sys.exit(0)
+shipped = upstream_settings.get("hooks")
+if not isinstance(shipped, dict) or not shipped:
+    sys.exit(0)
+
+fingerprint = hashlib.sha256(
+    json.dumps(shipped, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+).hexdigest()[:16]
+
+security = load(security_path)
+if not isinstance(security, dict):
+    security = None
+have_version, have_fingerprint = 0, ""
+if security is not None:
+    try:
+        have_version = int(security.get("hookSetVersion") or 0)
+    except (TypeError, ValueError):
+        have_version = 0
+    have_fingerprint = security.get("hookSetFingerprint") or ""
+if have_version >= want_version and have_fingerprint == fingerprint:
+    sys.exit(0)
+
+# The kit's own hook scripts, read from the hooks/ directory just copied in rather than
+# listed here, so this never drifts from what ships.
+try:
+    kit_scripts = set(
+        name for name in os.listdir(os.path.join(os.path.dirname(upstream), "hooks"))
+        if name.endswith((".sh", ".awk", ".py"))
+    )
+except OSError:
+    kit_scripts = set()
+if not kit_scripts:
+    sys.exit(0)
+
+
+def scripts_of(entry):
+    """Kit scripts an entry's commands name. Empty means it is not a kit hook."""
+    found = set()
+    if isinstance(entry, dict):
+        for hook in entry.get("hooks") or []:
+            if isinstance(hook, dict):
+                command = hook.get("command") or ""
+                found |= set(name for name in kit_scripts if name in command)
+    return found
+
+
+if os.path.islink(SETTINGS):
+    sys.exit(0)
+settings = load(SETTINGS)
+if settings is None:
+    report("skipped", "%s/settings.json is missing or not plain JSON, so the kit's"
+                      " PreToolUse guards are not registered in this project. Re-run"
+                      " install.sh here, or copy the hooks block from the kit." % config)
+    sys.exit(0)
+if not isinstance(settings, dict):
+    sys.exit(0)
+
+hooks = settings.get("hooks")
+if hooks is None:
+    hooks = {}
+elif not isinstance(hooks, dict):
+    sys.exit(0)
+
+added = []
+for event, shipped_entries in shipped.items():
+    if not isinstance(shipped_entries, list):
+        continue
+    live = hooks.get(event)
+    if live is not None and not isinstance(live, list):
+        continue
+    present = set()
+    for entry in live or []:
+        present |= scripts_of(entry)
+    for entry in shipped_entries:
+        wanted = scripts_of(entry)
+        if not wanted or wanted & present:
+            continue  # not a kit hook, or this project already runs it
+        if live is None:
+            live = []
+            hooks[event] = live
+        live.append(json.loads(json.dumps(entry)))
+        present |= wanted
+        added.extend("%s/%s" % (event, name) for name in sorted(wanted))
+
+if added and not dry_run:
+    settings["hooks"] = hooks
+    try:
+        write_json(SETTINGS, settings)
+    except OSError as exc:
+        report("skipped", "%s/settings.json: could not write (%s)" % (config, exc.strerror))
+        sys.exit(0)
+if added:
+    report("would register" if dry_run else "registered",
+           "%s/settings.json: %d kit hook(s) an older install never got — %s"
+           % (config, len(added), ", ".join(added)))
+
+# The rest of what the kit puts in settings.json still reaches fresh installs only:
+# enabling a plugin fetches and runs a third-party binary, which is the user's call and
+# not something an update should make for them. Say so rather than let the absence read
+# as a choice already made.
+pending = [
+    key for key in ("extraKnownMarketplaces", "enabledPlugins")
+    if isinstance(upstream_settings.get(key), dict) and not settings.get(key)
+]
+if pending:
+    report("notice", "%s/settings.json has no %s: the kit's security plugin is not"
+                     " enabled here. Add it with /plugin, or copy those keys from the"
+                     " kit — an update will not enable a plugin for you."
+                     % (config, " or ".join(pending)))
+
+if dry_run:
+    sys.exit(0)
+if security is None:
+    sys.exit(0)  # no record to write; the content check keeps the next run a no-op
+security["hookSetVersion"] = want_version
+security["hookSetFingerprint"] = fingerprint
+try:
+    write_json(security_path, security)
+except OSError:
+    pass  # the merge already happened; re-running it costs nothing
+PY
+  KIT_HOOKS="$(python3 "$TEMP_DIR/kit_hooks.py" "$DRY_RUN" "$TARGET_DIR" "$CONFIG_NAME" \
+    "$TEMP_DIR/repo/.claude/settings.json" "$TARGET_DIR/$CONFIG_NAME/security.json" \
+    "$HOOK_SET_VERSION")" || KIT_HOOKS=""
+  [ -z "$KIT_HOOKS" ] || CHANGES="$CHANGES$KIT_HOOKS\n"
 fi
 
 # CHANGELOG.md stays in source repo — not shipped to user projects
