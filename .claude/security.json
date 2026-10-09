@@ -4,19 +4,19 @@
   "tier": "relaxed",
 
   "_tiers": {
-    "off": "OS sandbox disabled, no path or egress fencing. The never-allowed deny set still applies at this level too — it is unconditional, and it is what stops an agent rewriting this file.",
-    "relaxed": "Default. Sandbox on; credentials, vaults, browser stores, shell history and login files denied; known exfil, tunnel and paste domains refused. Project .env and keypairs stay readable. CI-safe: emits zero permissions.ask entries, so nothing can hard-fail a headless run.",
-    "medium": "Relaxed plus: host credentials, Solana config *.json and session transcripts unreadable by commands; .env writes, package publishing and gh api gated. Hard-fails headless by design.",
-    "high": "Medium plus: reads fenced to the working directory and the toolchain roots, and mainnet writes denied. Writes outside the working directory are already fenced by Claude Code itself at every level from relaxed up, so that is not what high adds. Hard-fails headless by design."
+    "off": "OS sandbox disabled, no path or egress fencing. The never-allowed deny set still applies at this level too — it is unconditional, and it is what stops an agent rewriting this file. The hooks also still refuse the irreversible set, overwriting your default wallet keypair included.",
+    "relaxed": "Default. Sandbox on; credentials, vaults, browser stores, shell history and login files denied; known exfil, tunnel and paste domains refused. Project .env and keypairs stay readable. Force push and git history rewrites are allowed; package publishing asks. CI-safe: emits zero permissions.ask entries, and every hook prompt goes silent with no interactive user, so nothing can hard-fail a headless run.",
+    "medium": "Relaxed plus: host credentials, Solana config *.json and session transcripts unreadable by commands; .env writes denied, package publishing denied, gh api denied by rule, and force push and gh pr merge ask. Hard-fails headless by design.",
+    "high": "Medium plus: reads fenced to the working directory and the toolchain roots; mainnet writes, force push and gh pr merge denied; recoverable git history rewrites ask. Writes outside the working directory are already fenced by Claude Code itself at every level from relaxed up, so that is not what high adds. Hard-fails headless by design."
   },
 
   "_scope": "What the kit can enforce: file access and destructive commands, through permission rules, the OS sandbox and three PreToolUse hooks. What it cannot: egress. A local MCP server runs outside the sandbox with full user access, and the network allowlist has no effect from project settings, so no level here closes egress — only the known-bad domain denylist applies. Relaxed's honest guarantee is that your secrets will not additionally reach a third party, not confidentiality: it deliberately leaves the project .env readable, and once a value is read it is in the transcript.",
 
   "enforced": {
     "tier": "relaxed",
-    "ruleSetVersion": 4,
+    "ruleSetVersion": 5,
     "target": ".claude/settings.json",
-    "sha256": "18c09410226745a408203e7b05f9de0ec8ee8ea11db21eb0b0833e214cb3450a",
+    "sha256": "b1cf48ab4cb011ee0ea891fa30450a472d6fbba671e7e82c5ca9d44eee8a1353",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -375,6 +375,19 @@
       "Bash(git reflog expire *)",
       "Bash(git push *--mirror*)",
       "Bash(git push --mirror*)",
+      "Bash(git push *--receive-pack*)",
+      "Bash(git push --receive-pack*)",
+      "Bash(git push *--exec*)",
+      "Bash(git push --exec*)",
+      "Bash(git pull *--upload-pack*)",
+      "Bash(git pull --upload-pack*)",
+      "Bash(git fetch *--upload-pack*)",
+      "Bash(git fetch --upload-pack*)",
+      "Bash(git clone *--upload-pack*)",
+      "Bash(git clone --upload-pack*)",
+      "Bash(git ls-remote *--upload-pack*)",
+      "Bash(git ls-remote --upload-pack*)",
+      "Bash(gh issue delete *)",
       "Bash(solana program deploy *--final*)",
       "Bash(solana program deploy --final*)",
       "Bash(solana program set-upgrade-authority *--final*)",

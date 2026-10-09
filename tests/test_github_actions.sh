@@ -28,6 +28,49 @@ BAD="$(printf '%s\n' "$USES" | awk 'NF {
 }')"
 assert_eq "" "$BAD" "every uses: is owner/repo[/path]@ref with a tag or SHA, not a branch"
 
+# The workflows this repo runs must pin to a full commit SHA, not a version tag. A tag is
+# mutable: whoever controls the action's repo can repoint v4 at any commit, and
+# sync-skill-pins.yml runs with contents: write and pushes. Same rule validate.sh applies
+# to .mcp.json's npx pins. Templates are out of scope -- they are copied into a user's
+# project, and the pinning call there is theirs.
+mutable_tags() {
+  bash "$LIST" | awk -v dir="$1" '
+    index($1, dir) != 1 { next }
+    { ref = $2; sub(/^[^@]*@/, "", ref)
+      if (ref !~ /^[0-9a-f]{40}$/) print $1 " " $2 }'
+}
+assert_eq "" "$(mutable_tags '.github/workflows/')" "every action in .github/workflows/ is pinned to a full commit SHA"
+
+# Negative control: the same rule over a tree that does carry a tag must report it, or the
+# pass above only means the awk matched nothing.
+CONTROL_DIR="$(mktemp -d)"
+mkdir -p "$CONTROL_DIR/.github/workflows" "$CONTROL_DIR/.github/scripts"
+cp "$LIST" "$CONTROL_DIR/.github/scripts/list-actions.sh"
+printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n' \
+  > "$CONTROL_DIR/.github/workflows/planted.yml"
+CONTROL="$(cd "$CONTROL_DIR" && LIST="$CONTROL_DIR/.github/scripts/list-actions.sh" \
+  bash -c "$(declare -f mutable_tags); mutable_tags '.github/workflows/'")"
+rm -rf "$CONTROL_DIR"
+assert_contains "$CONTROL" "actions/checkout@v4" "the SHA-pin check reports a planted mutable tag"
+
+# No workflow checks out submodules recursively. install.sh fetches the packs with
+# `submodule update --init --depth 1` and never recurses on purpose (install.sh:150-155):
+# a pack's own submodules are pinned by that pack's author and reviewed by nobody here,
+# and update.sh prunes the registry's `vendored` paths after its copy. A recursive
+# checkout hands CI a tree no install can produce. That divergence hid the macOS failure
+# in #216 for two sessions, and under SOLANA_AI_KIT_LOCAL_SRC it would put nested
+# third-party trees into the smoke test's own fixture project.
+RECURSIVE="$(grep -rln 'submodules:[[:space:]]*recursive' "$REPO_ROOT/.github/workflows/" 2>/dev/null || true)"
+assert_eq "" "$RECURSIVE" "no workflow checks out submodules recursively (install.sh does not, so CI must not)"
+
+RC_DIR="$(mktemp -d)"
+mkdir -p "$RC_DIR/workflows"
+printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@%s\n        with:\n          submodules: recursive\n' \
+  "$(printf '0%.0s' $(seq 40))" > "$RC_DIR/workflows/planted.yml"
+RC_CONTROL="$(grep -rln 'submodules:[[:space:]]*recursive' "$RC_DIR/workflows/" 2>/dev/null || true)"
+rm -rf "$RC_DIR"
+assert_contains "$RC_CONTROL" "planted.yml" "the recursive-checkout check reports a planted workflow"
+
 # Every file parses as YAML (an unquoted "name: a: b" breaks a workflow silently).
 # Ruby ships on macOS and the GitHub runners; skip where it is missing.
 if command -v ruby >/dev/null 2>&1; then

@@ -55,7 +55,7 @@ done
 cp "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.mcp.json" "$REPO_ROOT/.env.example" "$KIT/"
 G -C "$TEMP_DIR" init -q kit
 for id in $CORE jupiter sendai; do
-  G -C "$KIT" submodule add -q "file://$TEMP_DIR/packs/$id" ".claude/skills/ext/$id" >/dev/null 2>&1
+  G -C "$KIT" submodule add -q "file://$TEMP_DIR/packs/$id" ".claude/skills/ext/$id" > "$QUIET_LOG" 2>&1 || quiet_fail "submodule add"
 done
 # sendai's source is gone: fetching it fails the install, so a pass proves it was not fetched.
 G -C "$KIT" config -f .gitmodules submodule..claude/skills/ext/sendai.url "file://$TEMP_DIR/packs/missing"
@@ -117,11 +117,48 @@ else
   PASS=$((PASS + 1))
 fi
 
+# The gitlink comparison is the only verification of a pinned pack there is — no content
+# hash exists anywhere — so a run that could not compare must not read like one that did.
+# This fixture is the partial case by construction: five submodules against a registry
+# that pins forty-five, which used to print "✓ All 5 submodule pins match the registry".
+echo "[pin reporting]"
+PINS_OUT="$(cd "$KIT" && bash .claude/bin/skills.sh pins 2>&1)"
+# The same set cmd_pins counts: every tiered entry that is not an upstream pack, since
+# an upstream pack is fetched by commit and has no gitlink to compare in the first place.
+PINS_TOTAL="$(python3 -c 'import json, sys; print(sum(1 for e in json.load(open(sys.argv[1]))["entries"] if "tier" in e and "skills" not in e))' "$KIT/.claude/skills/skill-registry.json")"
+assert_contains "$PINS_OUT" "Checked 5 of $PINS_TOTAL" "skills.sh pins says how many of the pins it actually checked"
+assert_eq "${PINS_OUT#✓ }" "$PINS_OUT" "a partial check does not lead with the ✓ a clean one earns"
+assert_cmd_success "cd '$KIT' && bash .claude/bin/skills.sh pins" "a partial check still exits 0 (a pack-free tree is legitimate)"
+
+# A source with no git metadata at all — a tarball, a mirror, a fork with ext/ committed
+# as plain files. Nothing is verified; the old wording called that "nothing to check" and
+# install.sh printed it as a tick.
+TARBALL="$TEMP_DIR/kit-tarball"
+cp -R "$KIT" "$TARBALL"
+rm -rf "$TARBALL/.git"
+PINS_OUT="$(cd "$REPO_ROOT" && bash .claude/bin/skills.sh pins "$TARBALL" 2>&1)"
+assert_contains "$PINS_OUT" "Checked 0 of $PINS_TOTAL" "a source with no gitlinks reports 0 checked, not a pass"
+assert_eq "${PINS_OUT#✓ }" "$PINS_OUT" "...and does not lead with ✓"
+assert_contains "$PINS_OUT" "not a check" "...and says the registry's commits verified nothing here"
+
+# This repo is the full case: every pack is a gitlink, so the report earns its ✓. The
+# gitlinks are in the index whether or not the submodules are checked out, so this holds
+# in a bare worktree too; it is skipped only when the kit is not a git checkout at all.
+# Not skip(): print_summary's skip note names the submodule remedy, which is not this.
+if [ -e "$REPO_ROOT/.git" ]; then
+  PINS_OUT="$(cd "$REPO_ROOT" && bash .claude/bin/skills.sh pins 2>&1)"
+  assert_contains "$PINS_OUT" "✓ All $PINS_TOTAL submodule pins match the registry" "a source with every gitlink reports a clean check"
+else
+  echo "  (not checking the clean report: this kit is not a git checkout)"
+fi
+
+PIN_RENDER="$(bash "$REPO_ROOT/install.sh" "$(new_project pin-render)" 2>&1)"
+assert_contains "$PIN_RENDER" "! Checked 5 of $PINS_TOTAL" "install.sh renders a partial pin check as a warning"
+assert_eq "" "$(printf '%s\n' "$PIN_RENDER" | grep -F '✓ Checked' || true)" "...and never as a tick"
+
 # The registry pin is the only record of a pack's commit that reaches a project, so a kit
 # whose gitlink says something else must stop the install rather than vendor it quietly.
 echo "[pin mismatch]"
-PINS_OUT="$(cd "$KIT" && bash .claude/bin/skills.sh pins 2>&1)"
-assert_contains "$PINS_OUT" "match the registry" "skills.sh pins reports the synced fixture as matching"
 python3 - "$KIT/.claude/skills/skill-registry.json" <<'PY'
 import re, sys
 p = sys.argv[1]

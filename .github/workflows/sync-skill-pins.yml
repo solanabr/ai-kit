@@ -31,7 +31,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      # SHA-pinned like every other workflow: this is the only job in the repo with
+      # contents: write, so a mutable tag here is a third party's commit running against
+      # a push token. checkout v7 also refuses outright to check out a *fork* PR's code
+      # under workflow_run, which is the second layer under the dependabot/ branch filter
+      # above and the changed-files refusal below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_branch }}
           fetch-depth: 0

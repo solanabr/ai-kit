@@ -132,7 +132,7 @@ CORE="$(python3 -c 'import json, sys; print(" ".join(e["id"] for e in json.load(
 for id in $CORE; do cp -R "$REPO_ROOT/.claude/skills/ext/$id" "$KIT/.claude/skills/ext/"; done
 cp "$REPO_ROOT/CLAUDE-solana.md" "$REPO_ROOT/.mcp.json" "$REPO_ROOT/.env.example" "$REPO_ROOT/.gitmodules" "$KIT/"
 set_field "$KIT/.claude/skills/skill-registry.json" commit "\"$PIN\""
-install_kit() { SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$REPO_ROOT/install.sh" "$@" >/dev/null 2>&1; }
+install_kit() { SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$REPO_ROOT/install.sh" "$@" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh $*"; }
 new_project() { mkdir -p "$TEMP_DIR/$1" && git -C "$TEMP_DIR/$1" init -q && echo "$TEMP_DIR/$1"; }
 
 # --- Default install: top-level skills in .claude/skills/, copied unchanged ---
@@ -174,19 +174,19 @@ for name in $ALLOW; do
   check "A default install carries $name, with no --with and nothing to add" test -f "$P3/.claude/skills/$name/SKILL.md"
 done
 assert_contains "$(bash "$P3/.claude/bin/skills.sh" add "$PACK" 2>&1)" "already installed" "skills.sh add is a no-op once the install has it"
-SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 check "update.sh keeps $PACK" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
 printf '\nRevised upstream.\n' >> "$FIX/skills/$FIRST/SKILL.md"
 PIN2="$(fixture_commit revise)"
 set_field "$KIT/.claude/skills/skill-registry.json" commit "\"$PIN2\""
-SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 check "update.sh moves $PACK to the commit the new kit pins" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
 assert_file_contains "$P3/.claude/skills/$PACK.lock" "commit $PIN2" "...and records it in the lock"
 # A core pack is not held by extensions.txt, so editing that file cannot drop it, and
 # deleting its folders by hand lasts only until the next update: there is no opt-out.
 printf '# no extensions\n' > "$P3/.claude/skills/extensions.txt"
 rm -rf "${P3:?}/.claude/skills/${FIRST:?}"
-SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" >/dev/null 2>&1
+SOLANA_AI_KIT_LOCAL_SRC="$KIT" bash "$P3/.claude/bin/update.sh" > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 check "update.sh re-fetches $PACK after its folder is deleted, because it is core" diff -r "$FIX/skills/$FIRST" "$P3/.claude/skills/$FIRST"
 assert_file_contains "$P3/.claude/skills/$PACK.lock" "commit $PIN2" "...and its lock is back at the pinned commit"
 
@@ -268,7 +268,7 @@ echo "[anthropics/skills at the pin]"
 unset SOLANA_AI_KIT_PACK_MIRROR
 P5="$TEMP_DIR/upstream"
 mkdir -p "$P5/.claude/bin" "$P5/.claude/skills"
-cp "$SKILLS_SH" "$P5/.claude/bin/"
+cp "$SKILLS_SH" "$REPO_ROOT/.claude/bin/_pack_strip.sh" "$P5/.claude/bin/"
 cp "$REGISTRY" "$P5/.claude/skills/"
 upstream_add() { bash "$P5/.claude/bin/skills.sh" add "$PACK" >/dev/null 2>&1; }
 if upstream_add || upstream_add; then

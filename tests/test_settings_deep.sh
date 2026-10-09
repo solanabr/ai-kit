@@ -329,9 +329,20 @@ assert_eq "7" "$KEYGEN_FORMS" "every --force spelling in the corpus was evaluate
 assert_eq "1" "$(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | wc -l | tr -d ' ')" \
   "the rule surface treats every solana-keygen --force spelling alike (all $(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | tr -d '\n'), $KEYGEN_FORMS forms)"
 if [ "$ASK_LEN" = "0" ]; then
-  echo "        NOTE: permissions.ask is empty, and no shipped hook gates solana-keygen"
-  echo "              --force either — it runs under the Bash(solana-keygen *) allow rule."
-  echo "              Tracked as audit finding 1.2; this suite asserts uniformity, not a gate."
+  # No ask rules at this tier, so the gate has to be the secrets hook — and until rule
+  # set 5 it was not: this branch printed an unconditional PASS for a gate that did not
+  # exist. Assert the hook actually carries it. The behaviour (every force spelling
+  # denied, every -o spelling silent) is exercised in test_hooks.sh; this only checks
+  # that the mechanism the message names is present, which is what makes that PASS mean
+  # something when read here.
+  if grep -q 'c0 == "solana-keygen"' "$REPO_ROOT/.claude/hooks/secrets-guard.sh" 2>/dev/null; then
+    echo "  PASS: no ask rules at this tier, and secrets-guard.sh carries the solana-keygen --force gate"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: no ask rules at this tier and secrets-guard.sh has no solana-keygen gate — --force is unguarded"
+    FAIL=$((FAIL + 1))
+  fi
+  TOTAL=$((TOTAL + 1))
 else
   assert_eq "no" "$(gated "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" \
     "a new keypair at another path without --force stays prompt-free"

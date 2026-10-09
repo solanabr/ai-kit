@@ -38,7 +38,7 @@ Debug the failing transaction described in $ARGUMENTS. The answer the developer 
    | 2500-2506 | `require!` family (`require_eq!`, `require_keys_eq!`, `require_gt!`, ...) |
    | 3000s | Accounts: 3002 discriminator mismatch, 3003 did not deserialize, 3005 not enough keys, 3006 not mutable, 3007 owned by wrong program, 3010 not signer, 3012 not initialized |
    | 4100, 4102 | `DeclaredProgramIdMismatch`, `InvalidNumericConversion` |
-   | 6000+ | The program's `#[error_code]` enum (one per program in Anchor 1.x): variant index N - 6000. Report the variant, its `#[msg]` text and `file:line`. |
+   | 6000+ | The program's `#[error_code]` variants, at `offset` (default 6000) + discriminant: the variant's explicit `= N` if it sets one, else the previous variant's + 1. A second enum compiles fine and also defaults to 6000, so check every enum in the program — two whose ranges overlap decode to the same code. Report the variant, its `#[msg]` text and `file:line`. |
 
    Pinocchio/native: map `Custom(N)` to the program's error enum or constants; standard `ProgramError` variants map by name.
 5. **Replay** (optional in A, required in B). Run `surfpool start --rpc-url <rpc> --no-tui --no-deploy --skip-signature-verification --log-bytes-limit 0` in the background (`--network devnet` for devnet). `--no-deploy` keeps the on-chain program the user hit; drop it later to test the local fix. Execute with `simulateTransaction` (`sigVerify: false`, `replaceRecentBlockhash: true`, `encoding: "base64"`) or `surfnet_profileTransaction` (logs, CU, pre/post account snapshots); the kit's Surfpool MCP server exposes the same cheatcodes.

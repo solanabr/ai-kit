@@ -463,35 +463,43 @@ done
 # tier. That is why every Bash deny is identical at every tier, and the assertion below
 # is what keeps it that way.
 #
-# Two sanctioned exceptions, both safe for the same reason: firewall.sh writes one file
+# Three sanctioned exceptions, all safe for the same reason: firewall.sh writes one file
 # and subtracts exactly its recorded ruleIds, which the relaxed -> high -> relaxed and
 # high -> medium byte-identity tests above are the proof of.
 #   * MCP tool-name denies -- MCP rules have no argument form at all (a parenthesised
 #     mcp__ rule is skipped on load), so a tool-name deny is the only expressible gate.
 #   * The self-protection Edit denies, High only, because below High the kit defers to a
 #     user customizing their own installation.
-# Every Bash rule stays identical at every tier, and that is what this test pins: a Bash
-# deny is the one that most plausibly reaches user or managed scope by hand-copying,
-# where no descent can lift it.
+#   * Bash(gh api *) at Medium and High -- the ONE Bash rule in the corpus that varies,
+#     added in rule set 5.
+# A Bash deny is the one that most plausibly reaches user or managed scope by
+# hand-copying, where no descent can lift it, so the one that varies is pinned by exact
+# rule string and exact tier set rather than waved through by shape. A second one cannot
+# appear without this test being edited on purpose -- which is what caught the attempt to
+# lower Bash(git -C *) to High, since a -C prefix defeats every subcommand-anchored
+# destructive git glob and the rule has to stay tier-invariant.
 echo "[never-allowed set]"
-DENY_DRIFT="$(python3 -c "
+BASH_VARY="$(python3 -c "
 import json
-base = None
-drift = []
-for t in '$TIERS'.split():
+tiers = '$TIERS'.split()
+by = {}
+for t in tiers:
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
-    bash_only = sorted(r for r in deny if r.startswith('Bash('))
-    if base is None:
-        base = bash_only
-    elif bash_only != base:
-        drift.append(t)
-print(';'.join(drift) or 'none')" 2>/dev/null)"
-assert_eq "none" "$DENY_DRIFT" "every Bash permissions.deny entry is identical across all four tiers"
+    by[t] = {r for r in deny if r.startswith('Bash(')}
+union, common = set(), None
+for s in by.values():
+    union |= s
+    common = s if common is None else (common & s)
+print('; '.join('%s@%s' % (r, ','.join(t for t in tiers if r in by[t]))
+                for r in sorted(union - common)) or 'none')" 2>/dev/null)"
+assert_eq "Bash(gh api *)@medium,high" "$BASH_VARY" \
+  "exactly one Bash permissions.deny entry varies by tier, at exactly the intended tiers"
 
-# And the tier-varying remainder is exactly the two sanctioned groups -- nothing else may
-# start varying here without this test being updated on purpose.
+# And the tier-varying remainder is exactly the sanctioned set -- nothing else may start
+# varying here without this test being updated on purpose.
 VARY_KIND="$(python3 -c "
 import json
+ALLOWED = {'Bash(gh api *)'}
 sets = {}
 for t in '$TIERS'.split():
     deny = (json.load(open('$WORK/gen.%s.json' % t)).get('permissions') or {}).get('deny') or []
@@ -501,10 +509,11 @@ for s in sets.values():
     union |= s
     common = s if common is None else (common & s)
 varying = union - common
-bad = sorted(r for r in varying if not (r.startswith('mcp__') or r.startswith('Edit(')))
+bad = sorted(r for r in varying
+             if not (r.startswith('mcp__') or r.startswith('Edit(') or r in ALLOWED))
 print(' '.join(bad) or 'none')" 2>/dev/null)"
 assert_eq "none" "$VARY_KIND" \
-  "only MCP tool-name denies and self-protection Edit denies vary by tier"
+  "only MCP tool-name denies, self-protection Edit denies and the one named Bash rule vary by tier"
 
 # The unconditional group, by exact rule, at every tier. Each is here because it is not
 # "customizing your installation": a nested `claude -p --dangerously-skip-permissions`
@@ -580,15 +589,19 @@ for t in '$TIERS'.split():
                 bad.append('%s:%s' % (t, rule))
 print(';'.join(bad) or 'none')" 2>/dev/null)"
 assert_eq "none" "$MCP_PARENS" "no tier emits an mcp__ rule with parentheses"
-if [ "$DENY_DRIFT" != "none" ]; then
-  printf '    non-MCP deny drifted at: %s\n' "$DENY_DRIFT"
+if [ "$BASH_VARY" != "Bash(gh api *)@medium,high" ]; then
+  printf '    Bash denies that vary by tier: %s\n' "$BASH_VARY"
   printf '    mcp denies per tier: %s\n' "$MCP_BY_TIER"
 fi
 # A few members of that set, spot-checked once (the full list lives in the generator).
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)"; do
+for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
+         "Bash(git fetch *--upload-pack*)" "Bash(git fetch --upload-pack*)" \
+         "Bash(git push *--receive-pack*)" "Bash(git push --receive-pack*)" \
+         "Bash(git push *--exec*)" "Bash(git push --exec*)" \
+         "Bash(gh issue delete *)"; do
   TOTAL=$((TOTAL + 1))
   if printf '%s\n' "$DENY_LIVE" | grep -qxF "$r"; then
     echo "  PASS: the never-allowed set denies $r"
@@ -597,6 +610,38 @@ for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(
     echo "  FAIL: the never-allowed set is missing $r"
     FAIL=$((FAIL + 1))
   fi
+done
+
+# git -c and git -C are both denied at EVERY tier, and the second one is the easy rule to
+# mistake for lazy breadth. `-c` is arbitrary code execution via core.fsmonitor. `-C`
+# merely changes directory -- but every destructive git deny is a glob anchored on the
+# literal subcommand, so a `git -C <dir>` prefix sits in front and none of them match:
+# `git -C . clean -xdf` and `git -C . reflog expire --expire=now --all` both walk
+# straight through, and `-C .` needs no second repository so no sandbox fence is behind
+# it. Lowering this one rule would make the whole destructive-git set advisory below
+# High, which is why it is asserted here per tier rather than only spot-checked above.
+echo "[git -c and git -C are tier-invariant]"
+for t in $TIERS; do
+  PAIR="$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print('%s/%s' % ('deny' if 'Bash(git -c *)' in deny else 'allow',
+                 'deny' if 'Bash(git -C *)' in deny else 'allow'))" 2>/dev/null)"
+  assert_eq "deny/deny" "$PAIR" "$t: git -c and git -C both denied (a -C prefix defeats every destructive git glob)"
+done
+
+# gh api: the raw API route around every narrower gh deny, closed only where a tier
+# promises the agent cannot change the repository.
+echo "[gh api by tier]"
+for t in $TIERS; do
+  GHAPI="$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print('deny' if 'Bash(gh api *)' in deny else 'allow')" 2>/dev/null)"
+  case $t in
+    medium | high) assert_eq "deny" "$GHAPI" "$t: gh api denied (it reaches gh repo delete and gh secret set by API)" ;;
+    *)             assert_eq "allow" "$GHAPI" "$t: gh api allowed (relaxed is the CI tier and makes no such promise)" ;;
+  esac
 done
 # Self-protection uses Edit(...), not Read(...): a Read deny also blocks Edit and Write
 # but leaves NotebookEdit open, and would stop the kit reading its own config. Checked
