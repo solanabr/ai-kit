@@ -1,6 +1,5 @@
 ---
 description: "Update solana-ai-kit to latest version from upstream"
-model: sonnet
 disable-model-invocation: true
 ---
 

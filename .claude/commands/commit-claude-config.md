@@ -1,6 +1,5 @@
 ---
 description: "Un-ignore and commit the kit config dir, instruction file, .mcp.json, .gitmodules, policy"
-model: sonnet
 disable-model-invocation: true
 ---
 
