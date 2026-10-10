@@ -12,6 +12,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 ## Read before changing infrastructure
 
 - [deployment.md](../skills/deployment.md): devnet and mainnet flows, verifiable builds, Squads multisig upgrades, upgrade-authority staging, rollback, and the incident-response runbook (contain, scope, preserve, remediate, post-mortem)
+- [monitoring.md](../skills/monitoring.md): what to alert on after a deploy (ProgramData, admin calls, vault bands, invariants, oracle age), which service metrics to emit with thresholds in slots and days of runway, and how to wire webhooks or subscriptions to a channel
 - [/setup-ci-cd](../commands/setup-ci-cd.md) generates the kit's pipeline; [/deploy](../commands/deploy.md) runs program deploys
 - [compatibility-matrix.md](../skills/ext/solana-dev/skills/solana-dev/references/compatibility-matrix.md) for Anchor, Solana CLI, Rust and GLIBC pairings; [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md) for Surfpool in CI
 - [workers-best-practices](../skills/ext/cloudflare/skills/workers-best-practices/SKILL.md) and [wrangler](../skills/ext/cloudflare/skills/wrangler/SKILL.md): Workers APIs move quickly, so read these before writing Worker code (install first: `bash .claude/bin/skills.sh add cloudflare`)
@@ -30,7 +31,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 - Fail over across at least two RPC providers, judging health by slot lag against the others, not only HTTP status.
 - Broadcasting the same signed transaction through several providers is safe because the signature deduplicates it; re-signing with a new blockhash while the first copy may still land can execute twice.
 - RPC keys stay server-side (Worker secrets via `wrangler secret put`); `NEXT_PUBLIC_*` and `EXPO_PUBLIC_*` values ship to clients. Public RPC proxies need a method allowlist and rate limits.
-- Alert on program upgrades and upgrade-authority changes (watch the ProgramData account with a webhook, or poll `solana program show <PROGRAM_ID>`), on deployer and fee-payer balances, and on indexer lag.
+- Alert on program upgrades and upgrade-authority changes (watch the ProgramData account with a webhook, or poll `solana program show <PROGRAM_ID>`), on deployer and fee-payer balances, and on indexer lag; the full signal list and thresholds are in monitoring.md.
 
 ## Handoffs
 

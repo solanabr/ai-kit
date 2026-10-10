@@ -247,6 +247,7 @@ your-project/
 │   │   ├── frontend-design/  # anthropic-skills (core), with webapp-testing/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
+│   │   ├── monitoring.md     # Post-deploy alerts
 │   │   └── deployment.md     # Deploy workflows
 │   ├── security.json      # Firewall tier in force (Relaxed by default)
 │   └── settings.json      # Permissions, sandbox and hooks, generated from the tier
