@@ -86,6 +86,7 @@ The three cover different questions: `auditor-skill` the program's source, `sign
 ## Deploy, infra, backend
 
 - [deployment.md](deployment.md): devnet and mainnet flow, verifiable builds, Squads multisig upgrades, rollback
+- [deployment.md](deployment.md), "Incident response" section: an exploit or broken release on mainnet: contain, scope the loss, preserve evidence, remediate, post-mortem. User-facing comms: [incident-comms](ext/startup-builder/skills/incident-comms/SKILL.md) (install: `bash .claude/bin/skills.sh add startup-builder`)
 - [backend-async.md](backend-async.md): Rust services and indexers that talk to Solana
 - MCP server for a program or API: Anthropic's `mcp-builder`, no longer in core. `/plugin marketplace add anthropics/skills` then `/plugin install example-skills@anthropic-agent-skills` — per-user, so it costs a project nothing
 - [Cloudflare](ext/cloudflare/skills/) (install: `bash .claude/bin/skills.sh add cloudflare`): [workers-best-practices](ext/cloudflare/skills/workers-best-practices/), [agents-sdk](ext/cloudflare/skills/agents-sdk/), [sandbox-stable](ext/cloudflare/skills/sandbox-stable/), [durable-objects](ext/cloudflare/skills/durable-objects/), [wrangler](ext/cloudflare/skills/wrangler/)
