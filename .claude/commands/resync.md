@@ -1,6 +1,5 @@
 ---
 description: "Resync external skill submodules to latest upstream versions"
-model: sonnet
 disable-model-invocation: true
 ---
 

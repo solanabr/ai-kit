@@ -71,34 +71,24 @@ echo ""
 # `disable-model-invocation: true` is user-invoked by definition, so it is always mid-session
 # and must inherit. Asserted as the rule, not per command, so a new one is covered too.
 echo "[User-invoked commands inherit the session model]"
-# Four commands predate the rule and still pin `model: sonnet`; they are recorded here as
-# known debt rather than silently exempted, so anything NEW is caught. Removing a name from
-# this list is the fix, never adding one.
-MID_SESSION_KNOWN="cleanup.md commit-claude-config.md resync.md update.md"
 MID_SESSION_SWITCH=""
-MID_SESSION_DEBT=""
 for f in "$REPO_ROOT"/.claude/commands/*.md; do
   front="$(awk 'NR==1 && $0!="---"{exit} NR==1{next} $0=="---"{exit} {print}' "$f")"
   printf '%s' "$front" | grep -q '^disable-model-invocation:[[:space:]]*true' || continue
   model="$(fm_model "$f")"
   [ -z "$model" ] && continue
-  if [[ " $MID_SESSION_KNOWN " == *" $(basename "$f") "* ]]; then
-    MID_SESSION_DEBT="$MID_SESSION_DEBT $(basename "$f")"
-  else
-    MID_SESSION_SWITCH="$MID_SESSION_SWITCH
+  MID_SESSION_SWITCH="$MID_SESSION_SWITCH
 ${f#"$REPO_ROOT"/} (model: $model)"
-  fi
 done
 TOTAL=$((TOTAL + 1))
 if [ -z "$MID_SESSION_SWITCH" ]; then
-  echo "  PASS: no new disable-model-invocation command pins a model: (a mid-session switch drops the prompt cache)"
+  echo "  PASS: no disable-model-invocation command pins a model: (a mid-session switch drops the prompt cache)"
   PASS=$((PASS + 1))
 else
   echo "  FAIL: these user-invoked commands pin a model:, switching it mid-session:"
   printf '%s\n' "$MID_SESSION_SWITCH" | sed '/^$/d; s/^/    /'
   FAIL=$((FAIL + 1))
 fi
-[ -n "$MID_SESSION_DEBT" ] && echo "  NOTE: known debt, pre-dates the rule:$MID_SESSION_DEBT"
 echo ""
 
 echo "[No hardcoded Fable model]"

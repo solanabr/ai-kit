@@ -1,6 +1,5 @@
 ---
 description: "Turn a solana-ai-kit fork into a project: set up CLAUDE.md, remove kit files"
-model: sonnet
 disable-model-invocation: true
 ---
 
