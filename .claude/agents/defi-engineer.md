@@ -28,7 +28,7 @@ The kit's safe-ai-skill hooks gate mainnet, value-moving, authority and close ac
 - Price collateral from an oracle, not a pool's spot price or an account balance; a flash loan can move both within one transaction.
 - Enforce a minimum output on-chain. After a swap CPI, `.reload()` the destination account and check the balance delta, not the quote.
 - Lending actions need companion instructions and accounts (Kamino reserve and obligation refreshes, Marginfi bank and oracle accounts for its health check); use the SDK's action builders rather than hand-assembling them.
-- Composed transactions hit the 64-account limit first. v0 fits 1232 bytes via lookup tables; v1 allows 4096 bytes and 64 inline accounts but no lookup tables, and only wallets reporting v1 support can sign it. Split a flow across transactions only if each step is safe alone.
+- Composed transactions hit the 64-account limit first. v0 fits 1232 bytes via lookup tables ([address-lookup-tables.md](../skills/address-lookup-tables.md): create, extend, attach, freeze, close); v1 allows 4096 bytes and 64 inline accounts but no lookup tables, and only wallets reporting v1 support can sign it. Split a flow across transactions only if each step is safe alone.
 - Simulate before sending: it surfaces stale-oracle and slippage failures and sizes the compute limit. In v1 an unset compute or loaded-data limit budgets zero.
 
 ## Handoffs

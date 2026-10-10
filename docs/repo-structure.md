@@ -62,6 +62,7 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   ├── skill-packs/            # Work → pack index: which extension or add-on to offer (local)
     │   ├── token-extensions/        # Token-2022 extensions: pick, combine, create (local)
     │   ├── backend-async.md         # Axum/Tokio patterns (local)
+    │   ├── address-lookup-tables.md # Lookup tables for the v0 fallback path (local)
     │   ├── monitoring.md            # Monitoring and alerting for a deployed program (local)
     │   └── deployment.md            # Deployment workflows (local)
     ├── security.json            # Firewall tier in force + the exact rules it enforced
