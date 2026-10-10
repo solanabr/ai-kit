@@ -88,13 +88,15 @@ The operator runbook for a live exploit or a broken release: contain, scope, pre
 
 ### Before launch
 
-- For each lever in the table below that the program actually has, write down the signer and the exact command or Squads transaction, and execute it once on devnet. A lever nobody has run fails during the incident.
+- For each lever in the table below that the program actually has, write down the signer and the exact command or Squads transaction, and execute it once on devnet through the same signer path mainnet uses: a vault transaction for a vault-held authority, not the CLI with a stand-in keypair. A lever nobody has run fails during the incident.
 - A Squads v4 `time_lock` delays every execution by that many seconds after approval, with no override. If the upgrade authority sits behind one, give the pause authority to a separate multisig with no time lock and a lower threshold that holds nothing else.
 - Build and verify a halt binary (every instruction returns an error) next to each release, so containment by upgrade is a buffer write, not a coding task.
 
 ### 1. Contain
 
 Pick the lever with the smallest blast radius that stops the loss. There is no public mempool to watch; the attacker repeats the transaction every few slots until something fails it.
+
+The `spl-token` commands below work only when a keypair holds the authority. spl-token-cli 5.6.1 can't sign for a multisig, and `pause`/`resume` accept `--multisig-signer` but ignore it and send an under-signed transaction ([token-extensions](token-extensions/SKILL.md)). For a vault-held authority use the multisig path after the table.
 
 | Lever | Exists if | Signer | Stops |
 |---|---|---|---|
@@ -104,7 +106,7 @@ Pick the lever with the smallest blast radius that stops the loss. There is no p
 | `spl-token authorize <MINT> mint <NEW_KEY>` (or `freeze`, or a fee authority) | the authority key itself is compromised | current authority | that key's power; `--disable` instead of a new key is irreversible |
 | Upgrade to the halt binary | the program is upgradeable, not `--final` | upgrade authority | everything, withdrawals included; dump the binary first (step 3, seconds) |
 
-With a multisig authority, an emergency instruction takes the same path as an upgrade: build the instruction with the vault PDA as its authority (`program.methods.pause().accounts({ authority: vaultPda }).instruction()`), wrap it in a vault transaction, create the proposal, collect approvals to threshold and execute (Squads app transaction builder, or the [squads skill](ext/sendai/skills/squads/SKILL.md); install first: `bash .claude/bin/skills.sh add sendai`). Keep the instruction builder scripted and the members' signing devices reachable; collecting approvals is usually the slowest step.
+With a multisig authority, every lever takes the same path as an upgrade: build the instruction with the vault PDA as its authority, either the program's own (`program.methods.pause().accounts({ authority: vaultPda }).instruction()`) or a Token-2022 one from `@solana-program/token-2022` (`getPauseInstruction`, `getResumeInstruction`, `getFreezeAccountInstruction`, `getSetAuthorityInstruction`), then wrap it in a vault transaction, create the proposal, collect approvals to threshold and execute (Squads app transaction builder, or the [squads skill](ext/sendai/skills/squads/SKILL.md); install first: `bash .claude/bin/skills.sh add sendai`). Keep the instruction builder scripted and the members' signing devices reachable; collecting approvals is usually the slowest step.
 
 ### 2. Scope
 
