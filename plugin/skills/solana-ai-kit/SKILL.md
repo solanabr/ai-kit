@@ -16,6 +16,7 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 
 - [skill-registry.json](../skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Entries with a `tier` are the full install's pinned skill packs; their `source` is the upstream repo.
 - [address-lookup-tables.md](../address-lookup-tables.md): lookup tables for wallets without v1: create, extend, attach to a v0 message, freeze, close
+- [keeper-ops.md](../keeper-ops.md): keepers and cranks in production: race handling, one sender, slot schedules, profitability, bundles, signer limits
 - [monitoring.md](../monitoring.md): alerts for a deployed program: on-chain signals, service metrics and thresholds, wiring
 
 Kit reference files the agents and commands link to (plain files, not skills):

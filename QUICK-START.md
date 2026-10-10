@@ -248,6 +248,7 @@ your-project/
 │   │   ├── token-extensions/ # Token-2022 extensions skill
 │   │   ├── backend-async.md  # Axum/Tokio patterns
 │   │   ├── address-lookup-tables.md  # ALTs, v0 fallback
+│   │   ├── keeper-ops.md     # Keepers and cranks
 │   │   ├── monitoring.md     # Post-deploy alerts
 │   │   └── deployment.md     # Deploy workflows
 │   ├── security.json      # Firewall tier in force (Relaxed by default)
