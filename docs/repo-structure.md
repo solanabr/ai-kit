@@ -23,6 +23,7 @@ What is in the kit repository, which parts reach an installed project, and the w
 │   ├── claude.yml                   # @claude mention responder (issues/PRs)
 │   └── submodule-review.yml         # Flags risky content in ext/ pin bumps
 ├── .github/scripts/
+│   ├── codex-skill-budget.py        # Fails when Codex cuts a skill description (used by ci.yml)
 │   └── submodule-bump-review.sh     # Diff each bumped pack (used by submodule-review.yml)
 ├── .github/templates/
 │   └── claude-code.yml              # Claude Code action template (copy into a project's own workflows/)

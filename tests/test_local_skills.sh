@@ -21,7 +21,7 @@ echo "[test_local_skills] Kit-owned skills (.claude/skills/<name>/SKILL.md): fro
 # whatever the skills were actually doing unexamined. Demonstrated by moving the hub
 # aside: 18 checks became 5 and a planted name mismatch went green.
 SKILL_REPORT="$(python3 - "$REPO_ROOT" <<'PY'
-import glob, os, re, sys
+import glob, json, os, re, sys
 
 root = sys.argv[1]
 skills = os.path.join(root, ".claude", "skills")
@@ -86,6 +86,24 @@ for skill_md in sorted(glob.glob(os.path.join(skills, "*", "SKILL.md"))):
            ("" if not broken else " (broken: " + "; ".join(broken[:5]) + ")"))
     if uninit:
         report_skip(f"{name}: {uninit} links into ext/ packs that are not checked out")
+
+# The frontmatter name of the hub must not collide with a skill an install also registers.
+# Codex and opencode scan .agents/skills/ recursively, hub included; on a shared name
+# opencode keeps one entry, and it kept the short hub entry over the real description
+# of the solana-dev pack (#212). Checked against pack ids, local skill dirs and every
+# SKILL.md name under a checked-out ext/ pack.
+m = re.search(r"^name:\s*(.+)$", hub.split("\n---", 1)[0], re.M)
+hub_name = m.group(1).strip().strip("\"'") if m else ""
+registry = os.path.join(skills, "skill-registry.json")
+taken = {e["id"] for e in json.load(open(registry))["entries"]} if os.path.exists(registry) else set()
+taken |= {os.path.basename(os.path.dirname(p)) for p in glob.glob(os.path.join(skills, "*", "SKILL.md"))}
+for p in glob.glob(os.path.join(skills, "ext", "**", "SKILL.md"), recursive=True):
+    head = open(p, encoding="utf-8", errors="replace").read(4096)
+    n = re.search(r"^name:\s*(.+)$", head.split("\n---", 1)[0], re.M) if head.startswith("---") else None
+    if n:
+        taken.add(n.group(1).strip().strip("\"'"))
+report(bool(hub_name) and hub_name not in taken,
+       f"hub frontmatter name {hub_name} collides with no pack or skill name")
 PY
 )" || SKILL_REPORT="FAIL	the kit-skill checker crashed before reporting (see stderr above)"
 

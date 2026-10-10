@@ -1,5 +1,5 @@
 ---
-name: solana-dev
+name: solana-ai-kit
 description: Routing hub for Solana development. Maps a task to the one reference to read first in the ext/ skill submodules or the kit's local skills.
 user-invocable: true
 ---
