@@ -16,6 +16,10 @@ These load when the plugin is enabled. Commands and skills are namespaced under 
 
 - [skill-registry.json](../skill-registry.json): catalog of opt-in add-on skills, plugins and MCPs that are not bundled. Search it by domain or tag and run an entry's install command only after the user confirms and `safe-ai-skill add skill|mcp <source>` returns `proceed: true`. Entries with a `tier` are the full install's pinned skill packs; their `source` is the upstream repo.
 
+Kit reference files the agents and commands link to (plain files, not skills):
+
+- [deployment.md](../deployment.md): program deploys, upgrades, verifiable builds, rollback
+- [backend-async.md](../backend-async.md): Rust services and indexers that talk to Solana
 
 The kit's own [token-extensions](../token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the `install.sh` full install.
 
@@ -54,6 +58,8 @@ The plugin's agents, commands and bundled skills are the same files the full ins
 - General Solana work (the `solana-dev` pack: Anchor, Pinocchio, `@solana/kit`, testing, security): ask the bundled solana-dev MCP.
 - The exact file: the kit's site serves the packs under `https://aikit.superteam.codes/.claude/skills/ext`; append the part of the link that follows `ext` (for a folder link, its `SKILL.md`). If the site doesn't have it, use the pack's own repository, the `source` of its `skill-registry.json` entry (the folder after `ext` is the pack id); paths there can differ from the commit the kit pins.
 - Tell the user once that the full install (`install.sh`) puts the packs in the project, where these links and `skills.sh` work.
+
+Two kit files are full-install only as well: the `.claude/skills/SKILL.md` hub (this skill replaces it) and the `skill-packs` skill (pack discovery here is `skill-registry.json`).
 
 ## Task routing
 

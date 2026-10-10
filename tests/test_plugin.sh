@@ -116,38 +116,58 @@ done
 assert_cmd_success "[ -n '$PLUGIN_SKILLS' ]" "plugin ships at least one skill"
 HUB_NAME="$(sed -n 's/^name:[[:space:]]*//p' "$PLUGIN_HUB" 2>/dev/null | head -1 || true)"
 assert_eq "solana-ai-kit" "$HUB_NAME" "plugin hub frontmatter name matches its directory"
-# A skill's links are relative to its own directory, so each one must resolve from there —
-# and resolve to a path *inside* plugin/. The paths are normalised lexically, not with
-# stat(): a skill symlinked in from .claude/skills/ would otherwise have its `..` taken
-# from the real directory, so a link out to the full install's tree would look live here
-# and be dead for the reader. ext/ links are the one exception: the packs are absent by
-# construction and the hub's missing-link section is their next step ([ext fallback]).
-SKILL_LINK_REPORT="$(python3 - "$PLUGIN_DIR" <<'PY'
-import glob, os, re, sys
+# --- Every relative link in what a plugin install loads resolves inside plugin/ (#180) ---
+# plugin/agents and plugin/commands are the full install's files and the bundled skills are
+# symlinked in, so a link to a kit file the plugin does not ship is dead for the reader. A
+# link is relative to the file's own directory, and must resolve to a path *inside* plugin/.
+# The paths are normalised lexically, not with stat(): a skill symlinked in from
+# .claude/skills/ would otherwise have its `..` taken from the real directory, so a link out
+# to the full install's tree would look live here and be dead in a `cp -RL plugin/` copy.
+# ext/ links are the one exception: the packs are absent by construction and the hub's
+# missing-link section is their next step ([ext fallback]).
+echo "[plugin links]"
+LINK_CHECK="$(cat <<'PY'
+import os, re, sys
 plugin = os.path.abspath(sys.argv[1])
+files = []
+for sub in ("agents", "commands", "skills"):
+    for d, _, names in os.walk(os.path.join(plugin, sub), followlinks=True):
+        files += [os.path.join(d, n) for n in names if n.endswith(".md")]
 checked, bad = 0, []
-for skill in sorted(glob.glob(os.path.join(plugin, "skills", "*", "SKILL.md"))):
-    name = os.path.basename(os.path.dirname(skill))
+for f in sorted(files):
+    rel = os.path.relpath(f, plugin)
+    if re.search(r"(^|/)ext/", rel):
+        continue
     seen = set()
-    for link in re.findall(r"\]\(([^)\s]+)\)", open(skill, encoding="utf-8").read()):
-        link = link.split("#")[0]
-        if not link or link.startswith("http") or link in seen:
-            continue
-        seen.add(link)
-        if re.search(r"(^|/)ext/", link):
-            continue
-        checked += 1
-        target = os.path.normpath(os.path.join(plugin, "skills", name, link))
-        if not (target + os.sep).startswith(plugin + os.sep):
-            bad.append(f"skills/{name}: {link} escapes plugin/")
-        elif not os.path.exists(target):
-            bad.append(f"skills/{name}: {link} does not resolve inside plugin/")
+    for n, line in enumerate(open(f, encoding="utf-8"), 1):
+        for link in re.findall(r"\]\(([^)\s]+)\)", line):
+            link = link.split("#")[0]
+            if not link or re.match(r"[a-z][a-z0-9+.-]*:", link) or re.search(r"(^|/)ext/", link):
+                continue
+            checked += 1
+            target = os.path.normpath(os.path.join(os.path.dirname(f), link))
+            if not (target + os.sep).startswith(plugin + os.sep):
+                bad.append(f"{rel}:{n}: {link} escapes plugin/")
+            elif not os.path.exists(target):
+                bad.append(f"{rel}:{n}: {link} does not resolve inside plugin/")
 print(checked)
 print("\n".join(bad) or "OK")
 PY
 )"
-assert_eq "OK" "$(printf '%s\n' "$SKILL_LINK_REPORT" | tail -n +2)" "every non-ext link in a plugin skill resolves inside plugin/ ($(printf '%s\n' "$SKILL_LINK_REPORT" | head -1) links)"
-assert_cmd_success "[ $(printf '%s\n' "$SKILL_LINK_REPORT" | head -1) -gt 0 ]" "plugin skills have relative links to check"
+LINK_REPORT="$(python3 -c "$LINK_CHECK" "$PLUGIN_DIR")"
+LINK_COUNT="$(printf '%s\n' "$LINK_REPORT" | head -1)"
+LINK_BAD="$(printf '%s\n' "$LINK_REPORT" | tail -n +2)"
+assert_eq "OK" "$LINK_BAD" "every non-ext link in plugin agents, commands and skills resolves inside plugin/ ($LINK_COUNT links)"
+[ "$LINK_BAD" = "OK" ] || printf '%s\n' "$LINK_BAD" | sed 's/^/    /'
+assert_cmd_success "[ '$LINK_COUNT' -gt 0 ]" "plugin agents, commands and skills have relative links to check"
+# Control: a plugin tree with one link to a kit file it doesn't ship must fail the same check
+LINK_CTRL="$(mktemp -d)"
+mkdir -p "$LINK_CTRL/plugin/agents" "$LINK_CTRL/plugin/skills" "$LINK_CTRL/.claude/skills"
+: > "$LINK_CTRL/.claude/skills/kit-only.md"
+printf 'See [kit-only](../skills/kit-only.md) and [pack](../skills/ext/x/SKILL.md).\n' > "$LINK_CTRL/plugin/agents/a.md"
+CTRL_BAD="$(python3 -c "$LINK_CHECK" "$LINK_CTRL/plugin" | tail -n +2)"
+rm -rf "$LINK_CTRL"
+assert_eq "agents/a.md:1: ../skills/kit-only.md does not resolve inside plugin/" "$CTRL_BAD" "the link check flags a link to a kit file the plugin does not ship, and skips ext/"
 
 # --- docs/plugin.md's "ships the core kit" sentence names exactly the linked skills ---
 # #210 deleted three plugin skills and left the sentence claiming one of them. Compare the
@@ -277,7 +297,7 @@ plugin = sys.argv[1]
 reg = json.load(open(os.path.join(plugin, "skills", "skill-registry.json"), encoding="utf-8"))
 source = {e["id"]: e.get("source") or "" for e in reg["entries"] if "tier" in e}
 counts, bad = [], []
-for group, pattern in (("agents", "agents/*.md"), ("commands", "commands/*.md"), ("skills", "skills/*/**/*.md")):
+for group, pattern in (("agents", "agents/*.md"), ("commands", "commands/*.md"), ("skills", "skills/**/*.md")):
     links = 0
     for f in sorted(glob.glob(os.path.join(plugin, pattern), recursive=True)):
         for n, line in enumerate(open(f, encoding="utf-8"), 1):

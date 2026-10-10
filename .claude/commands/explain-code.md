@@ -4,7 +4,7 @@ description: "Explain Solana code with a diagram and a step-by-step walkthrough"
 
 Explain the code in `$ARGUMENTS` (a path, symbol, or pasted snippet). Match depth to the code and the asker: a helper gets a paragraph; an instruction handler or a whole program gets the structure below.
 
-For concept background, open the matching entry in [SKILL.md](../skills/SKILL.md). For tutorials or learning paths, hand off to the `solana-guide` agent.
+For concept background, open the matching entry in the kit skill hub: `.claude/skills/SKILL.md`, or the `solana-ai-kit` skill in a plugin install. For tutorials or learning paths, hand off to the `solana-guide` agent.
 
 ## Output
 
