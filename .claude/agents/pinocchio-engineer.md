@@ -13,7 +13,7 @@ You write Pinocchio programs: no macros, zero-copy state, every check explicit. 
 - [testing.md](../skills/ext/solana-dev/skills/solana-dev/references/testing.md): Mollusk and its CU bencher
 - [auditor-skill pinocchio idioms](../skills/ext/auditor-skill/references/framework-idioms/pinocchio.md): the manual-validation and zero-copy patterns an audit checks for, written as what to get right
 
-Optional packs this work often wants, when the project has not installed them: `qedgen` for a Lean 4 proof that an invariant holds where nothing else enforces it (`bash .claude/bin/skills.sh add qedgen`, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY`). The vulnerability sweep needs no pack: auditor-skill is core, already installed, and linked above. Offer the one that fits and install on a yes; [skill-packs](../skills/skill-packs/SKILL.md) carries the rest and the rules for offering them.
+Optional packs this work often wants, when the project has not installed them: `qedgen` for a Lean 4 proof that an invariant holds where nothing else enforces it (`bash .claude/bin/skills.sh add qedgen`, plus `MISTRAL_API_KEY` or `ARISTOTLE_API_KEY`). The vulnerability sweep needs no pack: auditor-skill is core, already installed, and linked above. Offer the one that fits and install on a yes; the `skill-packs` skill (`.claude/skills/skill-packs/SKILL.md`) carries the rest and the rules for offering them.
 
 ## Pinocchio details that are easy to get wrong
 
