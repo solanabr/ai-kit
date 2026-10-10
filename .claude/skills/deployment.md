@@ -1,6 +1,6 @@
 ---
 name: deployment
-description: "Program deployment runbook: devnet then mainnet, verifiable builds, Squads v4 multisig upgrades, upgrade-authority staging, rollback, and cost estimation."
+description: "Program deployment runbook: devnet then mainnet, verifiable builds, Squads v4 multisig upgrades, upgrade-authority staging, rollback, incident response, and cost estimation."
 ---
 
 # Deployment
@@ -80,6 +80,59 @@ Squads SDK details (vault PDA, proposals): [squads skill](ext/sendai/skills/squa
 - Rolling back is another upgrade to the previous binary through the same buffer and multisig flow (devnet: `anchor upgrade <old>.so --program-id <PROGRAM_ID> --provider.cluster devnet`).
 - The previous binary must still read current account layouts. Ship layout changes additively (version field, `realloc`) so rollback stays possible; strategies in [program-upgrade-guide.md](ext/solana-new/skills/launch/deploy-to-mainnet/references/program-upgrade-guide.md) (install first: `bash .claude/bin/skills.sh add solana-new`).
 - An emergency pause exists only if every instruction already checks a pause flag; design it in before launch. A `--final` program cannot be rolled back.
+- A rollback during an incident follows [Incident response](#incident-response): dump the running binary before upgrading over it.
+
+## Incident response
+
+The operator runbook for a live exploit or a broken release: contain, scope, preserve, remediate, post-mortem. What users are told, where and by when is [incident-comms](ext/startup-builder/skills/incident-comms/SKILL.md) (install first: `bash .claude/bin/skills.sh add startup-builder`); start it in the first minutes, in parallel, and announce each on-chain action below with its transaction link. Every mainnet write still needs the user's go-ahead: ask once per action, naming the command, the signer and what it stops.
+
+### Before launch
+
+- For each lever in the table below that the program actually has, write down the signer and the exact command or Squads transaction, and execute it once on devnet. A lever nobody has run fails during the incident.
+- A Squads v4 `time_lock` delays every execution by that many seconds after approval, with no override. If the upgrade authority sits behind one, give the pause authority to a separate multisig with no time lock and a lower threshold that holds nothing else.
+- Build and verify a halt binary (every instruction returns an error) next to each release, so containment by upgrade is a buffer write, not a coding task.
+
+### 1. Contain
+
+Pick the lever with the smallest blast radius that stops the loss. There is no public mempool to watch; the attacker repeats the transaction every few slots until something fails it.
+
+| Lever | Exists if | Signer | Stops |
+|---|---|---|---|
+| Program pause flag | every value-moving instruction checks it | pause authority | the program's own instructions; reversible |
+| `spl-token pause <MINT>` / `resume` | the mint has the Pausable extension ([token-extensions](token-extensions/SKILL.md)) | pause authority | mint, burn and transfer of that token everywhere, other protocols included |
+| `spl-token freeze <TOKEN_ACCOUNT>` | the mint has a freeze authority | freeze authority | the frozen accounts only; also catches proceeds still held in that mint |
+| `spl-token authorize <MINT> mint <NEW_KEY>` (or `freeze`, or a fee authority) | the authority key itself is compromised | current authority | that key's power; `--disable` instead of a new key is irreversible |
+| Upgrade to the halt binary | the program is upgradeable, not `--final` | upgrade authority | everything, withdrawals included; dump the binary first (step 3, seconds) |
+
+With a multisig authority, an emergency instruction takes the same path as an upgrade: build the instruction with the vault PDA as its authority (`program.methods.pause().accounts({ authority: vaultPda }).instruction()`), wrap it in a vault transaction, create the proposal, collect approvals to threshold and execute (Squads app transaction builder, or the [squads skill](ext/sendai/skills/squads/SKILL.md); install first: `bash .claude/bin/skills.sh add sendai`). Keep the instruction builder scripted and the members' signing devices reachable; collecting approvals is usually the slowest step.
+
+### 2. Scope
+
+- Enumerate the exploit transactions: page `getSignaturesForAddress(<PROGRAM_ID or vault>, { before, until })` (newest first, 1,000 per page) back to the first suspicious slot, keep `err: null`, and fetch each with `getTransaction` (`maxSupportedTransactionVersion: 1`). Group them by instruction and signer. A busy program outruns RPC history; query the indexer instead.
+- The loss per account is `meta.postTokenBalances` minus `meta.preTokenBalances` (lamports: `postBalances` minus `preBalances`) summed over those transactions. Follow the proceeds to their current accounts: that list feeds the freeze lever and counsel.
+- `/debug-user-tx <signature>` takes one transaction down to the handler and the failing check.
+- Confirm containment worked: no new successful transactions from the attacker's signers after the containment slot.
+
+### 3. Preserve evidence
+
+An upgrade overwrites the exploited binary, and RPC serves current account state only, so capture both before remediating:
+
+- `solana program dump <PROGRAM_ID> incident-<slot>.so -u mainnet-beta` and `solana-verify get-program-hash -um <PROGRAM_ID>`.
+- `solana account <ADDRESS> --output json -u mainnet-beta` for every affected account, and the pre-state of one exploit transaction with `surfnet_exportSnapshot` (`preTransaction` scope), as in `/debug-user-tx`'s replay step. That snapshot is the regression-test fixture.
+- Keep a UTC timeline as you go: detection, each action with its signature and slot, who signed.
+
+### 4. Remediate
+
+- Reproduce first: replay the exploit transaction against a Surfpool fork with the fixed binary loaded; it must fail on the new check. Run `/audit-solana` on the fix and the bug class, not only the line that broke.
+- Ship through the normal upgrade path above (buffer, `get-buffer-hash`, Squads). The fixed binary must still read current account layouts, the same constraint as a rollback.
+- Rotate every key the incident may have exposed. A compromised upgrade-authority key is a race: move the authority to the vault PDA (Upgrade-authority staging, step 2) before the attacker upgrades.
+- Unpause only after `get-program-hash` matches the reviewed build and the replay fails on mainnet state.
+
+### 5. Post-mortem and regression test
+
+- Technical post-mortem: the timeline, the root cause down to the missing check, the loss per account, what detection missed and how long containment took, and actions with owners. The user-facing account comes from incident-comms' postmortem template and links this one.
+- Hand the snapshot and the exploit transaction to `solana-qa-engineer`: a LiteSVM or Mollusk test that loads that pre-state and asserts the fixed program rejects the transaction.
+- Rehearse this section once a year on devnet (a tabletop: who signs what, in which order), and after any change of authorities.
 
 ## CI jobs
 
