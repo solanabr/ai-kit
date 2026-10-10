@@ -140,6 +140,14 @@ PM_CONTROL="$(pm_delegation "$PM_FIX")"
 assert_contains "$PM_CONTROL" "settings.json PreToolUse: npm run" "the delegation check reports a planted hook command"
 assert_contains "$PM_CONTROL" "planted-guard.sh: make" "the delegation check reports a planted guard script"
 
+# The heredoc classifier is one block carried by two guards until it can move into
+# lib-tokenize.awk (#166). A copy is a corpus that drifts, so the copies must match.
+hd_block() { awk '/^# ---- heredoc classifier/{p=1} /^# An interpreter.s heredoc/{p=0} p' "$1"; }
+HD_SEC="$(hd_block "$REPO_ROOT/.claude/hooks/secrets-guard.awk")"
+assert_eq "yes" "$([ -n "$HD_SEC" ] && echo yes || echo no)" "secrets-guard.awk carries the heredoc classifier"
+assert_eq "$HD_SEC" "$(hd_block "$REPO_ROOT/.claude/hooks/onchain-guard.awk")" \
+  "the heredoc classifier is identical in secrets-guard.awk and onchain-guard.awk"
+
 for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.json"; do
   NAME="${FILE#"$REPO_ROOT"/}"
   echo "[$NAME]"
@@ -221,12 +229,20 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
   done
   run "$CHAIN" "$WORK" "cat <<EOF${NL}\$(${DEPLOY})${NL}EOF"
   assert_contains "$OUT" '"permissionDecision":"ask"' "an unquoted heredoc still runs its \$(...), so that asks"
-  # Still open on #138: a heredoc BODY line that begins with a gated verb is matched as
-  # though it were a statement, because the gate anchors on ^ and never learns where the
-  # body starts. `cat > notes.md <<'EOF' ... --final ... EOF` is a hard exit 2 — writing a
-  # document is blocked — and a quoted delimiter's $(...) is asked about even though a
-  # quoted heredoc never expands it. Both need the body skipped, which is heredoc
-  # tracking, not statement normalisation.
+  # A heredoc body is reduced to what runs (#166). A document is data, so a body line that
+  # begins with a gated verb is not a statement, and a quoted delimiter's $(...) never
+  # expands. A body fed to a shell or an interpreter is code and is still matched.
+  for c in "cat > notes.md <<'EOF'${NL}${FINAL}${NL}EOF" "cat > notes.md <<EOF${NL}${FINAL}${NL}EOF" \
+           "cat > notes.md <<'EOF'${NL}\$(${FINAL})${NL}EOF" "git commit -F - <<'EOF'${NL}${FINAL}${NL}EOF" \
+           "cat <<'EOF' | tee notes.md${NL}${DEPLOY}${NL}EOF"; do
+    run "$CHAIN" "$WORK/mainnet" "$c"
+    assert_eq "0|" "$RC|$OUT$ERR" "a heredoc document is not a command: ${c//$NL/\\n}"
+  done
+  for c in "cat <<'EOF' | sh${NL}${FINAL}${NL}EOF" "python3 - <<'EOF'${NL}import os${NL}os.system(\"${FINAL}\")${NL}EOF" \
+           "cat > notes.md <<EOF${NL}\$(${FINAL})${NL}EOF" "cat > notes.md <<'EOF'${NL}doc${NL}EOF${NL}${FINAL}"; do
+    run "$CHAIN" "$WORK" "$c"
+    assert_eq "2" "$RC" "a heredoc that runs, or a command after one, is still blocked: ${c//$NL/\\n}"
+  done
 
   # Credential reads stay blocked however they are wrapped; mentions in data do not block.
   for c in "env FOO=1 cat ~/.ssh/id_rsa" "sh -c 'cat ~/.config/solana/id.json'" "cat \"\$HOME/.ssh/id_ed25519\"" \
@@ -236,20 +252,29 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
     run "$SECRETS" "$WORK" "$c"
     assert_eq "2" "$RC" "secrets gate blocks: ${c//$NL/\\n}"
   done
-  # Still open, and a miss rather than a false positive: a heredoc body whose delimiter is
-  # QUOTED is dropped as data even when the heredoc feeds an interpreter or a shell, so
-  # `python3 - <<'EOF' print(open('~/.ssh/id_rsa').read()) EOF` and
-  # `cat <<EOF | sh ... EOF` both pass. The body does execute in both. The head-command
-  # test looks at the head of the line, not at what the pipeline feeds.
+  # A heredoc that something runs is code whatever its quoting (#166): an interpreter or
+  # shell reading stdin, a later pipeline stage, an inline-code command it is spliced into,
+  # and an unquoted body's own $(...).
+  for c in "python3 - <<'EOF'${NL}print(open('/home/u/.ssh/id_rsa').read())${NL}EOF" \
+           "cat <<'EOF' | sh${NL}cat ~/.config/solana/id.json${NL}EOF" "bash <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" \
+           "node <<'EOF'${NL}require('fs').readFileSync(process.env.HOME + '/.aws/credentials')${NL}EOF" \
+           "bash -c \"\$(cat <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF${NL})\"" \
+           "cat > notes.md <<EOF${NL}key: \$(cat ~/.ssh/id_rsa)${NL}EOF" "git grep foo -- ~/.ssh/id_rsa"; do
+    run "$SECRETS" "$WORK" "$c"
+    assert_eq "2" "$RC" "secrets gate blocks: ${c//$NL/\\n}"
+  done
+  # Mentions are data: patterns of search tools (git grep and find's name tests included,
+  # #166) and heredoc bodies nothing runs.
   for c in "grep -rn '.config/solana/id.json' README.md .claude/" "rg -n '\\.ssh/' tests/" \
            "git commit -m 'docs: never cat ~/.ssh/id_rsa'" "gh issue create --title x --body 'gh auth token leaks'" \
-           "cat > doc.md <<'EOF'${NL}Do not cat ~/.config/solana/id.json${NL}EOF" "echo 'keys live in ~/.config/solana/id.json'"; do
+           "cat > doc.md <<'EOF'${NL}Do not cat ~/.config/solana/id.json${NL}EOF" "echo 'keys live in ~/.config/solana/id.json'" \
+           "git grep -n '.ssh/'" "git grep -n .ssh/ -- tests" "git -C . grep -e '.config/solana/id.json'" \
+           "find . -name '*.pem'" "python3 script.py <<'EOF'${NL}~/.ssh/id_rsa${NL}EOF" \
+           "cat <<'EOF' | tee notes.md${NL}cat ~/.ssh/id_rsa${NL}EOF" \
+           "git commit -m \"\$(cat <<'EOF'${NL}never cat ~/.ssh/id_rsa${NL}EOF${NL})\""; do
     run "$SECRETS" "$WORK" "$c"
     assert_eq "0|" "$RC|$OUT$ERR" "secrets gate is silent for a mention: ${c//$NL/\\n}"
   done
-  # Still open, as a false positive: `git grep -n '.ssh/' -- tests` is blocked. `git grep`
-  # is a pattern tool, but the gate only treats grep/rg/sed/awk/jq as such and reads
-  # git's first positional as a path.
 
   # Without jq the gates read the payload with awk and decode the JSON escapes themselves.
   HOOK_PATH="$WORK/nojq"
