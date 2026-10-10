@@ -239,7 +239,10 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
     assert_eq "0|" "$RC|$OUT$ERR" "a heredoc document is not a command: ${c//$NL/\\n}"
   done
   for c in "cat <<'EOF' | sh${NL}${FINAL}${NL}EOF" "python3 - <<'EOF'${NL}import os${NL}os.system(\"${FINAL}\")${NL}EOF" \
-           "cat > notes.md <<EOF${NL}\$(${FINAL})${NL}EOF" "cat > notes.md <<'EOF'${NL}doc${NL}EOF${NL}${FINAL}"; do
+           "cat > notes.md <<EOF${NL}\$(${FINAL})${NL}EOF" "cat > notes.md <<'EOF'${NL}doc${NL}EOF${NL}${FINAL}" \
+           "bash /dev/stdin <<'EOF'${NL}${FINAL}${NL}EOF" "sh /proc/self/fd/0 <<'EOF'${NL}${FINAL}${NL}EOF" \
+           "source /dev/stdin <<'EOF'${NL}${FINAL}${NL}EOF" ". /dev/fd/0 <<'EOF'${NL}${FINAL}${NL}EOF" \
+           "echo \"<<X\"${NL}${FINAL}" "echo '<<X' # <<Y${NL}${FINAL}"; do
     run "$CHAIN" "$WORK" "$c"
     assert_eq "2" "$RC" "a heredoc that runs, or a command after one, is still blocked: ${c//$NL/\\n}"
   done
@@ -259,7 +262,12 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
            "cat <<'EOF' | sh${NL}cat ~/.config/solana/id.json${NL}EOF" "bash <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" \
            "node <<'EOF'${NL}require('fs').readFileSync(process.env.HOME + '/.aws/credentials')${NL}EOF" \
            "bash -c \"\$(cat <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF${NL})\"" \
-           "cat > notes.md <<EOF${NL}key: \$(cat ~/.ssh/id_rsa)${NL}EOF" "git grep foo -- ~/.ssh/id_rsa"; do
+           "cat > notes.md <<EOF${NL}key: \$(cat ~/.ssh/id_rsa)${NL}EOF" "git grep foo -- ~/.ssh/id_rsa" \
+           "bash /dev/stdin <<'EOF'${NL}cat ~/.config/solana/id.json${NL}EOF" \
+           "python3 /dev/stdin <<'EOF'${NL}print(open('/home/u/.ssh/id_rsa').read())${NL}EOF" \
+           "sh /proc/self/fd/0 <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" "source /dev/stdin <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" \
+           ". /dev/fd/0 <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" "echo \"<<X\"${NL}cat ~/.config/solana/id.json" \
+           "echo 'a <<X b'${NL}cat ~/.ssh/id_rsa" "echo \"\$(echo '<<X')\"${NL}cat ~/.ssh/id_rsa"; do
     run "$SECRETS" "$WORK" "$c"
     assert_eq "2" "$RC" "secrets gate blocks: ${c//$NL/\\n}"
   done

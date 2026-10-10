@@ -115,13 +115,17 @@ function hd_inline_flag(w, t) {
   if (hd_shell(w)) return (t ~ /^-[A-Za-z]*c[A-Za-z]*$/)
   return (t ~ /^-[A-Za-z]*[ceEp]$/ || t == "-m" || t ~ /^--(eval|print)/ || (w == "php" && t == "-r"))
 }
+# hd_stdin_path — t names the process's own stdin, which `-` also means.
+function hd_stdin_path(t) { return (t == "-" || t == "/dev/stdin" || t == "/dev/fd/0" || t == "/proc/self/fd/0") }
 # hd_stdin_code — the command at T[ci] reads its program from stdin.
 function hd_stdin_code(T, n, ci,   w, sh, i, t) {
-  w = base(T[ci]); sh = hd_shell(w)
+  w = base(T[ci])
+  if (w == "source" || w == ".") return (ci < n && hd_stdin_path(T[ci + 1]))
+  sh = hd_shell(w)
   if (!sh && !hd_interp(w)) return 0
   for (i = ci + 1; i <= n; i++) {
     t = T[i]
-    if (t == "-") return 1
+    if (hd_stdin_path(t)) return 1
     if (t ~ /^-/) {
       if (hd_inline_flag(w, t)) return 0             # stdin is that program's data
       if (sh ? t == "-o" : t ~ /^-[WX]$/) i++          # options taking a value
@@ -175,12 +179,39 @@ function hd_subst(l,   out, i, j, c, d, L) {
   }
   return out
 }
+# hd_open — fills HD_P with the positions on l of each `<<` outside quotes and
+# comments, and returns how many.  HD_Q is the quoting still open from earlier
+# lines, as a stack: s '…', d "…", b `…`, p ( or $( (unquoted again inside "…").
+# A `<<` inside quotes is text: `echo "<<X"` opens no heredoc.
+function hd_open(l,   i, L, c, top, k) {
+  k = 0; L = length(l)
+  for (i = 1; i <= L; i++) {
+    c = substr(l, i, 1); top = substr(HD_Q, length(HD_Q))
+    if (top == "s") { if (c == SQ) HD_Q = substr(HD_Q, 1, length(HD_Q) - 1); continue }
+    if (c == "\\") { i++; continue }
+    if (top == "d") {
+      if (c == "\"") HD_Q = substr(HD_Q, 1, length(HD_Q) - 1)
+      else if (substr(l, i, 2) == "$(") { HD_Q = HD_Q "p"; i++ }
+      else if (c == "`") HD_Q = HD_Q "b"
+      continue
+    }
+    if (c == SQ) HD_Q = HD_Q "s"
+    else if (c == "\"") HD_Q = HD_Q "d"
+    else if (c == "`") HD_Q = (top == "b") ? substr(HD_Q, 1, length(HD_Q) - 1) : HD_Q "b"
+    else if (c == "(") HD_Q = HD_Q "p"
+    else if (c == ")") { if (top == "p") HD_Q = substr(HD_Q, 1, length(HD_Q) - 1) }
+    else if (c == "#" && (i == 1 || substr(l, i - 1, 1) ~ /[ \t;&|(]/)) break
+    else if (substr(l, i, 3) == "<<<") i += 2                   # a here-string
+    else if (substr(l, i, 2) == "<<") { HD_P[++k] = i; i++ }
+  }
+  return k
+}
 # hd_strip — the raw command with every heredoc body reduced to what runs.
-function hd_strip(raw,   text, delim, mode, who, nl, L, k, l, t, quoted, d, s, HD_DQ, HD_SQ, HD_BARE) {
+function hd_strip(raw,   text, delim, mode, who, nl, L, k, l, t, quoted, d, s, np, j, at, HD_DQ, HD_SQ, HD_BARE) {
   HD_DQ = "<<-?[ \t]*\"[A-Za-z_][A-Za-z0-9_]*\""
   HD_SQ = "<<-?[ \t]*" SQ "[A-Za-z_][A-Za-z0-9_]*" SQ
   HD_BARE = "<<-?[ \t]*[A-Za-z_][A-Za-z0-9_]*"
-  text = ""; delim = ""
+  text = ""; delim = ""; HD_Q = ""
   nl = split(raw, L, "\n")
   for (k = 1; k <= nl; k++) {
     l = L[k]
@@ -192,17 +223,20 @@ function hd_strip(raw,   text, delim, mode, who, nl, L, k, l, t, quoted, d, s, H
       else if (mode == "subst") { s = hd_subst(l); if (s != "") text = text s "\n" }
       continue
     }
-    quoted = 0
-    if (match(l, HD_DQ) || match(l, HD_SQ)) quoted = 1
-    else if (!match(l, HD_BARE)) RSTART = 0
-    if (RSTART > 1 && substr(l, RSTART - 1, 1) == "<") RSTART = 0    # <<< is a here-string
+    np = hd_open(l); RSTART = 0
+    for (j = 1; j <= np && RSTART == 0; j++) {
+      at = HD_P[j]; s = substr(l, at); quoted = 0
+      if (match(s, "^" HD_DQ) || match(s, "^" HD_SQ)) quoted = 1
+      else if (!match(s, "^" HD_BARE)) RSTART = 0
+      if (RSTART > 0) RSTART += at - 1
+    }
     if (RSTART > 0) {
       d = substr(l, RSTART, RLENGTH)
       sub(/^<<-?[ \t]*/, "", d); gsub(/"/, "", d); gsub(SQ, "", d)
       who = hd_consumer(substr(l, 1, RSTART - 1), substr(l, RSTART + RLENGTH))
       delim = d
       if (who == "") mode = quoted ? "drop" : "subst"
-      else mode = (hd_shell(who) || who == "eval") ? "shell" : "interp"
+      else mode = (hd_shell(who) || who == "eval" || who == "source" || who == ".") ? "shell" : "interp"
     }
     text = text l "\n"
   }
