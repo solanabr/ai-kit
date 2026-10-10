@@ -40,6 +40,7 @@ Anchor 1.x defaults this kit uses (not all spelled out upstream): SPL transfers 
 | Transactions, Kit and web3.js boundary | [kit-web3-interop.md](ext/solana-dev/skills/solana-dev/references/kit-web3-interop.md) |
 | web3.js to Kit migration | [solana-kit-migration/](ext/sendai/skills/solana-kit-migration/), [solana-kit/](ext/sendai/skills/solana-kit/) (install: `bash .claude/bin/skills.sh add sendai`) |
 | Clients generated from an IDL (Codama, Shank) | [idl-codegen.md](ext/solana-dev/skills/solana-dev/references/idl-codegen.md) |
+| Lookup tables on the v0 fallback path (wallet without v1, transaction over 1,232 bytes): create, extend, attach, freeze, close | [address-lookup-tables.md](address-lookup-tables.md) |
 | Payments, Solana Pay, Kora | [payments.md](ext/solana-dev/skills/solana-dev/references/payments.md) |
 | Official doc links | [resources.md](ext/solana-dev/skills/solana-dev/references/resources.md) |
 | Vercel, Next.js, AI SDK, v0 | [ext/vercel/skills/](ext/vercel/skills/) from [Vercel](ext/vercel/) (install: `bash .claude/bin/skills.sh add vercel`) |

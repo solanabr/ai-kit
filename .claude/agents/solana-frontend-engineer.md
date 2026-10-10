@@ -28,7 +28,7 @@ A landing page, marketing site or any surface where the look carries weight star
 - Show each stage: awaiting signature, submitted (signature and explorer link right away), confirmed. A rejected signature is a normal outcome, not an error.
 - Update the UI at `confirmed`; do not hold users until `finalized`.
 - A blockhash lasts about 60-90 seconds. Rebroadcasting the same signed transaction is safe until then; once the block height passes `lastValidBlockHeight` it cannot land, so rebuild with a fresh blockhash and ask for a new signature.
-- `client.sendTransaction` plans transaction v1. Check `connected.supportedTransactionVersions.has(1)`; route wallets without v1 through a `version: 0` client or show an upgrade prompt.
+- `client.sendTransaction` plans transaction v1. Check `connected.supportedTransactionVersions.has(1)`; route wallets without v1 through a `version: 0` client or show an upgrade prompt. A v0 transaction over 1,232 bytes needs a lookup table built ahead of time: [address-lookup-tables.md](../skills/address-lookup-tables.md).
 - A hand-built v1 message budgets zero compute and loaded account data unless set: estimate both with Kit's resource estimator, and set the priority fee as a total with `setTransactionMessagePriorityFeeLamports` (the per-CU price setter is v0 only).
 - `NEXT_PUBLIC_*` values ship in the bundle, so route keyed RPC URLs through a server route or worker.
 
