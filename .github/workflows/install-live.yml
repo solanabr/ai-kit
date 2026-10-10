@@ -1,0 +1,46 @@
+name: Live install
+
+# Every CI install sets SOLANA_AI_KIT_LOCAL_SRC, so the path users take — the published
+# one-liner cloning the latest tag, then fetching only the packs it keeps — never runs
+# there (#113). This job runs that path un-mocked and checks the result against the
+# README on main: a stale release, a --with that installs nothing, or a pack fetch that
+# silently fails turns this red instead of landing in a user's project. Red after a
+# count changed on main, with nothing else wrong, means the release is behind: tag it.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      NO_COLOR: "1"
+      # jupiter: a small extension, so --with is exercised without a long fetch.
+      EXT: jupiter
+    steps:
+      # Only for the README and the check script; the install itself fetches nothing
+      # from this checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install with the published one-liner
+        run: |
+          unset SOLANA_AI_KIT_LOCAL_SRC SOLANA_CLAUDE_LOCAL_SRC SOLANA_AI_KIT_UPSTREAM
+          T="$RUNNER_TEMP/proj"; mkdir -p "$T"; git -C "$T" init -q
+          curl -fsSL https://aikit.superteam.codes | bash -s -- --with "$EXT" "$T"
+
+      - name: The installed tree matches the docs
+        run: |
+          tag="$(git ls-remote --tags --sort=-v:refname https://github.com/solanabr/ai-kit.git 'refs/tags/v*' \
+            | head -1 | sed 's|.*refs/tags/v||; s|\^{}||')"
+          bash .github/scripts/check-install.sh "$RUNNER_TEMP/proj" "$EXT" "$tag"

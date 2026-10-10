@@ -21,8 +21,10 @@ What is in the kit repository, which parts reach an installed project, and the w
 │   ├── ci.yml                       # PR validation
 │   ├── claude-code-review.yml       # Automatic Claude review of every PR (advisory)
 │   ├── claude.yml                   # @claude mention responder (issues/PRs)
+│   ├── install-live.yml             # Nightly un-mocked install from the one-liner, checked against the docs
 │   └── submodule-review.yml         # Flags risky content in ext/ pin bumps
 ├── .github/scripts/
+│   ├── check-install.sh             # Installed tree vs README counts (used by install-live.yml)
 │   ├── codex-skill-budget.py        # Fails when Codex cuts a skill description (used by ci.yml)
 │   └── submodule-bump-review.sh     # Diff each bumped pack (used by submodule-review.yml)
 ├── .github/templates/
