@@ -82,6 +82,8 @@ jobs:
   # The real clients discover the --agents install (no API key, no model calls).
   agents-mode-clients:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -100,10 +102,15 @@ jobs:
       - name: Install pinned opencode and Codex CLIs
         run: npm install -g opencode-ai@1.18.32 @openai/codex@0.156.1 --no-audit --no-fund
 
-      - name: Agents-mode install
+      - name: Agents-mode installs (default, near the Codex budget, over it)
         run: |
-          T="$RUNNER_TEMP/proj"; mkdir -p "$T"; git -C "$T" init -q
-          bash install.sh --agents "$T" > /dev/null
+          # big: 42 project skills, the most measured with every description whole
+          # (#212). over: sendai alone registers 57 and Codex cuts 11 of them.
+          for p in proj:'' big:helius,solana-mobile,light-protocol,jupiter over:sendai; do
+            T="$RUNNER_TEMP/${p%%:*}"; packs="${p#*:}"
+            mkdir -p "$T"; git -C "$T" init -q
+            bash install.sh --agents ${packs:+--with "$packs"} "$T" > /dev/null
+          done
 
       - name: opencode discovers the kit skills in .agents/skills
         run: |
@@ -121,8 +128,7 @@ jobs:
           # on — a core pack that is a submodule, so a failed fetch aborts the install
           # and this cannot flake on an absent pack (anthropic-skills only warns), and
           # the one core pack whose SKILL.md sits at its root, so the path does not
-          # encode the pack's inner layout. Not solana-dev: the hub SKILL.md declares
-          # that name too, and which of the two a client reports is scan-order dependent.
+          # encode the pack's inner layout.
           grep -q '/\.agents/skills/ext/auditor-skill/SKILL\.md' "$RUNNER_TEMP/opencode-skills.json" \
             || { echo "::error::opencode did not discover the auditor-skill pack"; head -c 3000 "$RUNNER_TEMP/opencode-skills.json"; exit 1; }
 
@@ -140,3 +146,17 @@ jobs:
           # positive — CLAUDE-solana.md, which becomes AGENTS.md here, never names it.
           grep -q 'auditor-skill' "$RUNNER_TEMP/codex-prompt.json" \
             || { echo "::error::Codex did not list the auditor-skill pack"; head -c 3000 "$RUNNER_TEMP/codex-prompt.json"; exit 1; }
+
+      # A name survives when Codex empties or cuts its description, so the steps above
+      # cannot see the shared budget running out (#212). Compare each description with
+      # its SKILL.md instead; the over-budget install proves the check still sees a cut.
+      - name: Codex keeps every project skill description whole
+        run: |
+          check() {
+            ( cd "$RUNNER_TEMP/$1" && timeout 300 codex debug prompt-input "hello" > "$RUNNER_TEMP/codex-$1.json" ) || return 3
+            python3 .github/scripts/codex-skill-budget.py "$RUNNER_TEMP/codex-$1.json" "$RUNNER_TEMP/$1/.agents/skills" "$2"
+          }
+          check proj 8 || { echo "::error::Codex shortened a description in the default --agents install"; exit 1; }
+          check big 40 || { echo "::error::Codex shortened a description with four Solana packs; the kit is past the skill budget"; exit 1; }
+          rc=0; check over 50 || rc=$?
+          [ "$rc" -eq 1 ] || { echo "::error::the budget check did not flag sendai's 57 skills (exit $rc); has Codex's output format changed?"; exit 1; }
