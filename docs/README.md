@@ -7,7 +7,7 @@ This directory is the kit's full spec: everything the [README](../README.md) lin
 | [install.md](install.md) | Every install route in full: installer variants, pinning a release from a clone, `--agents` for Codex and opencode, the no-install route, GitHub template, updating |
 | [plugin.md](plugin.md) | The Claude Code plugin route, why it is not recommended, and how to keep the exposure small if you use it |
 | [firewall.md](firewall.md) | The permission and safety gates, how a tier is generated, and — at length — what the tiers do not do |
-| [agents-and-commands.md](agents-and-commands.md) | All 15 agents with the model each runs on, all 32 commands, agent teams and team patterns |
+| [agents-and-commands.md](agents-and-commands.md) | All 15 agents with the model each runs on, all 33 commands, agent teams and team patterns |
 | [skill-packs.md](skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry, Anthropic's skills |
 | [other-agents.md](other-agents.md) | Codex, Grok Build, Cursor, Copilot, Gemini CLI, opencode: what each actually enforces |
 | [configuration.md](configuration.md) | MCP servers including the opt-in ones, the Claude Code plugins worth installing, and the settings the kit deliberately leaves to you |

@@ -35,7 +35,7 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   ├── resync.sh                # Submodule resync script
     │   ├── firewall.sh              # Generates a tier's permission + sandbox rules
     │   └── skills.sh                # List skill packs, install extensions on demand
-    ├── commands/                # 32 workflow commands
+    ├── commands/                # 33 workflow commands
     ├── hooks/                   # PreToolUse/SessionStart gate scripts
     ├── skills/                  # Progressive-loading knowledge
     │   ├── SKILL.md                 # Unified hub routing to all skills
@@ -114,3 +114,5 @@ git diff main...HEAD
 Remove: excessive comments, abnormal try/catch blocks, verbose errors, redundant validation.
 
 Keep: legitimate security checks, non-obvious explanations, matching error patterns.
+
+Then `/pr-description` writes the PR title and body from that diff and the test output you ran.

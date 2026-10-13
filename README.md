@@ -8,7 +8,7 @@
 ![Solana](https://img.shields.io/badge/Solana-black?logo=solana)
 ![Claude Code](https://img.shields.io/badge/Claude_Code-powered-orange)
 
-**Claude Code, set up to ship on Solana.** Not programs alone — the whole lifecycle: validating the idea, building the program and the app around it, shipping it, and the launch and growth work that follows. One command installs 15 specialized agents, 32 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 4 MCP servers for on-chain data, live docs and context compression, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
+**Claude Code, set up to ship on Solana.** Not programs alone — the whole lifecycle: validating the idea, building the program and the app around it, shipping it, and the launch and growth work that follows. One command installs 15 specialized agents, 33 workflow commands, skill packs pinned — and scanned — at a commit from the ecosystem's own repositories, 4 MCP servers for on-chain data, live docs and context compression, and a firewall that gates mainnet deploys, secret reads and destructive commands. Almost none of it loads until a task needs it.
 
 ```bash
 curl -fsSL https://aikit.superteam.codes | bash
@@ -21,7 +21,7 @@ Run it from your project's root — it installs into the current directory. Ever
 A complete `.claude/` configuration that turns Claude into a Solana building partner across that whole lifecycle, not program code alone:
 
 - **15 specialized agents** for different tasks (architecture, Anchor, Pinocchio, DeFi, tokens, frontend, mobile, backend, DevOps, QA, docs, games, Unity, learning, research) — [full table](docs/agents-and-commands.md#agents)
-- **32 workflow commands** for building, testing, deploying, profiling, migrating, and committing — [full table](docs/agents-and-commands.md#commands)
+- **33 workflow commands** for building, testing, deploying, profiling, migrating, committing, and writing the PR — [full table](docs/agents-and-commands.md#commands)
 - **4 MCP servers** on by default for on-chain data (Helius), Solana docs (solana-dev), library docs (Context7) and context optimization (context-mode), plus opt-in browser automation (Playwright) and local-validator / mainnet-fork control (Surfpool)
 - **Four firewall tiers** (Off / Relaxed / Medium / High, default Relaxed) gating file access, destructive commands, egress and `context-mode`'s code executor — pick one with `/firewall`, see [Firewall tiers](#firewall-tiers)
 - **The [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) security firewall** (core): hooks that gate mainnet, value-moving and authority actions and secret reads, and pin installed skills and MCPs at session start
@@ -181,7 +181,7 @@ Which gate stops what, how a tier is generated, and — at length — **what the
 |----------|----------------|
 | [install.md](docs/install.md) | Every install route in full, pinning a release, `--agents`, the no-install route, GitHub template, updating |
 | [firewall.md](docs/firewall.md) | Permission and safety gates, tier generation, and the limits of all of it |
-| [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 32 commands, agent teams |
+| [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 33 commands, agent teams |
 | [skill-packs.md](docs/skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry |
 | [other-agents.md](docs/other-agents.md) | Codex, Grok Build, Cursor, Gemini CLI, opencode: what each one actually enforces |
 | [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, the standard plugins and the optional ones with what each costs per session, and the settings the kit leaves to you |
