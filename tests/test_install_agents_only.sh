@@ -445,6 +445,58 @@ assert_contains "$(sed -n '/^cmd_add()/,/^}/p' "$REPO_ROOT/.claude/bin/skills.sh
 assert_contains "$(sed -n '/^cmd_prune()/,/^}/p' "$REPO_ROOT/.claude/bin/skills.sh")" "cmd_budget" "skills.sh prune (/update) runs the budget check"
 assert_file_contains "$REPO_ROOT/install.sh" 'skills.sh" budget' "install.sh --agents runs the budget check"
 
+# ── Skills a pack ships twice (#212) ────────────────────────────────────────
+# alchemy, mongodb and redis ship each skill under skills/ and again under
+# plugins/<p>/skills/, so Codex registered every copy. budget removes a copy that is
+# byte-identical to another of that name in the same pack, keeping a copy the kit links
+# to, else the shallowest; it keeps anything that differs and names the rest.
+echo "[duplicate skill names]"
+skill_copy() {  # skill_copy <dir> <name> [extra file]: a SKILL.md named <name>, plus ref.md
+  mkdir -p "$1"
+  printf -- '---\nname: %s\ndescription: d\n---\n' "$2" > "$1/SKILL.md"
+  echo "ref" > "$1/ref.md"
+  if [ -n "${3:-}" ]; then echo "x" > "$1/$3"; fi
+}
+dupe_dir() {  # dupe_dir <dir> <config name>
+  local s="$1/$2/skills" p="$1/$2/skills/ext/p"
+  budget_dir "$1" "$2" 0
+  skill_copy "$p/skills/same" same;    skill_copy "$p/plugins/x/skills/same" same
+  skill_copy "$p/plugins/y/skills/same" same
+  skill_copy "$p/skills/linked" linked; skill_copy "$p/plugins/x/skills/linked" linked
+  skill_copy "$p/skills/extra" extra;   skill_copy "$p/plugins/x/skills/extra" extra more.md
+  skill_copy "$p/skills/differs" differs; skill_copy "$p/plugins/x/skills/differs" differs
+  echo "other" > "$p/plugins/x/skills/differs/ref.md"
+  skill_copy "$s/ext/q" rooty;          skill_copy "$s/ext/q/plugins/r/skills/rooty" rooty
+  skill_copy "$s/ext/p2/skills/same" same   # same content, other pack: not this pack's copy
+  echo "[linked](ext/p/plugins/x/skills/linked/SKILL.md)" > "$s/HUB.md"
+}
+dupe_dir "$WORK/d-agents" .agents
+dupe_dir "$WORK/d-claude" .claude
+P="$WORK/d-agents/.agents/skills/ext/p"
+DUPE_OUT="$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>"$WORK/d-agents.err")"
+assert_contains "$DUPE_OUT" "Removed 4 duplicate skill copies" "budget removes the four byte-identical copies"
+assert_file_exists "$P/skills/same/SKILL.md" "the shallowest identical copy is kept"
+assert_dir_not_exists "$P/plugins/x/skills/same" "...and the deeper identical copies go"
+assert_dir_not_exists "$P/plugins/y/skills/same" "...every one of them"
+assert_file_exists "$P/plugins/x/skills/linked/SKILL.md" "the copy a kit file links to is kept, though deeper"
+assert_dir_not_exists "$P/skills/linked" "...and the unlinked identical copy goes"
+assert_file_exists "$P/plugins/x/skills/extra/more.md" "a copy with a file the other lacks is kept"
+assert_file_exists "$P/skills/extra/SKILL.md" "...and so is the copy it extends"
+assert_file_exists "$P/plugins/x/skills/differs/SKILL.md" "copies whose files differ are both kept"
+assert_file_exists "$P/skills/differs/SKILL.md" "...the other one too"
+assert_file_exists "$WORK/d-agents/.agents/skills/ext/q/SKILL.md" "a pack's root skill is kept"
+assert_dir_not_exists "$WORK/d-agents/.agents/skills/ext/q/plugins/r/skills/rooty" "...and its identical nested copy goes"
+assert_file_exists "$WORK/d-agents/.agents/skills/ext/p2/skills/same/SKILL.md" "an identical skill in another pack is not removed"
+DUPES="$(bash "$WORK/d-agents/.agents/bin/skills.sh" duplicates)"
+assert_eq "differs (ext/p/plugins/x/skills/differs, ext/p/skills/differs)
+extra (ext/p/plugins/x/skills/extra, ext/p/skills/extra)
+same (ext/p/skills/same, ext/p2/skills/same)" "$DUPES" "duplicates lists each name still registered twice, with its copies"
+assert_file_contains "$WORK/d-agents.err" "3 skill names are registered more than once" "budget warns on stderr about the names left"
+assert_file_contains "$WORK/d-agents.err" "skills.sh duplicates" "...and says how to see where they come from"
+assert_eq "" "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>/dev/null)" "a second run removes nothing"
+assert_eq "" "$(bash "$WORK/d-claude/.claude/bin/skills.sh" budget 2>&1)" "a .claude/ install is left as pinned, silently"
+assert_dir_exists "$WORK/d-claude/.claude/skills/ext/p/plugins/x/skills/same" "...every copy still there"
+
 # ── An --agents install that still lists AGENTS.md in the gitignore block ─────
 # Every --agents install made before AGENTS.md left the block still lists it there, so
 # Grok Build gets no house rules until it goes. /update and a re-install take it out of

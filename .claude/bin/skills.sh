@@ -25,6 +25,7 @@ set -euo pipefail
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
 #   skills.sh pins [--write] [<kit repo root>]                      # registry pins vs the gitlinks (maintainers, CI)
 #   skills.sh budget                                                # --agents: warn past Codex's skill budget
+#   skills.sh duplicates                                            # --agents: skill names registered more than once
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
 # those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
@@ -729,9 +730,96 @@ registered_skills() {
   find "$1/skills" -mindepth 1 -name '.*' -prune -o -name SKILL.md -print 2>/dev/null | wc -l | tr -d ' '
 }
 
+same_skill_copy() {  # same_skill_copy <copy> <kept>: every file in <copy> is in <kept>, byte-identical
+  local f
+  [ -z "$(find "$1" -type l -print -quit)" ] || return 1
+  while IFS= read -r f; do
+    cmp -s "$1/$f" "$2/$f" || return 1
+  done < <(cd "$1" && find . -type f)
+}
+
+kit_links_to() {  # kit_links_to <cfg> <path under skills/>: a kit file outside ext/ names it
+  grep -rqF --exclude-dir=ext -- "$2/" "$1" 2>/dev/null \
+    || grep -qF -- "$2/" "$1/../AGENTS.md" 2>/dev/null
+}
+
+# Some packs ship the same skill twice or three times, one copy per layout they publish
+# — skills/<name>/ for Agent Skills clients and plugins/<p>/skills/<name>/ for a Claude
+# Code plugin (alchemy, mongodb, redis). Codex and opencode find SKILL.md at any depth,
+# so under .agents/ each copy registers under the same name (#212): Codex lists every
+# copy and pays a share of its budget for each, while opencode keeps one per name.
+# Within one pack, a copy whose every file is byte-identical to a file in another
+# copy of that name is removed from this install, keeping one: a copy the kit links
+# to, otherwise the shallowest, then the first by path. Nothing that differs is
+# removed, nor a pack's root or a copy any kit file links to, so no content and no
+# kit link is lost. Only for .agents/ (cmd_budget): Claude Code does not register
+# skills nested inside ext/, and a .claude/ install keeps each pack exactly as pinned.
+# Prints how many copies it removed.
+drop_duplicate_skills() {
+  local cfg="$1" tab pack id rows name copies kept rel removed=0
+  tab="$(printf '\t')"
+  for pack in "$cfg"/skills/ext/*/; do
+    [ -d "$pack" ] || continue
+    pack="${pack%/}"
+    id="$(basename "$pack")"
+    # name<TAB>depth<TAB>dir (relative to the pack, "." for its root) of every SKILL.md.
+    rows="$(find "$pack" -mindepth 1 -name '.*' -prune -o -name SKILL.md -print 2>/dev/null \
+      | while IFS= read -r rel; do
+          rel="$(dirname "$rel")"; rel="${rel#"$pack"}"; rel="${rel#/}"; rel="${rel:-.}"
+          printf '%s\t%s\t%s\n' "$(skill_name "$pack/$rel/SKILL.md")" \
+            "$(printf '%s' "$rel" | tr -cd / | wc -c | tr -d ' ')" "$rel"
+        done | LC_ALL=C sort -t "$tab" -k1,1 -k2,2n -k3,3)"
+    for name in $(printf '%s\n' "$rows" | cut -f1 | awk 'NF' | uniq -d); do
+      valid_name "$name" || continue
+      copies="$(printf '%s\n' "$rows" | awk -F'\t' -v n="$name" '$1 == n { print $3 }')"
+      kept=""
+      while IFS= read -r rel; do
+        if [ "$rel" != . ] && kit_links_to "$cfg" "ext/$id/$rel"; then kept="$rel"; break; fi
+      done <<< "$copies"
+      [ -n "$kept" ] || kept="$(printf '%s\n' "$copies" | sed -n 1p)"
+      while IFS= read -r rel; do
+        [ "$rel" != "$kept" ] && [ "$rel" != . ] || continue
+        case "$kept/" in "$rel"/*) continue ;; esac   # holds the kept copy
+        if kit_links_to "$cfg" "ext/$id/$rel"; then continue; fi
+        same_skill_copy "$pack/$rel" "$pack/$kept" || continue
+        rm -rf "${pack:?}/${rel:?}"
+        removed=$((removed + 1))
+      done <<< "$copies"
+    done
+  done
+  echo "$removed"
+}
+
+# Names still registered more than once from skills/: different skills that share a
+# name, across packs (helius in helius and sendai) or within one (helius's per-harness
+# variants), plus any copy drop_duplicate_skills kept. Their content differs, so no
+# rule here can pick one without dropping a real skill; the user decides by removing a
+# pack. Prints "<name> (<dir>, <dir>)" lines, each dir relative to skills/.
+duplicate_skill_names() {
+  local root="$1/skills" f rel
+  find "$root" -mindepth 1 -name '.*' -prune -o -name SKILL.md -print 2>/dev/null \
+    | while IFS= read -r f; do
+        rel="${f#"$root"/}"
+        [ "$rel" = SKILL.md ] || rel="${rel%/SKILL.md}"
+        printf '%s\t%s\n' "$(skill_name "$f")" "$rel"
+      done | LC_ALL=C sort \
+    | awk -F'\t' '$1 != "" { n[$1]++; w[$1] = w[$1] (w[$1] == "" ? "" : ", ") $2 }
+        END { for (k in n) if (n[k] > 1) print k " (" w[k] ")" }' | LC_ALL=C sort
+}
+
 cmd_budget() {
-  local n
+  local n removed dupes
   [ "$CONFIG_NAME" = ".agents" ] || return 0
+  removed="$(drop_duplicate_skills "$CONFIG_DIR")"
+  [ "${removed:-0}" = 0 ] || echo "✓ Removed $removed duplicate skill copies packs ship twice (byte-identical), so each registers once"
+  dupes="$(duplicate_skill_names "$CONFIG_DIR")"
+  if [ -n "$dupes" ]; then
+    {
+      echo "! $(printf '%s\n' "$dupes" | grep -c .) skill names are registered more than once from $CONFIG_NAME/skills/: $(short_list "$(printf '%s\n' "$dupes" | cut -d' ' -f1 | tr '\n' ' ')")"
+      echo "  Mostly different skills that share a name. Codex lists every copy, each taking a share of its"
+      echo "  description budget; opencode keeps one per name. Where each comes from: bash $CONFIG_NAME/bin/skills.sh duplicates"
+    } >&2
+  fi
   n="$(registered_skills "$CONFIG_DIR")"
   [ "${n:-0}" -gt "$CODEX_SKILL_LIMIT" ] || return 0
   {
@@ -763,6 +851,7 @@ case "${1:-list}" in
   uninstalled) cmd_uninstalled ;;
   pins) shift; cmd_pins "$@" ;;
   budget) cmd_budget ;;
-  -h|--help|help) sed -n '4,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  duplicates) duplicate_skill_names "$CONFIG_DIR" ;;
+  -h|--help|help) sed -n '4,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac
