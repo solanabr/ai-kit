@@ -260,21 +260,6 @@
       "tags": ["rpc", "das", "grpc", "multi-chain", "official"]
     },
     {
-      "id": "eth-to-sol",
-      "name": "ETH to SOL",
-      "type": "skill",
-      "domain": "solana-core",
-      "description": "Solana Foundation's EVM porting skill: type, pattern and stdlib mappings, the mental model, and security and optimization notes for translating Solidity contracts. Catalogued as a pointer rather than pinned; the concept map in solana-new's solana-beginner references covers the same ground for a reader who only needs the mental model.",
-      "source": "https://github.com/solana-foundation/eth-to-sol-skill",
-      "install": { "method": "git-clone", "command": "git clone --depth 1 https://github.com/solana-foundation/eth-to-sol-skill .claude/skills/eth-to-sol", "env": [] },
-      "license": "none",
-      "maintainer": "solana-foundation",
-      "signal": { "stars": 2, "last_commit": "2026-06-19", "reputability": "official" },
-      "default_installed": false,
-      "safety": "clean as code: markdown references and Anchor examples, no scripts, no network and no credential read.",
-      "tags": ["solana", "evm", "solidity", "porting", "official"]
-    },
-    {
       "id": "solana-game",
       "name": "Solana Game Skill",
       "type": "skill",

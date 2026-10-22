@@ -252,6 +252,7 @@ your-project/
 │   │   ├── address-lookup-tables.md  # ALTs, v0 fallback
 │   │   ├── keeper-ops.md     # Keepers and cranks
 │   │   ├── monitoring.md     # Post-deploy alerts
+│   │   ├── csharp-unity-conventions.md  # C#/Unity build and player gotchas
 │   │   └── deployment.md     # Deploy workflows
 │   ├── security.json      # Firewall tier in force (Relaxed by default)
 │   └── settings.json      # Permissions, sandbox and hooks, generated from the tier

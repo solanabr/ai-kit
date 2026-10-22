@@ -28,7 +28,7 @@ Ids in the middle column install with `bash .claude/bin/skills.sh add <id>`. Ids
 |------|-------------------|---------|
 | Any program work: Anchor, Pinocchio, native | `qedgen` (Lean 4 proof that the invariant you just wrote holds) | — |
 | State that would cost too much as ordinary accounts | `light-protocol` (ZK compression: compressed PDAs and compressed tokens, and the cost model that justifies them — last moved 2026-06, so check its SDK versions) | — |
-| Porting a Solidity or EVM contract | — | `eth-to-sol` (the Solana Foundation's type, pattern and stdlib mappings) |
+| Porting a Solidity or EVM contract | `solana-new` (the EVM-to-Solana concept map in its solana-beginner references) | — |
 | Landing page, marketing site, any UI surface | `vercel` (web design review, Next.js and React performance), `get-shit-pretty` (brand identity and a design system: shadcn theme, design tokens, UI critique, WCAG audit — 45 skills, 13 sub-agents), `solana-new` (brand design, design taste, frontend design guidelines, number formatting) | `anydesign` (an image, URL or Figma frame into design tokens), `design-skills` (design critique, accessibility audit, journey mapping), `ux-writing-skill` (onboarding, error and empty-state copy) |
 | Animation, motion, transitions, page-load choreography | `gsap-skills` (GreenSock's own eight skills: timelines, ScrollTrigger, useGSAP, plugins, reduced-motion, performance — the one to offer when the ask is real motion work), `solana-new` (page-load animation and video-craft references) | `animation-principles` (motion principles as prose; unmaintained since December 2025) |
 | NFTs, collections, compressed NFTs | `metaplex` | — |

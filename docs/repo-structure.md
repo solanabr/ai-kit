@@ -68,6 +68,7 @@ What is in the kit repository, which parts reach an installed project, and the w
     │   ├── address-lookup-tables.md # Lookup tables for the v0 fallback path (local)
     │   ├── keeper-ops.md            # Keepers and cranks in production (local)
     │   ├── monitoring.md            # Monitoring and alerting for a deployed program (local)
+    │   ├── csharp-unity-conventions.md # C#/Unity constraints: C# 9, global.json, async, serialization, IL2CPP (local)
     │   └── deployment.md            # Deployment workflows (local)
     ├── security.json            # Firewall tier in force + the exact rules it enforced
     └── settings.json            # Sandbox, permissions, hooks, stbr marketplace + safe-ai-skill@stbr

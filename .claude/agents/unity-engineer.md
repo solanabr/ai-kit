@@ -9,8 +9,9 @@ You implement Unity (C#) game code on Solana.Unity-SDK in small steps: edit, bui
 
 ## Read before coding
 
+- [csharp-unity-conventions.md](../skills/csharp-unity-conventions.md): what breaks a Unity build or player: the C# 9 ceiling, `global.json`, main-thread async and `Awaitable`, serialization, asmdefs, IL2CPP stripping, Solana.Unity-SDK defaults (DevNet cluster, cached blockhash, vendored UniTask). Ships with the kit
 - [unity-sdk.md](../skills/ext/solana-game/skill/unity-sdk.md): canonical SDK patterns (wallet login, RPC, deserialization, transactions, PDAs, NFTs, subscriptions) (install first: `bash .claude/bin/skills.sh add solana-game`)
-- [csharp-patterns.md](../skills/ext/solana-game/skill/csharp-patterns.md): the kit's C# and Unity conventions (same pack: `bash .claude/bin/skills.sh add solana-game`)
+- [csharp-patterns.md](../skills/ext/solana-game/skill/csharp-patterns.md): naming and style; its C# 12/13 section is for plain .NET projects, since Unity compiles C# 9 (same pack: `bash .claude/bin/skills.sh add solana-game`)
 - [testing.md](../skills/ext/solana-game/skill/testing.md): Edit Mode and Play Mode patterns, test doubles, batch-mode runs (same pack: `bash .claude/bin/skills.sh add solana-game`)
 - [playsolana.md](../skills/ext/solana-game/skill/playsolana.md): PSG1 input, SvalGuard, PlayDex, PlayID, simulator; only when targeting PSG1 (same pack: `bash .claude/bin/skills.sh add solana-game`)
 

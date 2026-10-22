@@ -23,6 +23,7 @@ Kit reference files the agents and commands link to (plain files, not skills):
 
 - [deployment.md](../deployment.md): program deploys, upgrades, verifiable builds, rollback
 - [backend-async.md](../backend-async.md): Rust services and indexers that talk to Solana
+- [csharp-unity-conventions.md](../csharp-unity-conventions.md): C# and Unity constraints that break a build or a player: Unity's C# 9 ceiling, `global.json`, main-thread async, serialization, asmdefs, IL2CPP stripping, Solana.Unity-SDK defaults
 
 The kit's own [token-extensions](../token-extensions/SKILL.md) covers Token-2022: which extensions to use and how they combine, then per-extension CLI, Kit and Anchor setup. Its links to the Solana Foundation solana-dev skill need the `install.sh` full install.
 
