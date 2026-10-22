@@ -1,6 +1,7 @@
 ---
 name: pinocchio-engineer
 description: "Implements CU- or size-critical Solana programs and hot paths in Pinocchio (zero-copy, manual validation, Mollusk CU tests) when Anchor is the measured bottleneck."
+model: opus
 color: red
 ---
 

@@ -117,7 +117,7 @@ The kit pins no effort level and no agent teams; [docs/configuration.md](docs/co
 | **solana-guide** | Learning and tutorials |
 | **solana-researcher** | Ecosystem research |
 
-Each agent runs on Opus, Sonnet, or your own session model (never a pinned Fable). See [docs/agents-and-commands.md → Agents](docs/agents-and-commands.md#agents) for the routing.
+Every agent runs on Opus (never a pinned Fable), whatever your session model. See [docs/agents-and-commands.md → Agents](docs/agents-and-commands.md#agents) for the routing.
 
 ### 34 Slash Commands
 

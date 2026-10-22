@@ -1,7 +1,7 @@
 ---
 name: devops-engineer
 description: "Owns CI/CD, toolchain pinning, RPC infrastructure, monitoring and Cloudflare Workers for Solana projects. Program deploys run through /deploy; service code goes to rust-backend-engineer."
-model: sonnet
+model: opus
 color: amber
 ---
 

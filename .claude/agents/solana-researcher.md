@@ -1,7 +1,7 @@
 ---
 name: solana-researcher
 description: "Researches the Solana ecosystem with cited, dated sources: protocols, SDKs, APIs, tool versions, DeFi data, competitors. Design decisions go to solana-architect."
-model: sonnet
+model: opus
 color: violet
 ---
 

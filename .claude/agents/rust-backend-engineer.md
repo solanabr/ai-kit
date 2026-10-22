@@ -1,7 +1,7 @@
 ---
 name: rust-backend-engineer
 description: "Builds Rust async services around Solana (APIs, indexers, webhook consumers, transaction senders, keepers) on Tokio/Axum. Programs go to anchor-engineer; infra to devops-engineer."
-model: sonnet
+model: opus
 color: indigo
 ---
 

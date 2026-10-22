@@ -1,7 +1,7 @@
 ---
 name: tech-docs-writer
 description: "Writes developer docs for Solana projects: READMEs, instruction and account references, integration and deployment guides. Tutorials go to solana-guide."
-model: sonnet
+model: opus
 color: rose
 ---
 

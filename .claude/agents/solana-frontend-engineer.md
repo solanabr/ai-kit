@@ -1,7 +1,7 @@
 ---
 name: solana-frontend-engineer
 description: "Builds Solana web frontends in React/Next.js on @solana/kit: wallet connection, transaction UX, token views, WCAG 2.2 AA. React Native goes to mobile-engineer."
-model: sonnet
+model: opus
 color: orange
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: mobile-engineer
 description: "Builds Solana mobile apps in React Native/Expo: Mobile Wallet Adapter, Seeker features, deep links, dApp Store releases. Web frontends go to solana-frontend-engineer."
-model: sonnet
+model: opus
 color: cyan
 ---
 

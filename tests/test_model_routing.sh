@@ -6,13 +6,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/helpers.sh"
 
-# Model routing policy (docs/agents-and-commands.md "Agents"):
-#   model: opus    — deep reasoning where Opus is the right fit
-#   model: sonnet  — implementation-heavy, mechanical, docs or high-volume work
-#   no model: line — inherit the session model (a Fable session gets Fable)
+# Model routing policy (docs/agents-and-commands.md "Agents", issue #106):
+#   agents          — every one pins `model: opus` (Opus 5.5 is the best value now); a missing
+#                     line would inherit the session model, so it fails here too
+#   commands/skills — `sonnet` only when mechanical and run at session start, else no line
 # Fable is never hardcoded. Commands and skills run in the main conversation, where
 # `model:` overrides the rest of the turn, so `opus` there would downgrade a Fable session.
-AGENT_MODELS="opus sonnet haiku inherit"
+AGENT_MODELS="opus"
 COMMAND_MODELS="sonnet haiku inherit"
 FABLE_VALUE_RE='fable|^best$'
 FABLE_HARDCODE_RE="claude-fable|model[\"']?[[:space:]]*[:=][[:space:]]*[\"']?fable([\"'[:space:],]|\$)|--model[[:space:]=]+[\"']?fable([\"'[:space:]]|\$)"
@@ -28,11 +28,14 @@ fm_model() {
 }
 
 check_model() {
-  local file="$1" allowed="$2" rel model
+  local file="$1" allowed="$2" require="${3:-}" rel model
   rel="${file#"$REPO_ROOT"/}"
   model="$(fm_model "$file")"
   TOTAL=$((TOTAL + 1))
-  if [ -z "$model" ]; then
+  if [ -z "$model" ] && [ -n "$require" ]; then
+    echo "  FAIL: $rel has no model: line, so it would inherit the session model (expected one of: $allowed)"
+    FAIL=$((FAIL + 1))
+  elif [ -z "$model" ]; then
     echo "  PASS: $rel inherits the session model"
     PASS=$((PASS + 1))
   elif printf '%s' "$model" | grep -qiE "$FABLE_VALUE_RE"; then
@@ -54,8 +57,8 @@ for f in "$REPO_ROOT"/.claude/skills/*.md "$REPO_ROOT"/.claude/skills/*/SKILL.md
   [ -f "$f" ] && SKILL_FILES+=("$f")
 done
 
-echo "[Agents: model: is one of '$AGENT_MODELS' or omitted]"
-for f in "$REPO_ROOT"/.claude/agents/*.md; do check_model "$f" "$AGENT_MODELS"; done
+echo "[Agents: model: is '$AGENT_MODELS', never omitted]"
+for f in "$REPO_ROOT"/.claude/agents/*.md; do check_model "$f" "$AGENT_MODELS" require; done
 echo ""
 
 echo "[Commands: model: is one of '$COMMAND_MODELS' or omitted]"

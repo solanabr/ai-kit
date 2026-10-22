@@ -1,7 +1,7 @@
 ---
 name: solana-guide
 description: "Teaches Solana: explains concepts and existing code, writes tutorials and learning paths, mentors learners including EVM developers. Production code goes to engineer agents."
-model: sonnet
+model: opus
 color: teal
 ---
 

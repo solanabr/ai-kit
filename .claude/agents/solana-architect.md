@@ -1,6 +1,7 @@
 ---
 name: solana-architect
 description: "Designs and reviews Solana systems before code: accounts, PDAs, program boundaries, CPIs, upgrade and trust model, economic security. Games go to game-architect."
+model: opus
 color: blue
 ---
 

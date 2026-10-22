@@ -1,6 +1,7 @@
 ---
 name: game-architect
 description: "Designs Solana games before code: on-chain vs off-chain state, Unity architecture, economies, PSG1 targeting; writes concept.md and plan.md. Implementation goes to unity-engineer."
+model: opus
 color: lime
 ---
 

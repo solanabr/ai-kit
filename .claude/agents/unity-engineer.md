@@ -1,7 +1,7 @@
 ---
 name: unity-engineer
 description: "Implements Unity/C# for Solana games: Solana.Unity-SDK wallets, transactions, account reads, NFTs, UI, PSG1 input, Unity tests. Program changes go to anchor-engineer."
-model: sonnet
+model: opus
 color: sky
 ---
 
