@@ -87,7 +87,7 @@ curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
 `--agents` works with every installer variant above, e.g. `bash /tmp/solana-ai-kit-install.sh --agents`. It installs everything into `.agents/` instead of `.claude/`, with the instructions in `AGENTS.md` instead of `CLAUDE.md`, and the installed files point at `.agents/` paths. `.agents/agents/`, `.agents/commands/` and `.mcp.json` keep Claude Code's format, so other tools can use them as prompts or context. To update an `--agents` install, run this from your project's root:
 
 ```bash
-bash .agents/bin/update.sh
+SOLANA_AI_KIT_BRANCH="$(bash .agents/bin/kit-ref.sh)" bash .agents/bin/update.sh
 ```
 
 What each harness actually enforces from those files differs sharply — Codex cannot gate file reads at all, and only Claude Code applies the permission rules and sandbox. See [other-agents.md](other-agents.md).
@@ -159,16 +159,18 @@ Run these from your project's root (replace `your-project` with its path); in `-
 cd your-project
 ```
 
-Update the kit in place. It pulls the kit's `main` branch and keeps your `.env` and `CLAUDE.md`; when the kit's `CLAUDE.md` differs from yours, it writes the kit's version to `CLAUDE.md.upstream` for you to merge:
+Update the kit in place. It pulls the latest kit release, the same `vX.Y.Z` tag a fresh install gets (`main` while no release after v2.4.0 exists), and keeps your `.env` and `CLAUDE.md`; when the kit's `CLAUDE.md` differs from yours, it writes the kit's version to `CLAUDE.md.upstream` for you to merge:
 
 ```bash
-bash .claude/bin/update.sh
+SOLANA_AI_KIT_BRANCH="$(bash .claude/bin/kit-ref.sh)" bash .claude/bin/update.sh
 ```
+
+`kit-ref.sh` prints the release tag. Running `bash .claude/bin/update.sh` on its own pulls `main` instead and says so: its default branch sits in the part of the script that an older install runs from its own copy, so it cannot change. Set `SOLANA_AI_KIT_BRANCH` (and `SOLANA_AI_KIT_UPSTREAM` for a fork) to pull a ref of your choosing; `install.sh` honours the same two. An install whose `/update` predates `kit-ref.sh` pulls `main` once more, which brings in the `/update` that pulls the release from then on.
 
 Preview the update without writing anything:
 
 ```bash
-bash .claude/bin/update.sh --dry-run
+SOLANA_AI_KIT_BRANCH="$(bash .claude/bin/kit-ref.sh)" bash .claude/bin/update.sh --dry-run
 ```
 
 List the skill packs, then install an extension by its id (`sendai` here; `/add-skill <id>` does the same inside Claude Code):

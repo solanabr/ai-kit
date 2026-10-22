@@ -347,7 +347,7 @@ cd your-project
 ```
 
 ```bash
-bash .claude/bin/update.sh
+SOLANA_AI_KIT_BRANCH="$(bash .claude/bin/kit-ref.sh)" bash .claude/bin/update.sh
 ```
 
 Install a skill extension when a task needs one. `/add-skill` with no id lists them; replace `sendai` with the id you need:
@@ -384,7 +384,7 @@ Check that every link in the skill hub resolves (in a fork of the kit repo, this
 - Check API keys are set in environment
 
 **Skill packs in `.claude/skills/ext/` missing or empty:**
-- In an installed project they are plain copies: run `bash .claude/bin/update.sh` to fetch the core packs and the extensions you installed
+- In an installed project they are plain copies: run `/update` to fetch the core packs and the extensions you installed
 - In a fork of the kit repo they are git submodules: run `git submodule update --init --recursive`
 
 **A skill link points to a missing `ext/` folder:**

@@ -34,6 +34,7 @@ What is in the kit repository, which parts reach an installed project, and the w
     ├── agents/                  # 15 specialized agents
     ├── bin/
     │   ├── update.sh                # In-place update from upstream
+    │   ├── kit-ref.sh               # The release tag /update fetches
     │   ├── resync.sh                # Submodule resync script
     │   ├── firewall.sh              # Generates a tier's permission + sandbox rules
     │   └── skills.sh                # List skill packs, install extensions on demand

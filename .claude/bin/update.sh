@@ -138,6 +138,23 @@ if [ ! -d "$TEMP_DIR/repo/.claude" ]; then
   exit 1
 fi
 if [ -n "$LOCAL_SRC_NOTE" ]; then echo "Warning: $LOCAL_SRC_NOTE: $(redact_url "$REPO_URL")." >&2; fi
+# /update tracks release tags, as install.sh does (#125), but the frozen region above
+# defaults to main, so the tag arrives from the caller: /update passes
+# SOLANA_AI_KIT_BRANCH="$(bash bin/kit-ref.sh)". Say so when this run fetched anything
+# else. A run with no ref at all is the common case: `bash update.sh` by hand, or an
+# install whose /update predates kit-ref.sh, which fetches main once and so receives the
+# caller that fetches the tag next time. It is reported, not redone, because the copy
+# loop has already applied main by here and a second clone would double the fetch.
+if [ -z "$LOCAL_SRC" ] || [ -n "$LOCAL_SRC_NOTE" ]; then
+  if ! printf '%s\n' "$BRANCH" | grep -qxE 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+    if [ -z "${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}" ]; then
+      echo "Note: no ref was requested, so this fetched $BRANCH, not a release. /update fetches the latest release tag; from a shell:" >&2
+      echo "  SOLANA_AI_KIT_BRANCH=\"\$(bash $CONFIG_NAME/bin/kit-ref.sh)\" bash $CONFIG_NAME/bin/update.sh" >&2
+    else
+      echo "Note: fetched $BRANCH, which is not a release tag; $CONFIG_NAME/VERSION may not describe what was installed." >&2
+    fi
+  fi
+fi
 
 # hooks/ arrived after that frozen UPDATE_DIRS list, which cannot grow. Same
 # semantics as the loop: overwrite with upstream, but into a pre-created

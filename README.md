@@ -95,7 +95,7 @@ curl -fsSL https://aikit.superteam.codes | bash -s -- --agents
 | [Claude Code plugin](docs/plugin.md) | Not recommended — read that page before you use it |
 | [GitHub template](docs/install.md#using-as-a-github-template) | You are starting a new repository from the kit rather than adding it to one |
 
-Already installed? `bash .claude/bin/update.sh`, or `/update` inside Claude Code ([details](docs/install.md#updating)). Working in a fork or clone of this repo? Its top-level `CLAUDE.md` is for maintaining the kit itself; `/cleanup` swaps in `CLAUDE-solana.md`.
+Already installed? `/update` inside Claude Code pulls the latest release ([details, and the shell form](docs/install.md#updating)). Working in a fork or clone of this repo? Its top-level `CLAUDE.md` is for maintaining the kit itself; `/cleanup` swaps in `CLAUDE-solana.md`.
 
 ### Config is gitignored by default
 

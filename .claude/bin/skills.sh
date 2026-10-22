@@ -31,7 +31,8 @@ set -euo pipefail
 # touching folders the user made. skills/<id>.lock records an upstream pack's commit and
 # folders. Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a local checkout
 # (offline, tests); SOLANA_AI_KIT_UPSTREAM and SOLANA_AI_KIT_BRANCH override the
-# source (default: main); SOLANA_AI_KIT_PACK_MIRROR=/dir fetches upstream pack <id>
+# source (default: the release tag this install's VERSION names, else main);
+# SOLANA_AI_KIT_PACK_MIRROR=/dir fetches upstream pack <id>
 # from the git repo /dir/<id> instead of its source (the pinned commit still applies).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -593,10 +594,24 @@ cmd_add() {
       src="$local_src"
     else
       url="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-https://github.com/solanabr/ai-kit.git}}"
-      branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-main}}"
+      # The pins this install checks against are its own release's, and an install now
+      # tracks release tags (#125), so fetch the tag its VERSION names rather than main,
+      # whose pins move every week. Releases up to v2.4.0 predate tag tracking, so those
+      # installs may hold main's content under that VERSION: they keep fetching main. A
+      # tag that cannot be cloned (a VERSION nobody tagged yet) falls back to main too.
+      branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}"
+      if [ -z "$branch" ]; then
+        branch="$(awk '{ v = $NF; split(v, x, ".")
+          if (v ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ && (x[1] > 2 || (x[1] == 2 && (x[2] > 4 || (x[2] == 4 && x[3] > 0))))) print "v" v }' \
+          "$CONFIG_DIR/VERSION" 2>/dev/null || true)"
+      fi
       tmp="$(mktemp -d)"
-      echo "Fetching the pinned packs from $(redact_url "$url") ($branch)..."
-      git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit"
+      echo "Fetching the pinned packs from $(redact_url "$url") (${branch:-main})..."
+      if [ -z "${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}" ] && [ -n "$branch" ]; then
+        git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit" 2>/dev/null \
+          || { echo "  $branch is not on the upstream; using main" >&2; rm -rf "${tmp:?}/kit"; branch=""; }
+      fi
+      [ -d "$tmp/kit" ] || git clone -q --depth 1 --branch "${branch:-main}" "$url" "$tmp/kit"
       for id in $todo; do paths+=(".claude/skills/ext/$id"); done
       # Not --recursive: a pack's own submodules are pinned by its author, not by this
       # kit, and add would vendor that tree into the project at a pin nobody here
