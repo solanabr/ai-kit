@@ -460,9 +460,35 @@ else
   fw_tier="$(python3 -c "import json; print(json.load(open('.claude/security.json')).get('tier', ''))" 2>/dev/null)"
   case "$fw_tier" in
     off|relaxed|medium|high) check "security.json tier is one of off|relaxed|medium|high ($fw_tier)" 0 ;;
+    maintainer)
+       # install.sh copies this file into every new project, so a committed maintainer
+       # tier would be the one route by which it reached a user. It is a local switch.
+       echo "  FAIL: security.json declares the maintainer tier, which is for a local kit checkout only and must never be the committed default — run: bash .claude/bin/firewall.sh apply relaxed"
+       FAIL=$((FAIL + 1)) ;;
     *) echo "  FAIL: security.json tier must be off|relaxed|medium|high (got '$fw_tier')"
        FAIL=$((FAIL + 1)) ;;
   esac
+  # The enforced record and the generated block too: a hand-edit that reset `tier` alone
+  # would leave the maintainer rule set committed in settings.json.
+  fw_maint="$(python3 -c 'import json
+sec = json.load(open(".claude/security.json"))
+live = json.load(open(".claude/settings.json"))
+excl = (live.get("sandbox") or {}).get("excludedCommands") or []
+deny = (live.get("permissions") or {}).get("deny") or []
+bad = []
+if (sec.get("enforced") or {}).get("tier") == "maintainer":
+    bad.append("enforced.tier is maintainer")
+if "git submodule *" in excl:
+    bad.append("settings.json excludes git submodule from the sandbox")
+if "Bash(claude *)" not in deny:
+    bad.append("settings.json does not deny Bash(claude *)")
+print("; ".join(bad))' 2>/dev/null || echo "unreadable")"
+  if [ -z "$fw_maint" ]; then
+    check "committed firewall is not the maintainer tier (security.json enforced + settings.json)" 0
+  else
+    echo "  FAIL: committed firewall carries the maintainer tier ($fw_maint) — run: bash .claude/bin/firewall.sh apply relaxed"
+    FAIL=$((FAIL + 1))
+  fi
 
   # enforced.ruleIds is what a tier switch subtracts. An id the live settings.json no longer
   # holds means the record has drifted, and the next switch would leave a rule behind.

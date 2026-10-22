@@ -33,11 +33,14 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: firewall.sh <show|apply> [off|relaxed|medium|high] [--dry-run]
+Usage: firewall.sh <show|apply> [off|relaxed|medium|high|maintainer] [--dry-run]
 
   show    Report the declared tier, the enforced tier and any drift.
   apply   Regenerate the kit-owned permissions + sandbox block for a tier.
           With no tier, applies the tier declared in .claude/security.json.
+
+  maintainer  Relaxed minus the denies that stop work on the kit itself. Only for a
+              checkout of the solana-ai-kit repository; refused anywhere else.
 
   --dry-run   Report what would change; write nothing.
 USAGE
@@ -55,7 +58,7 @@ DRY_RUN=false
 for arg in "$@"; do
   case "$arg" in
     show|apply|set)            [ -n "$MODE" ] || MODE="$arg" ;;
-    off|relaxed|medium|high)   TIER="$arg" ;;
+    off|relaxed|medium|high|maintainer) TIER="$arg" ;;
     --tier=*)                  TIER="${arg#--tier=}" ;;
     --dry-run|-n)              DRY_RUN=true ;;
     -h|--help)                 usage; exit 0 ;;
@@ -146,9 +149,18 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #   7 -> 8: the project's dotenv files follow the tier, as the docs always said they
 #           did and no rule ever made true: DENY_ENV_WRITE at Medium, DENY_ENV_READ at
 #           High. Off and Relaxed are unchanged.
+# The maintainer tier (#162) arrived WITHOUT a bump, deliberately: the four user tiers
+# generate the same bytes they did at 8, so no install that already has a security.json
+# needs a re-apply, and none can be on maintainer from before it existed.
 RULE_SET_VERSION = 8
+# The four user tiers. `maintainer` is deliberately not one of them: it is a variant of
+# its base tier for the kit's own repository, so it is absent from bootstrap_ids() (no
+# install ever wrote its rules before enforced.ruleIds existed) and from every loop that
+# means "each tier a user can pick".
 TIERS = ("off", "relaxed", "medium", "high")
+MAINTAINER_BASE = "relaxed"
 RANK = {t: i for i, t in enumerate(TIERS)}
+RANK["maintainer"] = RANK[MAINTAINER_BASE]
 MARK = "@@KIT-GROUP@@"          # serializes to a blank line; never the last element
 
 # ===========================================================================
@@ -1150,6 +1162,60 @@ EXCLUDED_COMMANDS = [
 ]
 
 # ===========================================================================
+# the maintainer tier — the kit's own repository, never a user project (#162)
+# ===========================================================================
+# Relaxed, minus exactly the denies that obstruct work ON the kit, plus one sandbox
+# exclusion. Relaxed is the base because it is the default every user project runs:
+# maintainers keep dogfooding the tier they ship, and every other rule, sandbox path,
+# denied domain and hook decision is Relaxed's byte for byte. (The hooks read an
+# unknown tier name as relaxed, so they need no change to agree.)
+#
+# What it does NOT need to omit: Edit on .claude/settings.json, settings.local.json,
+# security.json and .mcp.json. Those are DENY_SELF_PROTECTION, High only since rule set
+# 4, so Relaxed already permits them — what remains there is Claude Code's own
+# protected-path prompt, which no settings file controls.
+#
+# Each omission is a rule whose purpose is "the agent cannot rewrite its own gates",
+# which in the kit's repository is the work itself:
+#   * Edit(/.claude/hooks/**) — the project's guard scripts are the kit's source.
+#     ~/.claude/hooks/** stays denied: the user's own hooks are not kit source.
+#   * Bash(claude *) and Bash(claude) — fixture probes (`claude -p` against a throwaway
+#     project), `claude plugin validate`, `claude --version`, `claude mcp add`. This is
+#     the large one: a nested `claude --dangerously-skip-permissions` starts an agent
+#     with no policy at all, and at this tier nothing refuses it.
+#   * Edit(/.safe-ai-skill/**) — the kit repo holds the policy.yaml that install.sh
+#     ships, so editing it is a kit change.
+# Managed settings stay denied: they belong to an administrator, not to the kit.
+MAINTAINER_OMIT_DENY = frozenset([
+    "Edit(/.claude/hooks/**)",
+    "Bash(claude *)",
+    "Bash(claude)",
+    "Edit(/.safe-ai-skill/**)",
+])
+
+# `git submodule update --init` writes the packs under .claude/skills/ext/, and Claude
+# Code's sandbox refuses shell writes there. Measured in a sandboxed session on
+# 2026-10-22: `touch` under the project's .claude/skills, .claude/hooks and
+# .claude/commands all got EPERM, though no kit rule names skills/ or commands/ — a
+# protected path of Claude Code's own, which allowWrite does not lift. Excluding the command runs
+# it unsandboxed, which is the only lever project settings have. Like every
+# excludedCommands entry it lifts the sandbox for the WHOLE command line (see above),
+# which is one more reason this tier never leaves the kit's repository.
+MAINTAINER_EXCLUDED_COMMANDS = [
+    "git submodule *",
+]
+
+
+def is_kit_checkout():
+    """True only in a checkout of the kit's own repository.
+
+    Two files no install ever writes into a project under these names: install.sh
+    copies CLAUDE-solana.md in as CLAUDE.md (or AGENTS.md), and never copies itself.
+    """
+    return all(os.path.isfile(os.path.join(TARGET, f)) for f in ("CLAUDE-solana.md", "install.sh"))
+
+
+# ===========================================================================
 # sandbox.filesystem
 # ===========================================================================
 # Conventions differ from permission rules: `.` resolves against the settings file's
@@ -1404,6 +1470,19 @@ DOMAINS_HIGH = [
 
 def plan(tier):
     """Return ({list path: [group, ...]}, {scalar path: value or None})."""
+    if tier == "maintainer":
+        # Built from the base tier's plan, so it can never drift from it: new lists,
+        # never the shared group objects, which the base tier still emits.
+        lists, scalars = plan(MAINTAINER_BASE)
+        lists["permissions.deny"] = [
+            [r for r in group if r not in MAINTAINER_OMIT_DENY]
+            for group in lists["permissions.deny"]
+        ]
+        lists["sandbox.excludedCommands"] = list(lists["sandbox.excludedCommands"]) + [
+            MAINTAINER_EXCLUDED_COMMANDS
+        ]
+        return lists, scalars
+
     at = RANK[tier]
     off = tier == "off"
     medium_up = at >= RANK["medium"]
@@ -1858,11 +1937,23 @@ if MODE == "show":
         print("drift         : declared '%s' has not been applied; run: firewall.sh apply" % declared)
     if recorded - live:
         print("drift         : settings.json lost rules the last apply wrote; re-apply")
+    if "maintainer" in (declared, enforced_before.get("tier")):
+        print("WARNING       : maintainer tier — guard hooks editable and nested `claude` "
+              "allowed. Only for working on the kit itself; never commit it as the default.")
     raise SystemExit(0)
 
 tier = TIER_ARG or declared or "relaxed"
-if tier not in TIERS:
+if tier not in TIERS and tier != "maintainer":
     die("unknown tier '%s' (expected one of: %s)" % (tier, ", ".join(TIERS)))
+if tier == "maintainer" and not is_kit_checkout():
+    # Refused rather than downgraded: silently writing Relaxed would leave security.json
+    # and settings.json disagreeing about what was asked for. This is also what keeps
+    # /update from ever carrying a user project onto the tier — its re-apply fails here
+    # and leaves settings.json untouched.
+    die("tier 'maintainer' is only for a checkout of the solana-ai-kit repository "
+        "(CLAUDE-solana.md and install.sh at its root), and %s is not one. It drops "
+        "the denies that stop an agent rewriting its own guard hooks or starting a "
+        "nested `claude`. For a project, use relaxed: firewall.sh apply relaxed" % TARGET)
 
 lists, scalars = plan(tier)
 
@@ -1967,4 +2058,8 @@ write_atomic(SETTINGS, settings_text)
 write_atomic(SECURITY, security_text)
 print("  wrote %s (%d rules) and %s" % (SETTINGS_REL, len(rule_ids), SECURITY_REL))
 print("  takes effect in the next session: permission rules are read once, at session start")
+if tier == "maintainer":
+    print("  WARNING: maintainer tier. The guard hooks are editable and a nested `claude` is "
+          "allowed. Do not commit this security.json or settings.json — validate.sh refuses "
+          "them. Back to the default when done: firewall.sh apply relaxed")
 PY

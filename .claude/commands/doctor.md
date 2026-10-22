@@ -114,6 +114,7 @@ PY
 ```
 These states look alike and are not. Read them in this order; stop at the first that matches.
 - `n/a` `config_dir: .agents`: an `--agents` install, which ships no `security.json`, no firewall and no `settings.json`, because no harness parses permission rules or a hooks array under `.agents/`. There is no tier to check and nothing to fix; enforcement needs a regular install run under Claude Code.
+- FAIL declared or enforced `maintainer`: **the kit's maintainer tier is in force**, so the agent can rewrite the guard hooks in `.claude/hooks/` and start a nested `claude` with no policy, and `git submodule` runs unsandboxed. It exists only for working on the solana-ai-kit repository itself. Lead the whole report with this row, above the table, even in the kit repo: it is easy to forget once the kit work is done, and the next commit would fail `validate.sh` on it. Fix: `bash .claude/bin/firewall.sh apply relaxed`
 - `n/a` declared `off`: the user chose no firewall. Nothing is generated and nothing is wrong — do not offer a fix.
 - WARN `live_rules: 0` and `full_install: False`: this is the plugin path — the plugin ships `hooks/hooks.json` only, so no permission or sandbox policy is installable and no tier applies. Hooks still gate deploys. For a tier, do a full install: `bash <(curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh)`
 - FAIL `live_rules: 0` and `full_install: True`: a full install whose `settings.json` lost its policy block. Regenerate: `bash .claude/bin/firewall.sh apply`

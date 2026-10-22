@@ -463,6 +463,23 @@ import json
 hooks = (json.load(open('$FW_SETTINGS')).get('hooks') or {})['PreToolUse']
 print([e['matcher'] for e in hooks if 'my-own-audit-hook' in ' '.join(h.get('command','') for h in e['hooks'])][0])" 2>/dev/null)" \
   "a non-kit Bash hook keeps its own matcher"
+
+# (5) /update never carries a project onto the maintainer tier, nor re-applies it. A
+# project that declares it (copied out of a kit checkout) is reported, not regenerated,
+# even with a rule set behind the shipped one — the case that otherwise re-applies.
+echo "[maintainer tier is never re-applied]"
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+d["tier"] = "maintainer"
+(d.get("enforced") or {})["ruleSetVersion"] = 1
+json.dump(d, open(sys.argv[1], "w"), indent=2)' "$FW_SECURITY"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" "declares the maintainer tier" "a declared maintainer tier is reported by /update"
+assert_eq "no" "$(printf '%s' "$FW_OUT" | grep -q 'firewall rule set v' && echo yes || echo no)" \
+  "/update does not re-apply the maintainer tier on an older rule set"
+assert_eq "maintainer" "$(fw_tier)" "/update leaves the declared tier for the user to change"
+assert_eq "no" "$(grep -q '"git submodule \*"' "$FW_SETTINGS" && echo yes || echo no)" \
+  "/update writes no maintainer rule into settings.json"
 rm -f "$FW_SETTINGS" "$FW_SECURITY"
 fi  # FW_TAG_OK
 

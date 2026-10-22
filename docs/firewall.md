@@ -62,6 +62,25 @@ Nine deny groups are the exception, and they are safe only because `/firewall` o
 
 `Bash(gh api *)` is the only `Bash` rule in the corpus that varies, and it arrived in rule set 5 because a glob with no argument form could express the gate while a tier-invariant deny could not pay for it: it is the raw API escape hatch that walks around every narrower `gh` deny, and only the two tiers promising "the agent cannot change your repository" need it closed. Every other `Bash` deny is identical at all four tiers, `Bash(git -C *)` included — see the wrapper note below for why that one in particular has to be.
 
+### The maintainer tier
+
+`maintainer` is a fifth value for `security.json`'s `tier`, and it is **only for working on the solana-ai-kit repository itself — never a user project** ([#162](https://github.com/solanabr/ai-kit/issues/162)). The firewall is right for a project and obstructs work on the kit: it denies editing the guard hooks the kit is made of, and running `claude` for fixture probes and `claude plugin validate`. No local settings file can lift either, because a `deny` from any scope wins.
+
+It is Relaxed — the default, so maintainers keep dogfooding what users run — minus exactly four denies, plus one sandbox exclusion:
+
+| Change from Relaxed | Why |
+|---|---|
+| no `Edit(/.claude/hooks/**)` | the project's guard scripts are the kit's source. `~/.claude/hooks/**` stays denied |
+| no `Bash(claude *)`, `Bash(claude)` | fixture probes (`claude -p`), `claude plugin validate`, `claude --version`, `claude mcp add`. The cost: an agent can start a nested `claude --dangerously-skip-permissions` with no policy at all |
+| no `Edit(/.safe-ai-skill/**)` | the kit repo holds the `policy.yaml` `install.sh` ships |
+| `git submodule *` in `excludedCommands` | Claude Code's own sandbox refuses shell writes under the project's `.claude/` (measured for `skills/`, `hooks/` and `commands/`, which no kit rule names), so `git submodule update --init` cannot write the packs under `.claude/skills/ext/`. Excluding the command runs it unsandboxed; like every exclusion, that lifts the sandbox for the whole command line |
+
+Everything else, hooks included, is Relaxed's: the hooks read an unknown tier name as `relaxed`. Edits to `.claude/settings.json` and `.claude/security.json` need no change, because Relaxed has permitted them since rule set 4; what remains there is Claude Code's own protected-path prompt.
+
+Four things keep it out of user projects. `firewall.sh` refuses it unless `CLAUDE-solana.md` and `install.sh` sit at the project root, which no install ever creates. `install.sh --tier` does not accept it. `/update` reports a declared `maintainer` and re-applies nothing. And `validate.sh` fails when it is the committed default, since `install.sh` copies the kit's `security.json` into every new project. `/doctor` reports it as a failure on any project, the kit repo included, so it is not forgotten. Adding it changed no other tier's rules, so `RULE_SET_VERSION` stayed at 8.
+
+Switch with `bash .claude/bin/firewall.sh apply maintainer` and restart the session. The generator writes `.claude/settings.json`, which Claude Code protects from sandboxed shell writes, so run it from a separate terminal or with `!` in the prompt. Before committing, restore the two files with `git checkout -- .claude/settings.json .claude/security.json`. That works in a linked worktree too, where `apply relaxed` would not give back the committed bytes: `git_common_write()` adds the machine's absolute `.git` path to the block it generates there. Separately from any tier, a networked `gh` or `git` call runs outside the sandbox only when it is the entire command line. Inside a loop, a pipeline or an `&&` chain it stays sandboxed and fails on the `gh` host file.
+
 ## What the tiers do not do
 
 The rest of this document is what the tiers do **not** do. It is here because a security feature that is oversold is worse than one that is understood.

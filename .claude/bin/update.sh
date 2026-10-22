@@ -853,7 +853,12 @@ PY
     WANT_RS="$(awk -F= '/^RULE_SET_VERSION[[:space:]]*=/{gsub(/[^0-9]/,"",$2); print $2; exit}' "$FW_SH" 2>/dev/null)"
     HAVE_RS="$(awk '/"ruleSetVersion"[[:space:]]*:/{gsub(/[^0-9]/,""); print; exit}' "$SEC_JSON" 2>/dev/null)"
     DECL_TIER="$(awk '/"tier"[[:space:]]*:/{t=$0; sub(/.*"tier"[^"]*"/,"",t); sub(/".*/,"",t); print t; exit}' "$SEC_JSON" 2>/dev/null)"
-    if [ -n "$WANT_RS" ] && [ -n "$HAVE_RS" ] && [ "$HAVE_RS" -lt "$WANT_RS" ] 2>/dev/null; then
+    if [ "$DECL_TIER" = maintainer ]; then
+      # The maintainer tier is for the kit's own repository, which never runs /update.
+      # firewall.sh refuses it outside a kit checkout anyway; saying so here names the
+      # real fix instead of reporting a failed apply. Nothing is re-applied or rewritten.
+      CHANGES="$CHANGES  [skipped] firewall: $CONFIG_NAME/security.json declares the maintainer tier, which is only for working on the kit itself. Run /firewall relaxed\n"
+    elif [ -n "$WANT_RS" ] && [ -n "$HAVE_RS" ] && [ "$HAVE_RS" -lt "$WANT_RS" ] 2>/dev/null; then
       if [ "$DRY_RUN" = true ]; then
         CHANGES="$CHANGES  [would update] $CONFIG_NAME/settings.json: firewall rule set v$HAVE_RS -> v$WANT_RS (re-applying ${DECL_TIER:-the declared tier})\n"
       elif bash "$FW_SH" apply >/dev/null 2>&1; then

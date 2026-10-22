@@ -94,7 +94,19 @@ for t in off relaxed medium high; do
   fi
 done
 assert_eq "4" "$GENERATED" "all four tiers generated into the fixture"
-if [ "$GENERATED" -ne 4 ]; then
+# The maintainer tier has a README row too. It applies only in a kit checkout, which
+# the two marker files make this fixture for one apply.
+touch "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
+if (cd "$WORK/proj" && CLAUDE_PROJECT_DIR="$WORK/proj" \
+    bash .claude/bin/firewall.sh apply maintainer) > "$QUIET_LOG" 2>&1; then
+  cp "$WORK/proj/.claude/settings.json" "$WORK/gen.maintainer.json"
+  MAINT_OK=yes
+else
+  MAINT_OK=no
+fi
+rm -f "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
+assert_eq "yes" "$MAINT_OK" "the maintainer tier generated into the fixture"
+if [ "$GENERATED" -ne 4 ] || [ "$MAINT_OK" != yes ]; then
   echo "  (a tier that did not generate has no rules to resolve against)"
   print_summary
 fi
@@ -415,7 +427,11 @@ if COL not in heads:
 else:
     idx = heads.index(COL)
     for cells in tier_rows:
-        tier = next((t for t in TIERS if re.search(r"\b%s\b" % t, cells[0], re.I)), None)
+        # The maintainer row is held to its own generated rules. It is kept out of TIERS,
+        # which the gate table reads as "every tier", because the maintainer tier
+        # deliberately omits denies that the gate table promises for every user tier.
+        tier = next((t for t in ("maintainer",) + TIERS
+                     if re.search(r"\b%s\b" % t, cells[0], re.I)), None)
         if tier is None:
             bad("a README Firewall-tiers row names no tier: %r" % cells[0])
             continue
@@ -460,7 +476,7 @@ else
   echo "  FAIL: the gate table parsed into ${GATE_ROWS:-no} rows (expected at least 10)"
   FAIL=$((FAIL + 1))
 fi
-assert_eq "4" "${README_ROWS:-0}" "README's Firewall-tiers table parsed into one row per tier"
+assert_eq "5" "${README_ROWS:-0}" "README's Firewall-tiers table parsed into one row per tier (four user tiers and maintainer)"
 
 VERDICT_COUNT="$(grep -cE '^(PASS|FAIL)\|' "$VERDICTS" 2>/dev/null || true)"
 TOTAL=$((TOTAL + 1))

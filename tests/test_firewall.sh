@@ -1088,4 +1088,92 @@ blob = ' '.join((fs.get('denyWrite') or []) + (fs.get('denyRead') or []))
 print('yes' if '~/.cargo/credentials' in blob and '~/.cargo/config.toml' in blob else 'no')" 2>/dev/null)"
 assert_eq "yes" "$CARGO_CREDS" "high still denies the cargo credentials and config.toml inside the carved-out root"
 
+# ── the maintainer tier: Relaxed minus the kit-self-protection denies (#162) ─
+# Only for a checkout of the kit itself. It must differ from Relaxed by exactly the
+# omissions it documents, refuse to apply anywhere else, and round-trip like any tier.
+echo "[maintainer tier]"
+fw relaxed
+cp "$WORK/proj/.claude/settings.json" "$WORK/maint-relaxed.json"
+cp "$WORK/proj/.claude/security.json" "$WORK/maint-relaxed-sec.json"
+
+fw maintainer
+TOTAL=$((TOTAL + 1))
+if [ "$RC" -ne 0 ] && printf '%s' "$FW_OUT" | grep -q "only for a checkout of the solana-ai-kit repository"; then
+  echo "  PASS: maintainer is refused in a project that is not a kit checkout"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: maintainer applied outside a kit checkout (exit $RC): $(printf '%s' "$FW_OUT" | head -2)"
+  FAIL=$((FAIL + 1))
+fi
+assert_cmd_success "cmp -s '$WORK/maint-relaxed.json' '$WORK/proj/.claude/settings.json' && cmp -s '$WORK/maint-relaxed-sec.json' '$WORK/proj/.claude/security.json'" \
+  "a refused maintainer apply writes neither settings.json nor security.json"
+
+# The two files that mark a kit checkout; no install writes either under this name.
+touch "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
+fw maintainer
+assert_eq "0" "$RC" "maintainer applies in a kit checkout"
+cp "$WORK/proj/.claude/settings.json" "$WORK/gen.maintainer.json"
+assert_contains "$FW_OUT" "WARNING: maintainer tier" "applying maintainer prints a warning"
+MAINT_DIFF="$(python3 -c "
+import json, sys
+r = json.load(open(sys.argv[1])); m = json.load(open(sys.argv[2]))
+def lists(d):
+    out = {}
+    for k, v in (d.get('permissions') or {}).items():
+        out['permissions.' + k] = v
+    sb = d.get('sandbox') or {}
+    for k, v in sb.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out['sandbox.%s.%s' % (k, k2)] = v2
+        else:
+            out['sandbox.' + k] = v
+    return out
+lr, lm = lists(r), lists(m)
+diffs = []
+for key in sorted(set(lr) | set(lm)):
+    a, b = lr.get(key), lm.get(key)
+    if a == b:
+        continue
+    if isinstance(a, list) and isinstance(b, list):
+        gone = sorted(set(a) - set(b)); new = sorted(set(b) - set(a))
+        diffs.append('%s -%s +%s' % (key, gone, new))
+    else:
+        diffs.append('%s %r -> %r' % (key, a, b))
+others = {k: v for k, v in r.items() if k not in ('permissions', 'sandbox')}
+if others != {k: v for k, v in m.items() if k not in ('permissions', 'sandbox')}:
+    diffs.append('non-firewall keys changed')
+print(' | '.join(diffs))
+" "$WORK/maint-relaxed.json" "$WORK/gen.maintainer.json" 2>/dev/null || echo __ERROR__)"
+assert_eq "permissions.deny -['Bash(claude *)', 'Bash(claude)', 'Edit(/.claude/hooks/**)', 'Edit(/.safe-ai-skill/**)'] +[] | sandbox.excludedCommands -[] +['git submodule *']" \
+  "$MAINT_DIFF" "maintainer differs from relaxed by exactly the four kit-self-protection denies and the submodule exclusion"
+assert_eq "yes yes" "$(python3 -c "
+import json
+deny = (json.load(open('$WORK/gen.maintainer.json')).get('permissions') or {}).get('deny') or []
+print('yes' if 'Edit(~/.claude/hooks/**)' in deny else 'no', 'yes' if 'Edit(//**/managed-settings.json)' in deny else 'no')" 2>/dev/null)" \
+  "maintainer keeps the user-scope hooks deny and the managed-settings deny"
+assert_eq "maintainer maintainer" "$(python3 -c "
+import json
+d = json.load(open('$WORK/proj/.claude/security.json'))
+print(d.get('tier'), (d.get('enforced') or {}).get('tier'))" 2>/dev/null)" \
+  "security.json records maintainer as declared and enforced"
+SHOW_OUT="$( (cd "$WORK/proj" && bash .claude/bin/firewall.sh show) 2>&1 || true)"
+assert_contains "$SHOW_OUT" "WARNING" "firewall.sh show flags a maintainer tier"
+fw maintainer
+assert_cmd_success "cmp -s '$WORK/gen.maintainer.json' '$WORK/proj/.claude/settings.json'" \
+  "applying maintainer twice is byte-identical"
+fw relaxed
+assert_cmd_success "cmp -s '$WORK/maint-relaxed.json' '$WORK/proj/.claude/settings.json'" \
+  "relaxed -> maintainer -> relaxed restores the relaxed bytes exactly"
+fw high
+fw maintainer
+assert_cmd_success "cmp -s '$WORK/gen.maintainer.json' '$WORK/proj/.claude/settings.json'" \
+  "high -> maintainer leaves no High-only rule behind"
+fw relaxed
+rm -f "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
+# The hooks read an unknown tier as relaxed, which is what lets maintainer reuse them
+# unchanged. Pin that, so a stricter fallback later is a decision, not an accident.
+assert_eq "relaxed 1" "$(KIT_FIREWALL_TIER=maintainer bash -c '. "$1"; t=$(kit_tier); printf "%s %s" "$t" "$(kit_tier_num "$t")"' _ "$REPO_ROOT/.claude/hooks/lib-headless.sh" 2>/dev/null)" \
+  "the hooks act at Relaxed under the maintainer tier"
+
 print_summary

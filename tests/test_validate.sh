@@ -111,6 +111,27 @@ assert_contains "$OUT" "Bash(git log * main) does not stop 'git log main'" \
   "a spaced * in a one-wildcard rule is named by the command it lets through"
 cp "$TEMP_DIR/settings.json.orig" "$TEMP_DIR/.claude/settings.json"
 
+# The maintainer tier is a local switch for kit work. install.sh copies the committed
+# security.json and settings.json into every project, so either one carrying it fails.
+echo "[maintainer tier is never the committed default]"
+cp "$TEMP_DIR/.claude/security.json" "$TEMP_DIR/security.json.orig"
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1])); d["tier"] = "maintainer"
+json.dump(d, open(sys.argv[1], "w"), indent=2)' "$TEMP_DIR/.claude/security.json"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when security.json declares the maintainer tier"
+assert_contains "$OUT" "declares the maintainer tier" "the failure names the maintainer tier"
+cp "$TEMP_DIR/security.json.orig" "$TEMP_DIR/.claude/security.json"
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+d["permissions"]["deny"] = [r for r in d["permissions"]["deny"] if r not in ("Bash(claude *)", "Bash(claude)")]
+d["sandbox"]["excludedCommands"].append("git submodule *")
+json.dump(d, open(sys.argv[1], "w"), indent=2)' "$TEMP_DIR/.claude/settings.json"
+OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "1" "$RC" "validate.sh fails when settings.json carries the maintainer rules under another tier name"
+assert_contains "$OUT" "committed firewall carries the maintainer tier" "the failure says the committed block is the maintainer one"
+cp "$TEMP_DIR/settings.json.orig" "$TEMP_DIR/.claude/settings.json"
+
 # A default MCP server on @latest (or any unpinned npx package) fails validation
 echo "[mcp pins]"
 sed -i.bak 's/"helius-mcp@[^"]*"/"helius-mcp@latest"/' "$TEMP_DIR/.mcp.json"

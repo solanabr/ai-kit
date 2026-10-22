@@ -87,6 +87,7 @@ When X changes, also update Y. A row that is wrong is worse than absent, because
 All work on a feature branch: `git checkout -b <type>/<scope>-<description>-<DD-MM-YYYY>`.
 
 - **Local install test**: `SOLANA_AI_KIT_LOCAL_SRC=. bash install.sh /tmp/test-project` uses the local repo instead of cloning from GitHub (legacy `SOLANA_CLAUDE_LOCAL_SRC` still works). Also test `bash install.sh --agents /path`, which installs into `.agents/` with `AGENTS.md`, whenever you touch `install.sh`.
+- **Editing the guards or probing with `claude`**: the kit's own firewall denies `Edit` on `.claude/hooks/**` and `Bash(claude *)` at every user tier, and no local settings file can lift a deny. Switch this checkout to the maintainer tier: `bash .claude/bin/firewall.sh apply maintainer` from a terminal (it writes `settings.json`, which the sandbox protects), then restart. Before committing, run `git checkout -- .claude/settings.json .claude/security.json`, because `validate.sh` fails on a committed maintainer tier. What it omits and why is in [`docs/firewall.md`](docs/firewall.md#the-maintainer-tier). On a checkout older than the tier, `claude --setting-sources user` is the fallback. It is blunt, because it drops every project setting, the sandbox and the guard hooks included, so keep it to the one session that needs it.
 - Before merging: `bash validate.sh && bash tests/run_all.sh` passes; `/diff-review` is clean (no duplicate functionality, no AI slop); every Ripple Map row has been walked; and the install above verifies in Claude Code.
 
 ## Release Management
