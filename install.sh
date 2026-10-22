@@ -42,6 +42,28 @@ case "$TIER" in
   *) printf 'install.sh: unknown --tier "%s" (expected off, relaxed, medium or high)\n' "$TIER" >&2; exit 1 ;;
 esac
 
+# Log helpers — glyph prefixes only; message text stays grep-stable. Progress goes to
+# stdout, warnings and refusals to stderr: a caller that silences progress with
+# > /dev/null must still see why the install stopped (#246 failed CI with an empty log).
+step() { printf '▸ %s\n' "$*"; }
+ok()   { printf '✓ %s\n' "$*"; }
+warn() { printf '! %s\n' "$*" >&2; }
+fail() { printf '✗ %s\n' "$*" >&2; }
+# A URL safe to print: git keeps credentials out of its own errors, so ours do too.
+# Greedy up to the last @ before the first /, so a raw @ in a password goes with it.
+redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/]*@#\1#'; }
+
+# Support local source for testing: SOLANA_AI_KIT_LOCAL_SRC=/path/to/repo
+# (SOLANA_CLAUDE_LOCAL_SRC honored as legacy fallback). Checked before the target is
+# created, so a refused install leaves nothing behind.
+LOCAL_SRC="${SOLANA_AI_KIT_LOCAL_SRC:-${SOLANA_CLAUDE_LOCAL_SRC:-}}"
+LOCAL_SRC_VAR=SOLANA_AI_KIT_LOCAL_SRC
+[ -n "${SOLANA_AI_KIT_LOCAL_SRC:-}" ] || LOCAL_SRC_VAR=SOLANA_CLAUDE_LOCAL_SRC
+if [ -n "$LOCAL_SRC" ] && [ ! -d "$LOCAL_SRC/.claude" ]; then
+  fail "$LOCAL_SRC_VAR=$LOCAL_SRC has no .claude/; nothing was installed"
+  exit 1
+fi
+
 TARGET_DIR="${TARGET_ARG:-.}"
 mkdir -p "$TARGET_DIR"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
@@ -85,28 +107,11 @@ print_banner() {
   printf '%s\n\n' "${CSUB}         by @SuperteamBR 🇧🇷${CRST}"
 }
 
-# Log helpers — glyph prefixes only; message text stays grep-stable. Progress goes to
-# stdout, warnings and refusals to stderr: a caller that silences progress with
-# > /dev/null must still see why the install stopped (#246 failed CI with an empty log).
-step() { printf '▸ %s\n' "$*"; }
-ok()   { printf '✓ %s\n' "$*"; }
-warn() { printf '! %s\n' "$*" >&2; }
-fail() { printf '✗ %s\n' "$*" >&2; }
-# A URL safe to print: git keeps credentials out of its own errors, so ours do too.
-redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/@]*@#\1#'; }
-
 print_banner
 
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-# Support local source for testing: SOLANA_AI_KIT_LOCAL_SRC=/path/to/repo
-# (SOLANA_CLAUDE_LOCAL_SRC honored as legacy fallback)
-LOCAL_SRC="${SOLANA_AI_KIT_LOCAL_SRC:-${SOLANA_CLAUDE_LOCAL_SRC:-}}"
-if [ -n "$LOCAL_SRC" ] && [ ! -d "$LOCAL_SRC/.claude" ]; then
-  fail "SOLANA_AI_KIT_LOCAL_SRC=$LOCAL_SRC has no .claude/; nothing was installed"
-  exit 1
-fi
 if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
   step "Using local source: $LOCAL_SRC"
   mkdir -p "$TEMP_DIR/repo"
@@ -504,8 +509,26 @@ step "Initializing submodules..."
 GITIGNORE="$TARGET_DIR/.gitignore"
 [ -f "$GITIGNORE" ] || : > "$GITIGNORE"
 
-append_ignore() {  # append a pattern once (exact-line match)
-  grep -qxF "$1" "$GITIGNORE" || printf '%s\n' "$1" >> "$GITIGNORE"
+# A last line without a newline would swallow the next append: `.env.local` followed
+# by `.memsearch/` becomes `.env.local.memsearch/`, and .env.local stops being ignored.
+end_with_newline() { [ ! -s "$1" ] || [ -z "$(tail -c1 "$1")" ] || printf '\n' >> "$1"; }
+# The kit schema's key blocks (comment lines plus KEY=) whose key the project's own
+# .env.schema does not declare, each after a blank line. The kit's header, its root
+# decorators and `# ---`, is never copied.
+missing_schema_blocks() {  # <kit-schema> <project-schema>
+  awk '
+    function flush() { if (key != "" && !(key in have)) printf "\n%s", blk; blk = ""; key = "" }
+    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); if (l ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { sub(/=.*/, "", l); have[l] = 1 }; next }
+    !body { if ($0 ~ /^# ---/) body = 1; next }
+    /^[[:space:]]*$/ { flush(); next }
+    { blk = blk $0 "\n"; if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { key = $0; sub(/=.*/, "", key) } }
+    END { flush() }
+  ' "$2" "$1"
+}
+append_ignore() {  # append a pattern once (exact-line match; Git for Windows' CRs ignored)
+  tr -d '\r' < "$GITIGNORE" | grep -qxF "$1" && return 0
+  end_with_newline "$GITIGNORE"
+  printf '%s\n' "$1" >> "$GITIGNORE"
 }
 
 # 1) External skill submodules — always ignored (re-fetched via submodule update)
@@ -542,8 +565,8 @@ else
     if sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF "$entry"; then
       continue
     fi
-    awk -v f="$entry" '/^# <<< solana-ai-kit config <<</ { print f } { print }' "$GITIGNORE" > "$GITIGNORE.tmp" \
-      && cat "$GITIGNORE.tmp" > "$GITIGNORE" && rm -f "$GITIGNORE.tmp"
+    awk -v f="$entry" '/^# <<< solana-ai-kit config <<</ { print f } { print }' "$GITIGNORE" > "$TEMP_DIR/gitignore.tmp" \
+      && cat "$TEMP_DIR/gitignore.tmp" > "$GITIGNORE" && rm -f "$TEMP_DIR/gitignore.tmp"
     ADDED_IGNORE="$ADDED_IGNORE $entry"
   done
   if [ -n "$ADDED_IGNORE" ]; then
@@ -564,11 +587,11 @@ else
     inblk { buf[++n] = $0; next }
     { print }
     END { if (inblk) { for (i = 1; i <= n; i++) print buf[i] }; exit !gone }
-  ' "$GITIGNORE" > "$GITIGNORE.tmp"; then
-    cat "$GITIGNORE.tmp" > "$GITIGNORE"
+  ' "$GITIGNORE" > "$TEMP_DIR/gitignore.tmp"; then
+    cat "$TEMP_DIR/gitignore.tmp" > "$GITIGNORE"
     ok "Removed $INSTR_FILE from the gitignore config block (Grok Build skips an ignored instruction file)"
   fi
-  rm -f "$GITIGNORE.tmp"
+  rm -f "$TEMP_DIR/gitignore.tmp"
 fi
 
 # 3) Local-only — never committed (.env holds API keys once filled; .env.example and
@@ -601,12 +624,24 @@ if [ -f "$TEMP_DIR/repo/.env.example" ]; then
 fi
 
 # varlock schema: key names, types and which are secret, no values. Both modes, since
-# varlock is harness-agnostic. Copied only when nothing is there, and never merged into:
-# a project's own schema has its own root defaults, under which the kit's keys could
-# become required.
-if [ -f "$TEMP_DIR/repo/.env.schema" ] && [ ! -e "$TARGET_DIR/.env.schema" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
-  cp "$TEMP_DIR/repo/.env.schema" "$TARGET_DIR/.env.schema"
-  ok "Created .env.schema (varlock: key names and which are secret, no values; commit it)"
+# varlock is harness-agnostic. Copied when nothing is there. A project's own schema gets
+# the kit's missing key blocks appended: .env above just received every kit key, and
+# varlock treats a key its schema does not declare as required, so leaving one out is
+# what breaks `varlock load`. Each block carries its own @sensitive and @optional, so it
+# keeps its meaning under the project's root defaults. A symlinked schema is not touched.
+SCHEMA_SRC="$TEMP_DIR/repo/.env.schema"
+if [ -f "$SCHEMA_SRC" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
+  if [ ! -e "$TARGET_DIR/.env.schema" ]; then
+    cp "$SCHEMA_SRC" "$TARGET_DIR/.env.schema"
+    ok "Created .env.schema (varlock: key names and which are secret, no values; commit it)"
+  elif [ -f "$TARGET_DIR/.env.schema" ]; then
+    SCHEMA_ADD="$(missing_schema_blocks "$SCHEMA_SRC" "$TARGET_DIR/.env.schema")"
+    if [ -n "$SCHEMA_ADD" ]; then
+      end_with_newline "$TARGET_DIR/.env.schema"
+      printf '%s\n' "$SCHEMA_ADD" >> "$TARGET_DIR/.env.schema"
+      ok "Added the kit's keys to your .env.schema: $(printf '%s\n' "$SCHEMA_ADD" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')"
+    fi
+  fi
 fi
 
 echo ""
@@ -650,9 +685,11 @@ else
   BOX_LINES+=("Firewall tier: $TIER. Switch any time with /firewall <tier>")
   BOX_LINES+=("(off, relaxed, medium, high).")
 fi
+IGNORED_LIST="$CONFIG_DIR/, .mcp.json and .gitmodules are"
+[ "$AGENTS_ONLY" = true ] || IGNORED_LIST="$CONFIG_DIR/, .mcp.json, .gitmodules and .safe-ai-skill/ are"
 BOX_LINES+=(
   ""
-  "$CONFIG_DIR/, .mcp.json and .gitmodules are gitignored by default to"
+  "$IGNORED_LIST gitignored by default to"
   "keep your repo clean. $INSTR_FILE is not: Grok Build skips an"
   "instruction file that .gitignore lists. To version the kit config,"
   "run /commit-claude-config (or edit .gitignore)."

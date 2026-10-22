@@ -500,4 +500,62 @@ done
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.memsearch/')" "a CRLF .gitignore keeps one .memsearch/ line across two updates"
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.claude/worktrees/')" "a CRLF .gitignore keeps one .claude/worktrees/ line across two updates"
 
+# --- .gitignore: no glued last line, no write through a planted scratch file ---
+# A last line without a newline would be glued to the next append (`.env.local` then
+# `.memsearch/` became `.env.local.memsearch/`, un-ignoring .env.local). And the scratch
+# copy that edits the kit block must never go through a .gitignore.tmp a repo shipped as
+# a symlink, since the repo's .gitignore text would land wherever it points.
+echo "[gitignore appends and scratch file]"
+# A kit block without .safe-ai-skill/ makes the update edit the block through its
+# scratch file; a final `.env.local` with no newline is what the next append meets.
+{
+  printf '# >>> solana-ai-kit config — gitignored by default; run /commit-claude-config to version it >>>\n'
+  printf '.gitmodules\n.claude/\n.mcp.json\n'
+  printf '# <<< solana-ai-kit config <<<\n'
+  printf '.env.local'
+} > "$TEMP_DIR/.gitignore"
+printf 'PRECIOUS\n' > "$FW_DIR/victim"
+ln -s "$FW_DIR/victim" "$TEMP_DIR/.gitignore.tmp"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+assert_eq "1" "$(grep -cxF '.env.local' "$TEMP_DIR/.gitignore")" "a last line without a newline stays its own line after an update"
+assert_eq "PRECIOUS" "$(cat "$FW_DIR/victim")" "update.sh never writes through a planted .gitignore.tmp symlink"
+assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$TEMP_DIR/.gitignore" | grep -cxF '.safe-ai-skill/')" \
+  "...while the edit that uses the scratch file ran: .safe-ai-skill/ is back in the kit block"
+rm -f "$TEMP_DIR/.gitignore.tmp"
+
+# --- .env.schema: an existing schema gets the kit's missing keys ---
+# .env receives every kit key, and varlock treats a key its schema does not declare as
+# required, so a schema that lacks one breaks `varlock load`. Dropping the last block
+# stands in for a key a newer kit adds.
+echo "[.env.schema merge]"
+cp "$REPO_ROOT/.env.schema" "$TEMP_DIR/.env.schema"
+python3 - "$TEMP_DIR/.env.schema" <<'EOF'
+import sys
+p = sys.argv[1]
+head = open(p).read().rstrip("\n").rpartition("\n\n")[0]
+open(p, "w").write(head + "\n")
+EOF
+LAST_KEY="$(grep -E '^[A-Z_]+=' "$REPO_ROOT/.env.schema" | tail -1 | cut -d= -f1)"
+DRY_SCHEMA="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
+assert_contains "$DRY_SCHEMA" "[would update] .env.schema — kit keys added: $LAST_KEY" "--dry-run reports the kit key the schema lacks"
+assert_eq "0" "$(grep -c "^$LAST_KEY=" "$TEMP_DIR/.env.schema")" "...and writes nothing"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+assert_eq "1" "$(grep -c "^$LAST_KEY=" "$TEMP_DIR/.env.schema")" "update.sh appends the kit key the schema lacks"
+assert_eq "1" "$(grep -c '^# ---' "$TEMP_DIR/.env.schema")" "...without copying the kit's header again"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+assert_eq "1" "$(grep -c "^$LAST_KEY=" "$TEMP_DIR/.env.schema")" "...and a second run adds nothing"
+# A symlinked schema points somewhere the project does not own: never written through.
+cp "$TEMP_DIR/.env.schema" "$FW_DIR/shared.schema"
+python3 - "$FW_DIR/shared.schema" <<'EOF'
+import sys
+p = sys.argv[1]
+head = open(p).read().rstrip("\n").rpartition("\n\n")[0]
+open(p, "w").write(head + "\n")
+EOF
+cp "$FW_DIR/shared.schema" "$FW_DIR/shared.before"
+rm -f "$TEMP_DIR/.env.schema" && ln -s "$FW_DIR/shared.schema" "$TEMP_DIR/.env.schema"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+assert_eq "" "$(diff "$FW_DIR/shared.before" "$FW_DIR/shared.schema" 2>&1 || true)" "update.sh never writes through a symlinked .env.schema"
+rm -f "$TEMP_DIR/.env.schema"
+
 print_summary

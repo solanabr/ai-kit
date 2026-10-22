@@ -50,6 +50,10 @@ source "$SCRIPT_DIR/_pack_strip.sh"
 # skills from Anthropic directly.
 DENIED_SKILLS="docx pdf pptx xlsx doc-coauthoring"
 
+# A URL safe to print: git keeps credentials out of its own errors, so ours do too.
+# Greedy up to the last @ before the first /, so a raw @ in a password goes with it.
+redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/]*@#\1#'; }
+
 die() { echo "skills.sh: $*" >&2; exit 1; }
 
 # id<TAB>tier<TAB>triggers for each kit pack. The registry keeps one key per line
@@ -593,7 +597,7 @@ cmd_add() {
       url="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-https://github.com/solanabr/ai-kit.git}}"
       branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-main}}"
       tmp="$(mktemp -d)"
-      echo "Fetching the pinned packs from $url ($branch)..."
+      echo "Fetching the pinned packs from $(redact_url "$url") ($branch)..."
       git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit"
       for id in $todo; do paths+=(".claude/skills/ext/$id"); done
       # Not --recursive: a pack's own submodules are pinned by its author, not by this

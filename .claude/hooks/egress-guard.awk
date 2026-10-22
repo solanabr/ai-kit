@@ -108,7 +108,7 @@ function code_has_net(a) {
 
 # Template and documentation suffixes are not secrets: this repo ships a
 # .env.example and the docs name it.
-function is_template(a) { return (a ~ /\.(example|sample|template|dist|tpl|md)$/) }
+function is_template(a) { return (a ~ /\.(example|sample|template|dist|tpl|md|schema)$/) }
 
 function arg_is_secret(a,   t) {
   if (SECRETRE == "") return 0

@@ -102,13 +102,32 @@ done
 # It protects only installs already on this code: a failed fetch overwrote nothing, so
 # an older update.sh runs on in its own code.
 # A URL safe to print: git keeps credentials out of its own errors, so ours do too.
-redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/@]*@#\1#'; }
+# Greedy up to the last @ before the first /, so a raw @ in a password goes with it.
+redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/]*@#\1#'; }
+# A last line without a newline would swallow the next append: `.env.local` followed
+# by `.memsearch/` becomes `.env.local.memsearch/`, and .env.local stops being ignored.
+end_with_newline() { [ ! -s "$1" ] || [ -z "$(tail -c1 "$1")" ] || printf '\n' >> "$1"; }
+# The kit schema's key blocks (comment lines plus KEY=) whose key the project's own
+# .env.schema does not declare, each after a blank line. The kit's header, its root
+# decorators and `# ---`, is never copied.
+missing_schema_blocks() {  # <kit-schema> <project-schema>
+  awk '
+    function flush() { if (key != "" && !(key in have)) printf "\n%s", blk; blk = ""; key = "" }
+    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); if (l ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { sub(/=.*/, "", l); have[l] = 1 }; next }
+    !body { if ($0 ~ /^# ---/) body = 1; next }
+    /^[[:space:]]*$/ { flush(); next }
+    { blk = blk $0 "\n"; if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { key = $0; sub(/=.*/, "", key) } }
+    END { flush() }
+  ' "$2" "$1"
+}
 # The frozen region also falls back to the network, silently, when a local source has
 # no .claude/. Name the path either way: as the reason a fetch failed, or as a warning
 # when the clone worked, since the copy loop above has already applied it by now.
 LOCAL_SRC_NOTE=""
 if [ -n "$LOCAL_SRC" ] && [ ! -d "$LOCAL_SRC/.claude" ]; then
-  LOCAL_SRC_NOTE="SOLANA_AI_KIT_LOCAL_SRC=$LOCAL_SRC has no .claude/, so the upstream was used instead"
+  LOCAL_SRC_VAR=SOLANA_AI_KIT_LOCAL_SRC
+  [ -n "${SOLANA_AI_KIT_LOCAL_SRC:-}" ] || LOCAL_SRC_VAR=SOLANA_CLAUDE_LOCAL_SRC
+  LOCAL_SRC_NOTE="$LOCAL_SRC_VAR=$LOCAL_SRC has no .claude/, so the upstream was used instead"
 fi
 if [ ! -d "$TEMP_DIR/repo/.claude" ]; then
   if [ -n "$LOCAL_SRC_NOTE" ]; then echo "Error: $LOCAL_SRC_NOTE." >&2; fi
@@ -344,7 +363,7 @@ fi
 # refuses the same mismatch outright.
 if [ "$DRY_RUN" = false ] && [ -f "$TEMP_DIR/repo/.claude/bin/skills.sh" ]; then
   PIN_SRC="$TEMP_DIR/repo"
-  [ -n "$LOCAL_SRC" ] && PIN_SRC="$LOCAL_SRC"
+  [ -n "$LOCAL_SRC" ] && [ -z "$LOCAL_SRC_NOTE" ] && PIN_SRC="$LOCAL_SRC"
   if ! PIN_REPORT="$(bash "$TEMP_DIR/repo/.claude/bin/skills.sh" pins "$PIN_SRC" 2>&1)"; then
     echo "Note: a skill pack is not at the commit skill-registry.json records for it:" >&2
     printf '%s\n' "$PIN_REPORT" | sed 's/^/  /' >&2
@@ -995,19 +1014,35 @@ if [ -f "$TEMP_DIR/repo/.env.example" ]; then
   fi
 fi
 
-# varlock schema (.env.schema), in both modes: added when missing and never touched
-# after, as install.sh does. Merging new keys in is deliberately not done: a project's
-# own schema has its own root defaults, under which they could become required. The
-# frozen local-source copy above predates the file, hence the fallback.
+# varlock schema (.env.schema), in both modes: added when missing, as install.sh does.
+# A schema that exists gets the kit's missing key blocks appended: .env above receives
+# every kit key, and varlock treats a key its schema does not declare as required, so
+# leaving one out is what breaks `varlock load` and `varlock run`. Each block carries
+# its own @sensitive and @optional, so it keeps its meaning under the project's root
+# defaults. A symlinked schema is never written through. The frozen local-source copy
+# above predates the file, hence the fallback.
 SCHEMA_SRC="$TEMP_DIR/repo/.env.schema"
 [ -f "$SCHEMA_SRC" ] || SCHEMA_SRC="${LOCAL_SRC:+$LOCAL_SRC/.env.schema}"
-if [ -n "$SCHEMA_SRC" ] && [ -f "$SCHEMA_SRC" ] \
-  && [ ! -e "$TARGET_DIR/.env.schema" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
-  if [ "$DRY_RUN" = true ]; then
-    CHANGES="$CHANGES  [would create] .env.schema\n"
-  else
-    cp "$SCHEMA_SRC" "$TARGET_DIR/.env.schema"
-    CHANGES="$CHANGES  [created] .env.schema\n"
+if [ -n "$SCHEMA_SRC" ] && [ -f "$SCHEMA_SRC" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
+  if [ ! -e "$TARGET_DIR/.env.schema" ]; then
+    if [ "$DRY_RUN" = true ]; then
+      CHANGES="$CHANGES  [would create] .env.schema\n"
+    else
+      cp "$SCHEMA_SRC" "$TARGET_DIR/.env.schema"
+      CHANGES="$CHANGES  [created] .env.schema\n"
+    fi
+  elif [ -f "$TARGET_DIR/.env.schema" ]; then
+    SCHEMA_ADD="$(missing_schema_blocks "$SCHEMA_SRC" "$TARGET_DIR/.env.schema")"
+    if [ -n "$SCHEMA_ADD" ]; then
+      SCHEMA_KEYS="$(printf '%s\n' "$SCHEMA_ADD" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')"
+      if [ "$DRY_RUN" = true ]; then
+        CHANGES="$CHANGES  [would update] .env.schema — kit keys added: ${SCHEMA_KEYS% }\n"
+      else
+        end_with_newline "$TARGET_DIR/.env.schema"
+        printf '%s\n' "$SCHEMA_ADD" >> "$TARGET_DIR/.env.schema"
+        CHANGES="$CHANGES  [updated] .env.schema — kit keys added: ${SCHEMA_KEYS% }\n"
+      fi
+    fi
   fi
 fi
 
@@ -1040,8 +1075,9 @@ GITIGNORE="$TARGET_DIR/.gitignore"
 if [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ]; then
   for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/"; do
     # Git for Windows checks a tracked .gitignore out with CRLF: match without the CR,
-    # or every run appends the line again.
+    # or the line is appended a second time.
     tr -d '\r' < "$GITIGNORE" | grep -qxF "$ignore" && continue
+    end_with_newline "$GITIGNORE"
     printf '%s\n' "$ignore" >> "$GITIGNORE"
     CHANGES="$CHANGES  [updated] .gitignore — $ignore added\n"
   done
@@ -1113,8 +1149,8 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
     if [ "$DRY_RUN" = true ]; then
       CHANGES="$CHANGES  [would update] .gitignore — .safe-ai-skill/ added to the kit config block\n"
     else
-      awk '/^# <<< solana-ai-kit config <<</ { print ".safe-ai-skill/" } { print }' "$GITIGNORE" > "$GITIGNORE.tmp" \
-        && cat "$GITIGNORE.tmp" > "$GITIGNORE" && rm -f "$GITIGNORE.tmp"
+      awk '/^# <<< solana-ai-kit config <<</ { print ".safe-ai-skill/" } { print }' "$GITIGNORE" > "$TEMP_DIR/gitignore.tmp" \
+        && cat "$TEMP_DIR/gitignore.tmp" > "$GITIGNORE" && rm -f "$TEMP_DIR/gitignore.tmp"
       CHANGES="$CHANGES  [updated] .gitignore — .safe-ai-skill/ added to the kit config block\n"
     fi
   fi

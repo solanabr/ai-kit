@@ -37,9 +37,21 @@ ignore_status() {
   echo "$rc"
 }
 same() { diff "$1" "$2" > /dev/null 2>&1 && echo same || echo differs; }
+# keeps_prefix <original> <file> — the file still begins with the original, byte for byte
+keeps_prefix() { [ "$(head -c "$(wc -c < "$1")" "$2")" = "$(cat "$1")" ] && echo kept || echo changed; }
+# kit_keys_once <file> — every key the kit schema declares appears exactly once
+kit_keys_once() {
+  local k bad=""
+  for k in $(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$REPO_ROOT/$SCHEMA" | tr -d '='); do
+    [ "$(grep -c "^$k=" "$1")" = 1 ] || bad="$bad $k"
+  done
+  echo "${bad:-all-once}"
+}
 
-# A project that already uses varlock, with its own root defaults and keys. Merging the
-# kit's keys into it would make them required there, so it must come through untouched.
+# A project that already uses varlock, with its own root defaults and keys. .env gets
+# every kit key, and varlock treats a key its schema does not declare as required, so
+# the kit's key blocks are appended. Each carries its own @optional, so it stays optional
+# under this project's @defaultRequired=true, and the project's own lines stay as written.
 printf '# @defaultRequired=true\n# ---\nMY_APP_KEY=\n' > "$TEMP_DIR/own-schema"
 
 assert_file_exists "$REPO_ROOT/$SCHEMA" "The kit ships $SCHEMA"
@@ -63,7 +75,9 @@ check_mode() {
   p="$(new_project "$label-own")"
   cp "$TEMP_DIR/own-schema" "$p/$SCHEMA"
   install_kit "$@" "$p"
-  assert_eq "same" "$(same "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "install.sh${1:+ $1} leaves a project's own $SCHEMA alone, kit keys not merged in"
+  assert_eq "kept" "$(keeps_prefix "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "install.sh${1:+ $1} keeps a project's own $SCHEMA lines as written"
+  assert_eq "all-once" "$(kit_keys_once "$p/$SCHEMA")" "...and appends each kit key it lacked, once"
+  assert_eq "1" "$(grep -c '^# ---' "$p/$SCHEMA")" "...without the kit's header"
 
   echo "[update.sh${1:+ $1}]"
   rm -f "$p/$SCHEMA"
@@ -76,8 +90,11 @@ check_mode() {
   assert_eq "1" "$(ignore_status "$p" "$SCHEMA")" "...and does not gitignore it"
   cp "$TEMP_DIR/own-schema" "$p/$SCHEMA"
   out="$(update_kit "$p" "$cfg")" || true
-  assert_eq "same" "$(same "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "update.sh keeps an existing $SCHEMA byte for byte"
-  assert_eq "" "$(printf '%s\n' "$out" | grep -F "$SCHEMA" || true)" "...and does not mention it"
+  assert_eq "kept" "$(keeps_prefix "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "update.sh keeps an existing $SCHEMA's lines as written"
+  assert_eq "all-once" "$(kit_keys_once "$p/$SCHEMA")" "...and appends each kit key it lacked, once"
+  assert_contains "$out" "[updated] $SCHEMA — kit keys added:" "...and says which"
+  out="$(update_kit "$p" "$cfg")" || true
+  assert_eq "" "$(printf '%s\n' "$out" | grep -F "$SCHEMA" || true)" "...and a second run has nothing to add or say"
 }
 
 check_mode claude .claude
