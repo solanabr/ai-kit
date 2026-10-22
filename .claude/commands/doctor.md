@@ -43,7 +43,7 @@ npx --yes @colosseum-org/copilot-connect status 2>&1 | tail -3 || echo "HELPER_U
 cat .claude/VERSION
 git ls-remote --tags --sort=-v:refname https://github.com/solanabr/ai-kit | head -3
 ```
-- WARN behind the latest tag: `bash .claude/bin/update.sh` (`.agents/bin/update.sh` for `--agents` installs); preview with `--dry-run`
+- WARN behind the latest tag: `/update`, or from a shell `SOLANA_AI_KIT_BRANCH="$(bash .claude/bin/kit-ref.sh)" bash .claude/bin/update.sh` (`.agents/bin/` for `--agents` installs); preview with `--dry-run`
 - FAIL no `VERSION` file (corrupted or pre-1.0 config): the same update command
 
 **7. MCP config.**
