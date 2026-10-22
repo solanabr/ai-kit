@@ -101,9 +101,9 @@ print_banner() {
   printf '%s%s%s\n' "$C2" '  / ___// __ \/ /   /   |  / | / /   |' "$CRST"
   printf '%s%s%s\n' "$C3" '  \__ \/ / / / /   / /| | /  |/ / /| |' "$CRST"
   printf '%s%s%s\n' "$C4" ' ___/ / /_/ / /___/ ___ |/ /|  / ___ |' "$CRST"
-  printf '%s%s%s\n' "$C5" '/____/\____/_____/_/  |_/_/ |_/_/  |_|' "$CRST"
+  printf '%s%s%s\n\n' "$C5" '/____/\____/_____/_/  |_/_/ |_/_/  |_|' "$CRST"
   printf '%s%s%s\n' "$C6" '           ▄▀█ █   █▄▀ █ ▀█▀' "$CRST"
-  printf '%s%s%s\n' "$C7" '           █▀█ █   █ █ █  █' "$CRST"
+  printf '%s%s%s\n\n' "$C7" '           █▀█ █   █ █ █  █' "$CRST"
   printf '%s\n\n' "${CSUB}         by @SuperteamBR 🇧🇷${CRST}"
 }
 
