@@ -24,6 +24,7 @@ set -euo pipefail
 #   skills.sh prune                                                 # after update.sh has copied every pack
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
 #   skills.sh pins [--write] [<kit repo root>]                      # registry pins vs the gitlinks (maintainers, CI)
+#   skills.sh budget                                                # --agents: warn past Codex's skill budget
 #
 # skills/extensions.txt lists the extensions a project installed; update.sh keeps
 # those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
@@ -531,6 +532,7 @@ cmd_prune() {
   write_list "$CONFIG_DIR" "$keep"
   write_packs "$CONFIG_DIR" "$reg"
   summary "$reg" "$keep" "$CONFIG_NAME"
+  cmd_budget
 }
 
 # Extensions this project has not installed. Hub links into them dangle until
@@ -623,6 +625,7 @@ cmd_add() {
   write_list "$CONFIG_DIR" "$(recorded_extensions "$CONFIG_DIR" "$reg")" \
     "$(for id in $ids; do if has_line "$extensions" "$id" && ! has_word "$failed" "$id"; then echo "$id"; fi; done)"
   write_packs "$CONFIG_DIR" "$reg"
+  cmd_budget
   [ -z "$failed" ] || die "not installed:$failed"
 }
 
@@ -707,6 +710,35 @@ cmd_pins() {
   fi
 }
 
+# Codex splits one description budget (~22 KB) evenly across every skill it registers
+# and cuts each description to its share with no marker; far enough past it, it lists
+# names with no description and then drops skills outright, so it cannot route to them
+# (#212). Measured on codex-cli 0.155-0.156 against --agents installs: 42 project skills
+# all whole, sendai's 57 with 11 cut. It is a count of SKILL.md files, not of packs —
+# sendai alone ships 49 — and Codex's built-in and user-level skills share the same
+# budget, so the line sits below the first measured cut rather than at it. Claude Code
+# and Grok are not affected: a .claude/ install is never checked. opencode has no cap at
+# all and carries every description in every session, which this cannot warn about.
+CODEX_SKILL_LIMIT=45
+
+# The skills Codex registers from this install: every SKILL.md under skills/, at any
+# depth, except inside dot-directories, which neither Codex nor opencode scans.
+registered_skills() {
+  find "$1/skills" -mindepth 1 -name '.*' -prune -o -name SKILL.md -print 2>/dev/null | wc -l | tr -d ' '
+}
+
+cmd_budget() {
+  local n
+  [ "$CONFIG_NAME" = ".agents" ] || return 0
+  n="$(registered_skills "$CONFIG_DIR")"
+  [ "${n:-0}" -gt "$CODEX_SKILL_LIMIT" ] || return 0
+  {
+    echo "! $n skills are registered from $CONFIG_NAME/skills/, past the ~$CODEX_SKILL_LIMIT Codex's shared description budget holds."
+    echo "  Codex shortens every description to fit, without saying so, and well past it drops them, so it stops routing to those skills."
+    echo "  To remove an extension: delete its line from $CONFIG_NAME/skills/$LIST_FILE, then run: bash $CONFIG_NAME/bin/skills.sh prune"
+  } >&2
+}
+
 cmd_list() {
   local reg="$CONFIG_DIR/skills/skill-registry.json" id tier trig state
   check_registry "$reg"
@@ -727,6 +759,7 @@ case "${1:-list}" in
   prune) cmd_prune ;;
   uninstalled) cmd_uninstalled ;;
   pins) shift; cmd_pins "$@" ;;
-  -h|--help|help) sed -n '4,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  budget) cmd_budget ;;
+  -h|--help|help) sed -n '4,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac

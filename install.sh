@@ -236,7 +236,11 @@ fi
 # hooks from .codex/hooks.json; Cursor, Copilot, Gemini CLI and opencode read
 # instructions only. A tier record and a generated rule block there would be dead
 # weight that looks like protection, so --agents installs no firewall at all.
-AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json'
+# settings.json goes for the same reason (#160): its permission rules, sandbox flag and
+# hooks block are Claude Code's, and Grok reads hooks only from .claude/settings.json,
+# so under .agents/ the file is 22 KB of policy nothing parses, which reads as if it
+# were in force.
+AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json settings.json'
 agents_paths() {
   local f
   for f in "$@"; do
@@ -274,7 +278,7 @@ if [ "$AGENTS_ONLY" = true ]; then
   R="$TEMP_DIR/repo"
   for f in $AGENTS_SKIP_FILES; do rm -f "$R/.claude/$f"; done
   strip_md_comments "$R/CLAUDE-solana.md"
-  agents_paths "$R/CLAUDE-solana.md" "$R/.gitmodules" "$R/.claude/settings.json"
+  agents_paths "$R/CLAUDE-solana.md" "$R/.gitmodules"
   while IFS= read -r f; do agents_paths "$f"; done < <(
     find "$R/.claude/agents" "$R/.claude/commands" "$R/.claude/skills" \
       "$R/.claude/hooks" -path "$R/.claude/skills/ext" -prune -o -type f -print 2>/dev/null
@@ -306,8 +310,12 @@ for dir in agents skills commands bin hooks; do
 done
 
 # The copy merges, so it never removes the Claude-Code-only files an older --agents
-# install shipped. Remove them here.
-if [ "$AGENTS_ONLY" = true ]; then
+# install shipped. Remove them here. Not when .agents/ is the same directory as
+# .claude/ (a symlink between them): there these are Claude Code's live settings and
+# firewall, which nothing here should delete.
+if [ "$AGENTS_ONLY" = true ] && [ -d "$TARGET_DIR/.claude" ] && [ "$TARGET_DIR/$CONFIG_DIR" -ef "$TARGET_DIR/.claude" ]; then
+  warn "$CONFIG_DIR/ and .claude/ are the same directory, so its settings.json and firewall files were left in place"
+elif [ "$AGENTS_ONLY" = true ]; then
   for f in $AGENTS_SKIP_FILES; do
     if [ -f "$TARGET_DIR/$CONFIG_DIR/$f" ]; then
       rm -f "$TARGET_DIR/$CONFIG_DIR/$f"
@@ -344,6 +352,12 @@ fi
 if [ -d "$TARGET_DIR/$CONFIG_DIR/skills/ext" ]; then
   STRIPPED="$(strip_pack_load_surfaces "$TARGET_DIR/$CONFIG_DIR/skills/ext"/*/)"
   [ "$STRIPPED" = 0 ] || ok "Removed $STRIPPED pack-local instruction file(s) and .claude/ from $CONFIG_DIR/skills/ext/"
+fi
+
+# Codex cuts every skill description once too many are registered (#212). Counted here,
+# after the copy, because --with packs and the user's own skills only meet at this point.
+if [ "$AGENTS_ONLY" = true ] && [ -f "$TARGET_DIR/$CONFIG_DIR/bin/skills.sh" ]; then
+  bash "$TARGET_DIR/$CONFIG_DIR/bin/skills.sh" budget || true
 fi
 
 # VERSION: always overwrite (CHANGELOG stays in source repo only)
@@ -691,8 +705,9 @@ else
 fi
 BOX_LINES+=("")
 if [ "$AGENTS_ONLY" = true ]; then
-  BOX_LINES+=("No firewall is installed here: nothing reads a permission")
-  BOX_LINES+=("block under $CONFIG_DIR/. Use a full install for the tiers.")
+  BOX_LINES+=("No firewall and no settings.json are installed here: no")
+  BOX_LINES+=("harness reads permission rules or hooks under $CONFIG_DIR/, so")
+  BOX_LINES+=("nothing the kit ships is enforced. Use a full install for tiers.")
 else
   BOX_LINES+=("Firewall tier: $TIER. Switch any time with /firewall <tier>")
   BOX_LINES+=("(off, relaxed, medium, high).")

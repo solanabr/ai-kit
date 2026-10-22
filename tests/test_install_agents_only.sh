@@ -41,19 +41,16 @@ assert_dir_not_exists "$TEMP_DIR/.agents/rules" ".agents/rules/ not installed (k
 assert_dir_exists "$TEMP_DIR/.agents/bin" ".agents/bin/ directory exists"
 assert_file_exists "$TEMP_DIR/.agents/skills/SKILL.md" "SKILL.md exists in .agents/"
 
-# settings.json should exist in .agents/
-assert_json_valid "$TEMP_DIR/.agents/settings.json" ".agents/settings.json is valid JSON"
-assert_file_contains "$TEMP_DIR/.agents/settings.json" "Bash(bash .agents/bin/skills.sh add *)" ".agents/settings.json allows skills.sh add at its .agents/ path"
-
 # --agents mode is unfirewalled, and ships nothing that pretends otherwise. Nothing there
 # reads a permission block: Grok reads .claude/settings.json, Codex reads AGENTS.md plus
-# .agents/skills/ with hooks in .codex/hooks.json. So the tier record, the generator and
-# /firewall are all skipped, and firewall.sh apply never runs. (.agents/settings.json is
-# equally unread but predates this; it stays installed — removing it is its own change.)
+# .agents/skills/ with hooks in .codex/hooks.json. So the tier record, the generator,
+# /firewall and settings.json itself (#160: 22 KB of rules, a sandbox flag and a hooks
+# block that no harness parses there) are all skipped, and firewall.sh apply never runs.
+assert_file_not_exists "$TEMP_DIR/.agents/settings.json" "no .agents/settings.json (no harness reads it there)"
 assert_file_not_exists "$TEMP_DIR/.agents/security.json" "no .agents/security.json (--agents is unfirewalled)"
 assert_file_not_exists "$TEMP_DIR/.agents/bin/firewall.sh" "no .agents/bin/firewall.sh"
 assert_file_not_exists "$TEMP_DIR/.agents/commands/firewall.md" "no /firewall in --agents mode"
-for skipped in "security.json" "bin/firewall.sh" "commands/firewall.md"; do
+for skipped in "security.json" "settings.json" "bin/firewall.sh" "commands/firewall.md"; do
   TOTAL=$((TOTAL + 1))
   if grep -qF "$skipped" <<< "$(sed -n 's/^AGENTS_SKIP_FILES=.\(.*\).$/\1/p' "$REPO_ROOT/install.sh")"; then
     echo "  PASS: install.sh AGENTS_SKIP_FILES skips $skipped"
@@ -379,20 +376,74 @@ for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   add_to_block "$OLD" CLAUDE.md
   echo "gitdir: ../../../../.git/modules/.claude/skills/ext/solana-dev" > "$OLD/.agents/skills/ext/solana-dev/.git" 2>/dev/null || true
   cp "$REPO_ROOT/.claude/commands/cleanup.md" "$OLD/.agents/commands/cleanup.md"
+  # and every install before #160 wrote an .agents/settings.json nothing reads
+  cp "$REPO_ROOT/.claude/settings.json" "$OLD/.agents/settings.json"
 done
-assert_cmd_success "cd '$WORK/old-update' && bash .agents/bin/update.sh" "update.sh upgrades an older --agents install"
+UPD_OUT="$(cd "$WORK/old-update" && bash .agents/bin/update.sh 2>&1)" && RC=0 || RC=$?
+assert_eq "0" "$RC" "update.sh upgrades an older --agents install"
+assert_contains "$UPD_OUT" "[removed] .agents/settings.json" "update.sh reports removing the older install's settings.json"
 assert_cmd_success "install_agents '$WORK/old-reinstall'" "install.sh --agents re-install upgrades an older --agents install"
 assert_file_contains "$WORK/last.log" "Removed .agents/commands/cleanup.md" \
   "install.sh --agents reports removing the older install's /cleanup"
+assert_file_contains "$WORK/last.log" "Removed .agents/settings.json" \
+  "install.sh --agents reports removing the older install's settings.json"
 for OLD in "$WORK/old-update" "$WORK/old-reinstall"; do
   NAME="$(basename "$OLD")"
   assert_file_not_exists "$OLD/.agents/commands/cleanup.md" "$NAME: the older install's /cleanup is removed"
+  assert_file_not_exists "$OLD/.agents/settings.json" "$NAME: the older install's settings.json is removed"
   assert_file_exists "$OLD/AGENTS.md" "$NAME: AGENTS.md created"
   assert_eq "" "$(config_block "$OLD" | grep -xF 'AGENTS.md' || true)" \
     "$NAME: AGENTS.md is not added to the .gitignore config block"
   assert_eq "1" "$(ignore_status "$OLD" AGENTS.md)" "$NAME: git does not ignore the AGENTS.md it created"
   assert_submodules_under_agents "$OLD" "$NAME"
 done
+
+# ── .agents/ as a symlink to .claude/ ───────────────────────────────────────
+# The skip-file removal deletes by path under .agents/, so with the two directories
+# being one it would delete Claude Code's live settings.json and firewall. It must not.
+echo "[.agents/ -> .claude/]"
+LINKED="$WORK/linked"; mkdir -p "$LINKED/.claude/bin"; git -C "$LINKED" init -q
+ln -s .claude "$LINKED/.agents"
+echo '{"user_custom": true}' > "$LINKED/.claude/settings.json"
+echo '{"tier": "high"}' > "$LINKED/.claude/security.json"
+echo '# firewall' > "$LINKED/.claude/bin/firewall.sh"
+install_agents "$LINKED" || true
+for f in settings.json security.json bin/firewall.sh; do
+  assert_file_exists "$LINKED/.claude/$f" "install.sh --agents through a symlinked .agents/ keeps .claude/$f"
+done
+assert_file_contains "$LINKED/.claude/settings.json" "user_custom" "...and .claude/settings.json is unchanged"
+(cd "$LINKED" && bash .agents/bin/update.sh > "$WORK/linked-update.log" 2>&1) || true
+for f in settings.json security.json; do
+  assert_file_exists "$LINKED/.claude/$f" "update.sh through a symlinked .agents/ keeps .claude/$f"
+done
+
+# ── Codex's skill budget (#212) ─────────────────────────────────────────────
+# skills.sh budget warns once an --agents install registers more SKILL.md files than
+# Codex's shared description budget holds. Driven against a scratch config dir so the
+# count is exact whatever packs this checkout has populated.
+echo "[codex skill budget]"
+budget_dir() {  # budget_dir <dir> <config name> <skills> — a config dir with N skills
+  local d="$1/$2" i
+  mkdir -p "$d/bin" "$d/skills"
+  cp "$REPO_ROOT/.claude/bin/skills.sh" "$REPO_ROOT/.claude/bin/_pack_strip.sh" "$d/bin/"
+  for i in $(seq 1 "$3"); do mkdir -p "$d/skills/ext/p/s$i"; echo "---" > "$d/skills/ext/p/s$i/SKILL.md"; done
+}
+LIMIT="$(sed -n 's/^CODEX_SKILL_LIMIT=\([0-9]*\)$/\1/p' "$REPO_ROOT/.claude/bin/skills.sh")"
+assert_cmd_success "[ -n '$LIMIT' ] && [ '$LIMIT' -gt 0 ]" "skills.sh declares CODEX_SKILL_LIMIT"
+budget_dir "$WORK/b-at" .agents "$LIMIT"
+budget_dir "$WORK/b-over" .agents "$((LIMIT + 1))"
+budget_dir "$WORK/b-claude" .claude "$((LIMIT + 1))"
+budget_dir "$WORK/b-dot" .agents "$LIMIT"
+mkdir -p "$WORK/b-dot/.agents/skills/ext/p/.hidden/s"; echo "---" > "$WORK/b-dot/.agents/skills/ext/p/.hidden/s/SKILL.md"
+assert_eq "" "$(bash "$WORK/b-at/.agents/bin/skills.sh" budget 2>&1)" "budget is silent at the limit"
+OVER="$(bash "$WORK/b-over/.agents/bin/skills.sh" budget 2>&1 >/dev/null)"
+assert_contains "$OVER" "$((LIMIT + 1)) skills are registered from .agents/skills/" "budget warns on stderr one past the limit"
+assert_contains "$OVER" "bash .agents/bin/skills.sh prune" "...and names the way to remove an extension"
+assert_eq "" "$(bash "$WORK/b-claude/.claude/bin/skills.sh" budget 2>&1)" "budget never warns for a .claude/ install"
+assert_eq "" "$(bash "$WORK/b-dot/.agents/bin/skills.sh" budget 2>&1)" "a SKILL.md inside a dot-directory is not counted"
+assert_contains "$(sed -n '/^cmd_add()/,/^}/p' "$REPO_ROOT/.claude/bin/skills.sh")" "cmd_budget" "skills.sh add runs the budget check"
+assert_contains "$(sed -n '/^cmd_prune()/,/^}/p' "$REPO_ROOT/.claude/bin/skills.sh")" "cmd_budget" "skills.sh prune (/update) runs the budget check"
+assert_file_contains "$REPO_ROOT/install.sh" 'skills.sh" budget' "install.sh --agents runs the budget check"
 
 # ── An --agents install that still lists AGENTS.md in the gitignore block ─────
 # Every --agents install made before AGENTS.md left the block still lists it there, so

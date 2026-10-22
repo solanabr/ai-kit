@@ -209,7 +209,11 @@ done
 # hooks from .codex/hooks.json; Cursor, Copilot, Gemini CLI and opencode read
 # instructions only. A tier record and a generated rule block there would be dead
 # weight that looks like protection, so --agents installs no firewall at all.
-AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json'
+# settings.json goes for the same reason (#160): its permission rules, sandbox flag and
+# hooks block are Claude Code's, and Grok reads hooks only from .claude/settings.json,
+# so under .agents/ the file is 22 KB of policy nothing parses, which reads as if it
+# were in force.
+AGENTS_SKIP_FILES='commands/cleanup.md commands/firewall.md bin/firewall.sh security.json settings.json'
 agents_paths() {
   local f
   for f in "$@"; do
@@ -245,8 +249,14 @@ INSTR_FILE="CLAUDE.md"
 if [ "$CONFIG_NAME" = ".agents" ]; then
   INSTR_FILE="AGENTS.md"
   # The frozen copy loop above just wrote these. A dry run copies nothing, so there
-  # only an older install's copy can be present, and it must stay.
+  # only an older install's copy can be present, and it must stay. settings.json is
+  # never written by that loop, so for it this is the removal from an older install.
+  # Skipped when .agents/ is .claude/ under another name: those are live there.
+  SAME_AS_CLAUDE=false
+  [ -d "$TARGET_DIR/.claude" ] && [ "$TARGET_DIR/$CONFIG_NAME" -ef "$TARGET_DIR/.claude" ] && SAME_AS_CLAUDE=true
+  [ "$SAME_AS_CLAUDE" = false ] || CHANGES="$CHANGES  [kept] $CONFIG_NAME/ is the same directory as .claude/, so its settings.json and firewall files stay\n"
   for f in $AGENTS_SKIP_FILES; do
+    [ "$SAME_AS_CLAUDE" = false ] || break
     [ -f "$TARGET_DIR/$CONFIG_NAME/$f" ] || continue
     if [ "$DRY_RUN" = true ]; then
       CHANGES="$CHANGES  [would remove] $CONFIG_NAME/$f (Claude Code only)\n"

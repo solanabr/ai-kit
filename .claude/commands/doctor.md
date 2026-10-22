@@ -67,8 +67,10 @@ Detect it from the project config alone. `$HOME/.claude/settings.json` is outsid
 [ -f .claude/VERSION ] && echo "FULL_INSTALL present"
 grep -qE '"solana-ai-kit@[^"]*"[[:space:]]*:[[:space:]]*true' .claude/settings.json 2>/dev/null \
   && echo "PLUGIN enabled (project scope)"
+[ -f .claude/VERSION ] && [ -f .agents/VERSION ] && echo "DUAL_INSTALL .claude/ and .agents/"
 ```
 OK with exactly one of the two, `n/a` with neither. WARN with both; the fix is to pick one: `/plugin uninstall solana-ai-kit` (keeps the full install's permissions/sandbox policy and ext/ submodules), or remove the project `.claude/` and rely on the plugin, which carries neither. Report user-scope enablement as `unknown` whenever check 9 shows the read fence on — a plugin enabled only in `~/.claude/settings.json` is invisible then, and `/plugin` is where the user can see it.
+`DUAL_INSTALL` (a regular install beside an `--agents` one) is OK and works, but add one line to the report naming which side is governed, since this is where symmetry gets assumed: the rules, sandbox and hooks in `.claude/settings.json` bind Claude Code sessions only, and Codex, opencode or any other harness reading `.agents/` runs against the same repo, keys and clusters with none of them. There is no fix to offer.
 
 **9. Firewall tier.** `.claude/security.json` declares the tier; `bash .claude/bin/firewall.sh apply` writes the generated `permissions` + `sandbox` block into `.claude/settings.json` and records the exact rule strings it wrote in `enforced.ruleIds`. Read both files, edit neither.
 ```bash
@@ -98,6 +100,7 @@ print("live_rules:", len(live), "recorded:", len(rec), "absent:", len(rec - live
 print("fence:", fence(cfg), "fence_local:", fence(loc))
 print("sandbox:", (cfg.get("sandbox") or {}).get("enabled"), "sandbox_local:", (loc.get("sandbox") or {}).get("enabled"))
 print("full_install:", pathlib.Path(".claude/VERSION").is_file())
+print("config_dir:", pathlib.Path(".claude/VERSION").parent.name)
 want = 0
 for line in (pathlib.Path(".claude/bin/firewall.sh").read_text().splitlines()
              if pathlib.Path(".claude/bin/firewall.sh").is_file() else []):
@@ -110,6 +113,7 @@ print("mcp_denies:", len(mcp))
 PY
 ```
 These states look alike and are not. Read them in this order; stop at the first that matches.
+- `n/a` `config_dir: .agents`: an `--agents` install, which ships no `security.json`, no firewall and no `settings.json`, because no harness parses permission rules or a hooks array under `.agents/`. There is no tier to check and nothing to fix; enforcement needs a regular install run under Claude Code.
 - `n/a` declared `off`: the user chose no firewall. Nothing is generated and nothing is wrong — do not offer a fix.
 - WARN `live_rules: 0` and `full_install: False`: this is the plugin path — the plugin ships `hooks/hooks.json` only, so no permission or sandbox policy is installable and no tier applies. Hooks still gate deploys. For a tier, do a full install: `bash <(curl -fsSL https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh)`
 - FAIL `live_rules: 0` and `full_install: True`: a full install whose `settings.json` lost its policy block. Regenerate: `bash .claude/bin/firewall.sh apply`
@@ -137,9 +141,11 @@ print("registered:", has("fetch-exec-guard"))
 print("older_guards:", sum(has(g) for g in ("secrets-guard", "onchain-guard", "egress-guard")))
 print("script:", pathlib.Path(".claude/hooks/fetch-exec-guard.sh").is_file())
 print("full_install:", pathlib.Path(".claude/VERSION").is_file())
+print("config_dir:", pathlib.Path(".claude/VERSION").parent.name)
 PY
 ```
 Read these in order; stop at the first that matches.
+- `n/a` `config_dir: .agents`: an `--agents` install has no `settings.json` to register the guard in (check 9 says why). The script is on disk and runs only if the user wires it into their own harness.
 - `n/a` `full_install: False`: the plugin path. The plugin's own `hooks/hooks.json` carries the guard, so there is nothing in the project to register and nothing wrong.
 - OK `registered: True`: the gate is live. Report the tier it is acting at (check 9).
 - WARN `registered: False` and `older_guards: 0` and `full_install: True`: no kit guard is registered at all, so the `hooks` array was emptied or rewritten by hand — **removed on purpose**. Report it and offer no fix; re-adding something the user deleted is not a repair.
