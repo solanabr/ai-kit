@@ -25,10 +25,10 @@ set -euo pipefail
 #   skills.sh uninstalled                                           # extensions not installed here, one id per line
 #   skills.sh pins [--write] [<kit repo root>]                      # registry pins vs the gitlinks (maintainers, CI)
 #
-# skills/extensions.txt lists the extensions a project installed; update.sh keeps
-# those and the core packs. skills/kit-packs.txt lists every ext/ pack the kit put
-# here, so a pack a later kit drops is removed without touching folders the user
-# made. skills/<id>.lock records an upstream pack's commit and
+# skills/extensions.txt lists the extensions a project installed (no file: none, so
+# core-only); update.sh keeps those and the core packs. skills/kit-packs.txt lists
+# every ext/ pack the kit put here, so a pack a later kit drops is removed without
+# touching folders the user made. skills/<id>.lock records an upstream pack's commit and
 # folders. Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a local checkout
 # (offline, tests); SOLANA_AI_KIT_UPSTREAM and SOLANA_AI_KIT_BRANCH override the
 # source (default: main); SOLANA_AI_KIT_PACK_MIRROR=/dir fetches upstream pack <id>
@@ -397,26 +397,24 @@ expand_ids() {
   done
 }
 
-# Extensions a project installed. Installs from before the core/extension split
-# have no list and carried every pack, so they keep what is on disk. Lines are
-# trimmed and lowercased; one that is not an extension id in this registry is
+# Extensions a project installed: the lines of extensions.txt and nothing else. No list
+# means none were chosen, so the project is core-only (#112). That is every install from
+# before the core/extension split: it vendored all the packs and wrote no list, so what
+# is on disk there is the old default, not a choice — and once update.sh's copy loop has
+# run, every pack is on disk whatever was chosen, so the disk is never evidence. Lines
+# are trimmed and lowercased; one that is not an extension id in this registry is
 # dropped with a warning, so a hand edit can't add a pack nobody chose.
 recorded_extensions() {
   local cfg="$1" reg="$2" known id
-  if [ -f "$cfg/skills/$LIST_FILE" ]; then
-    known="$(tier_ids "$reg" extension)"
-    while IFS= read -r id; do
-      if has_line "$known" "$id"; then
-        echo "$id"
-      else
-        echo "skills.sh: ignoring '$id' in $(basename "$cfg")/skills/$LIST_FILE: not a skill extension in this kit" >&2
-      fi
-    done < <(tr -d '\r' < "$cfg/skills/$LIST_FILE" | awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, ""); $0 = tolower($0) } NF && !/^#/ && !seen[$0]++')
-  else
-    for id in $(tier_ids "$reg" extension); do
-      if installed "$cfg" "$id"; then echo "$id"; fi
-    done
-  fi
+  [ -f "$cfg/skills/$LIST_FILE" ] || return 0
+  known="$(tier_ids "$reg" extension)"
+  while IFS= read -r id; do
+    if has_line "$known" "$id"; then
+      echo "$id"
+    else
+      echo "skills.sh: ignoring '$id' in $(basename "$cfg")/skills/$LIST_FILE: not a skill extension in this kit" >&2
+    fi
+  done < <(tr -d '\r' < "$cfg/skills/$LIST_FILE" | awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, ""); $0 = tolower($0) } NF && !/^#/ && !seen[$0]++')
 }
 
 write_list() {

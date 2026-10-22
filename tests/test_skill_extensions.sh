@@ -31,6 +31,8 @@ PY
 }
 ext_dirs() { ls "$1" 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//'; }
 sorted() { printf '%s\n' "$@" | awk 'NF' | sort | tr '\n' ' ' | sed 's/ $//'; }
+# the ids a config dir's extensions.txt records, sorted, space-separated
+recorded() { grep -v '^#' "$1/skills/extensions.txt" 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//' || true; }
 
 CORE="$(tier_ids core)"
 EXTENSIONS="$(tier_ids extension)"
@@ -292,11 +294,12 @@ PY
 # the time anyone reads the failure.
 UPDATE_RC=0
 UPDATE_NOTE=""
+# A third argument names the config dir (.agents for an --agents install).
 run_update() {
-  local log="$TEMP_DIR/$1.log"
+  local log="$TEMP_DIR/$1.log" cfg="${3:-.claude}"
   UPDATE_RC=0
   UPDATE_NOTE=""
-  (cd "${2:?}" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) \
+  (cd "${2:?}" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$cfg/bin/update.sh") \
     > "$log" 2>&1 || UPDATE_RC=$?
   # `|| true` inside the substitution, not outside: an assignment carries its
   # substitution's exit status, so a missing log would abort the suite here under set -e.
@@ -367,17 +370,39 @@ if packs_ready; then
 fi
 pack_check assert_eq "0" "$UPDATE_RC" "update.sh exits 0$UPDATE_NOTE"
 pack_check assert_eq "$(sorted $KIT_CORE solana-game)" "$(ext_dirs "$P1/.claude/skills/ext")" "update.sh keeps core packs and installed extensions, adds none"
+# The copy loop put every pack on disk before prune ran; a list naming one of them must
+# come out naming exactly that one, not whatever the updater just wrote (#112).
+pack_check assert_eq "solana-game" "$(recorded "$P1/.claude")" "...and extensions.txt still lists exactly the one it listed"
 
-# An install from before the split has every pack and no list: update keeps them all
+# An install from before the split (v2.1.0's shape): every pack vendored, and neither
+# extensions.txt nor kit-packs.txt. No list means no extension was chosen, so update
+# moves it to core-only and writes the list that says so (#112). Under the old fallback
+# this fixture kept every pack, so each check below fails on that code.
 echo "[legacy install]"
 if packs_ready; then
   vendor_ext "$P1/.claude/skills/ext"
-  rm -f "$P1/.claude/skills/extensions.txt"
+  rm -f "$P1/.claude/skills/extensions.txt" "$P1/.claude/skills/kit-packs.txt"
   run_update legacy "$P1"
 fi
 pack_check assert_eq "0" "$UPDATE_RC" "update.sh exits 0 on a pre-split install$UPDATE_NOTE"
-pack_check assert_eq "$(sorted $KIT_CORE $KIT_EXTENSIONS)" "$(ext_dirs "$P1/.claude/skills/ext")" "Update keeps every pack of a pre-split install"
-pack_check assert_eq "$(sorted $KIT_EXTENSIONS)" "$(grep -v '^#' "$P1/.claude/skills/extensions.txt" 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//')" "...and records them as its extensions"
+pack_check assert_eq "$KIT_CORE" "$(ext_dirs "$P1/.claude/skills/ext")" "Update moves a pre-split install with every pack to the core packs"
+pack_check assert_file_exists "$P1/.claude/skills/extensions.txt" "...writes its extensions.txt"
+pack_check assert_eq "" "$(recorded "$P1/.claude")" "...recording no extension"
+pack_check assert_eq "$(sorted $CORE)" "$(grep -v '^#' "$P1/.claude/skills/kit-packs.txt" 2>/dev/null | sort | tr '\n' ' ' | sed 's/ $//')" "...and kit-packs.txt names only the core packs"
+# A list-less install holding only some extensions is not adopted either: what is on disk
+# is never read as a choice, whatever the copy loop did or did not write.
+if packs_ready; then
+  cp -R "$REPO_ROOT/.claude/skills/ext/jupiter" "$P1/.claude/skills/ext/jupiter"
+  rm -f "$P1/.claude/skills/extensions.txt" "$P1/.claude/skills/kit-packs.txt"
+  (cd "$P1" && bash .claude/bin/skills.sh prune) > "$QUIET_LOG" 2>&1 || quiet_fail "skills.sh"
+fi
+pack_check assert_eq "$KIT_CORE" "$(ext_dirs "$P1/.claude/skills/ext")" "prune with no list drops an extension that is on disk"
+pack_check assert_eq "" "$(recorded "$P1/.claude")" "...and records none"
+# A second update on the migrated install changes nothing.
+if packs_ready; then
+  run_update legacy-again "$P1"
+fi
+pack_check assert_eq "$KIT_CORE" "$(ext_dirs "$P1/.claude/skills/ext")" "A second update keeps the migrated install core-only$UPDATE_NOTE"
 
 # --- install.sh --with ---
 echo "[--with]"
@@ -457,5 +482,15 @@ if packs_ready; then
 fi
 pack_check assert_dir_exists "$P3/.agents/skills/ext/metaplex" ".agents/bin/skills.sh add installs into .agents/skills/ext"
 pack_check assert_dir_not_exists "$P3/.claude" "--agents skills.sh writes nothing under .claude/"
+# The pre-split migration is the same under .agents/: no list means core-only.
+if packs_ready; then
+  vendor_ext "$P3/.agents/skills/ext"
+  rm -f "$P3/.agents/skills/extensions.txt" "$P3/.agents/skills/kit-packs.txt"
+  run_update agents-legacy "$P3" .agents
+fi
+pack_check assert_eq "0" "$UPDATE_RC" "--agents update.sh exits 0 on a pre-split install$UPDATE_NOTE"
+pack_check assert_eq "$KIT_CORE" "$(ext_dirs "$P3/.agents/skills/ext")" "--agents update moves a pre-split install to the core packs"
+pack_check assert_eq "" "$(recorded "$P3/.agents")" "...and records no extension"
+pack_check assert_dir_not_exists "$P3/.claude" "...writing nothing under .claude/"
 
 print_summary

@@ -150,8 +150,9 @@ fi
 # Read version from source
 [ -f "$TEMP_DIR/repo/.claude/VERSION" ] && SCRIPT_VERSION="$(awk '{print $NF}' "$TEMP_DIR/repo/.claude/VERSION")"
 
-# Skill packs: keep the core ext/ packs, plus extensions named with --with or already
-# installed here (skills/skill-registry.json tiers). select removes the other ext/
+# Skill packs: keep the core ext/ packs, plus extensions named with --with or recorded
+# in this project's skills/extensions.txt (skills/skill-registry.json tiers; no list
+# means core-only, as in update.sh's prune). select removes the other ext/
 # directories, so a clone then fetches only what is left. Runs before the --agents
 # rewrite below, which would point .gitmodules away from the clone's paths.
 # Releases without skills.sh have no tiers and vendor every pack.
