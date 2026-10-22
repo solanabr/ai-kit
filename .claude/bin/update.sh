@@ -95,12 +95,6 @@ done
 # script by byte offset, so an older update.sh carries on with the new code from
 # here. Keep every byte above this comment unchanged; add new logic below it.
 
-# A failed fetch is invisible above: the frozen clone keeps only git's last line and
-# swallows its exit status, so the loop found nothing to copy. Stop before any step
-# below writes to the project or reports success. The local-source branch copies a
-# .claude/ only when one exists, so a SOLANA_AI_KIT_LOCAL_SRC run always passes this.
-# It protects only installs already on this code: a failed fetch overwrote nothing, so
-# an older update.sh runs on in its own code.
 # A URL safe to print: git keeps credentials out of its own errors, so ours do too.
 # Greedy up to the last @ before the first /, so a raw @ in a password goes with it.
 redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/]*@#\1#'; }
@@ -109,11 +103,14 @@ redact_url() { printf '%s' "$1" | sed -E 's#^([A-Za-z][A-Za-z0-9+.-]*://)[^/]*@#
 end_with_newline() { [ ! -s "$1" ] || [ -z "$(tail -c1 "$1")" ] || printf '\n' >> "$1"; }
 # The kit schema's key blocks (comment lines plus KEY=) whose key the project's own
 # .env.schema does not declare, each after a blank line. The kit's header, its root
-# decorators and `# ---`, is never copied.
+# decorators and `# ---`, is never copied. A project key counts in every spelling
+# varlock accepts (`export KEY=`, indented, `KEY = v`); missing one would append a
+# second declaration, and varlock lets the later one win.
 missing_schema_blocks() {  # <kit-schema> <project-schema>
   awk '
     function flush() { if (key != "" && !(key in have)) printf "\n%s", blk; blk = ""; key = "" }
-    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); if (l ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { sub(/=.*/, "", l); have[l] = 1 }; next }
+    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); sub(/^[ \t]*(export[ \t]+)?/, "", l)
+      if (l ~ /^[A-Za-z_][A-Za-z0-9_]*[ \t]*=/) { sub(/[ \t]*=.*/, "", l); have[l] = 1 }; next }
     !body { if ($0 ~ /^# ---/) body = 1; next }
     /^[[:space:]]*$/ { flush(); next }
     { blk = blk $0 "\n"; if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { key = $0; sub(/=.*/, "", key) } }
@@ -129,6 +126,12 @@ if [ -n "$LOCAL_SRC" ] && [ ! -d "$LOCAL_SRC/.claude" ]; then
   [ -n "${SOLANA_AI_KIT_LOCAL_SRC:-}" ] || LOCAL_SRC_VAR=SOLANA_CLAUDE_LOCAL_SRC
   LOCAL_SRC_NOTE="$LOCAL_SRC_VAR=$LOCAL_SRC has no .claude/, so the upstream was used instead"
 fi
+# A failed fetch is invisible above: the frozen clone keeps only git's last line and
+# swallows its exit status, so the loop found nothing to copy. Stop before any step
+# below writes to the project or reports success. The local-source branch copies a
+# .claude/ only when one exists, so a SOLANA_AI_KIT_LOCAL_SRC run always passes this.
+# It protects only installs already on this code: a failed fetch overwrote nothing, so
+# an older update.sh runs on in its own code.
 if [ ! -d "$TEMP_DIR/repo/.claude" ]; then
   if [ -n "$LOCAL_SRC_NOTE" ]; then echo "Error: $LOCAL_SRC_NOTE." >&2; fi
   echo "Error: could not fetch $(redact_url "$REPO_URL") ($BRANCH); nothing was updated." >&2
@@ -212,7 +215,7 @@ agents_paths() {
   for f in "$@"; do
     [ -f "$f" ] && grep -q '\.claude/' "$f" || continue
     sed -E '/\.agents\//!{s#(^|[^[:alnum:]_./~-])\.claude/#\1.agents/#g;s#([$][{]CLAUDE_PROJECT_DIR:-[.][}])/\.claude/#\1/.agents/#g;}' \
-      "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
+      "$f" > "$TEMP_DIR/rewrite.tmp" && cat "$TEMP_DIR/rewrite.tmp" > "$f" && rm -f "$TEMP_DIR/rewrite.tmp"
   done
 }
 # Codex and opencode do not strip HTML comments, so the maintainer notes in
@@ -236,7 +239,7 @@ strip_md_comments() {
     END { if (inc) {
             print "strip_md_comments: unterminated <!-- in " FILENAME > "/dev/stderr"
             exit 1 } }
-  ' "$1" > "$1.tmp" && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
+  ' "$1" > "$TEMP_DIR/rewrite.tmp" && cat "$TEMP_DIR/rewrite.tmp" > "$1" && rm -f "$TEMP_DIR/rewrite.tmp"
 }
 INSTR_FILE="CLAUDE.md"
 if [ "$CONFIG_NAME" = ".agents" ]; then
@@ -549,7 +552,19 @@ if [ "$CONFIG_NAME" != ".claude" ]; then
   :
 elif command -v python3 >/dev/null 2>&1 && [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
   cat > "$TEMP_DIR/firewall_migrate.py" <<'PY'
-import hashlib, json, os, sys
+import hashlib, json, os, sys, tempfile
+
+
+def write_text(path, text):
+    # mkstemp creates the scratch file itself (O_EXCL, random name), so a link a cloned
+    # repo plants at a fixed name beside the target cannot redirect the write.
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix="." + os.path.basename(path) + ".")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    um = os.umask(0)
+    os.umask(um)
+    os.chmod(tmp, 0o666 & ~um)
+    os.replace(tmp, path)  # atomic: same directory
 
 dry_run = sys.argv[1] == "true"
 target, config, upstream, temp = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
@@ -642,10 +657,7 @@ else:
                      " Run /firewall relaxed to adopt the kit set." % config)
 
 if not dry_run:
-    tmp = SECURITY + ".firewall.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
-    os.replace(tmp, SECURITY)  # atomic: same directory
+    write_text(SECURITY, json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
     if pristine and can_apply:
         with open(os.path.join(temp, "firewall-apply"), "w", encoding="utf-8") as f:
             f.write(tier)
@@ -701,7 +713,19 @@ if [ "$CONFIG_NAME" != ".claude" ]; then
   :
 elif command -v python3 >/dev/null 2>&1 && [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
   cat > "$TEMP_DIR/mcp_matcher.py" <<'PY'
-import json, os, sys
+import json, os, sys, tempfile
+
+
+def write_text(path, text):
+    # mkstemp creates the scratch file itself (O_EXCL, random name), so a link a cloned
+    # repo plants at a fixed name beside the target cannot redirect the write.
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix="." + os.path.basename(path) + ".")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    um = os.umask(0)
+    os.umask(um)
+    os.chmod(tmp, 0o666 & ~um)
+    os.replace(tmp, path)  # atomic: same directory
 
 dry_run, target, config, matcher = sys.argv[1] == "true", sys.argv[2], sys.argv[3], sys.argv[4]
 SETTINGS = os.path.join(target, config, "settings.json")
@@ -745,11 +769,8 @@ for entry in entries:
 if not changed:
     sys.exit(0)
 if not dry_run:
-    tmp = SETTINGS + ".mcp.tmp"
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-        os.replace(tmp, SETTINGS)
+        write_text(SETTINGS, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     except OSError as e:
         print("  [skipped] %s/settings.json: could not write (%s)" % (config, e.strerror))
         sys.exit(0)
@@ -823,7 +844,7 @@ PY
   # guard entry, since the fingerprint beside this gate would otherwise match and skip.
   HOOK_SET_VERSION=2
   cat > "$TEMP_DIR/kit_hooks.py" <<'PY'
-import hashlib, json, os, sys
+import hashlib, json, os, sys, tempfile
 
 dry_run = sys.argv[1] == "true"
 target, config, upstream, security_path = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
@@ -844,11 +865,20 @@ def load(path):
         return None
 
 
-def write_json(path, data):
-    tmp = path + ".hooks.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+def write_text(path, text):
+    # mkstemp creates the scratch file itself (O_EXCL, random name), so a link a cloned
+    # repo plants at a fixed name beside the target cannot redirect the write.
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix="." + os.path.basename(path) + ".")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    um = os.umask(0)
+    os.umask(um)
+    os.chmod(tmp, 0o666 & ~um)
     os.replace(tmp, path)  # atomic: same directory
+
+
+def write_json(path, data):
+    write_text(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 upstream_settings = load(upstream)
@@ -1022,7 +1052,7 @@ fi
 # defaults. A symlinked schema is never written through. The frozen local-source copy
 # above predates the file, hence the fallback.
 SCHEMA_SRC="$TEMP_DIR/repo/.env.schema"
-[ -f "$SCHEMA_SRC" ] || SCHEMA_SRC="${LOCAL_SRC:+$LOCAL_SRC/.env.schema}"
+[ -f "$SCHEMA_SRC" ] || [ -n "$LOCAL_SRC_NOTE" ] || SCHEMA_SRC="${LOCAL_SRC:+$LOCAL_SRC/.env.schema}"
 if [ -n "$SCHEMA_SRC" ] && [ -f "$SCHEMA_SRC" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
   if [ ! -e "$TARGET_DIR/.env.schema" ]; then
     if [ "$DRY_RUN" = true ]; then
@@ -1031,11 +1061,15 @@ if [ -n "$SCHEMA_SRC" ] && [ -f "$SCHEMA_SRC" ] && [ ! -L "$TARGET_DIR/.env.sche
       cp "$SCHEMA_SRC" "$TARGET_DIR/.env.schema"
       CHANGES="$CHANGES  [created] .env.schema\n"
     fi
+  elif [ -f "$TARGET_DIR/.env.schema" ] && [ ! -r "$TARGET_DIR/.env.schema" ]; then
+    CHANGES="$CHANGES  [skipped] .env.schema is not readable, so it was not checked for the kit's keys\n"
   elif [ -f "$TARGET_DIR/.env.schema" ]; then
     SCHEMA_ADD="$(missing_schema_blocks "$SCHEMA_SRC" "$TARGET_DIR/.env.schema")"
     if [ -n "$SCHEMA_ADD" ]; then
       SCHEMA_KEYS="$(printf '%s\n' "$SCHEMA_ADD" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')"
-      if [ "$DRY_RUN" = true ]; then
+      if [ ! -w "$TARGET_DIR/.env.schema" ]; then
+        CHANGES="$CHANGES  [skipped] .env.schema is not writable — kit keys missing: ${SCHEMA_KEYS% }\n"
+      elif [ "$DRY_RUN" = true ]; then
         CHANGES="$CHANGES  [would update] .env.schema — kit keys added: ${SCHEMA_KEYS% }\n"
       else
         end_with_newline "$TARGET_DIR/.env.schema"
@@ -1075,8 +1109,10 @@ GITIGNORE="$TARGET_DIR/.gitignore"
 if [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ]; then
   for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/"; do
     # Git for Windows checks a tracked .gitignore out with CRLF: match without the CR,
-    # or the line is appended a second time.
-    tr -d '\r' < "$GITIGNORE" | grep -qxF "$ignore" && continue
+    # or the line is appended a second time. Two patterns rather than `tr | grep -q`:
+    # under pipefail an early match kills `tr` with SIGPIPE, and a large file then
+    # reads as "not found".
+    grep -qxF -e "$ignore" -e "$ignore"$'\r' "$GITIGNORE" && continue
     end_with_newline "$GITIGNORE"
     printf '%s\n' "$ignore" >> "$GITIGNORE"
     CHANGES="$CHANGES  [updated] .gitignore — $ignore added\n"
@@ -1113,7 +1149,7 @@ fi
 # not own, so /update never writes through one, not even to create the file.
 POLICY=".safe-ai-skill/policy.yaml"
 POLICY_SRC="$TEMP_DIR/repo/$POLICY"
-[ -f "$POLICY_SRC" ] || POLICY_SRC="${LOCAL_SRC:+$LOCAL_SRC/$POLICY}"
+[ -f "$POLICY_SRC" ] || [ -n "$LOCAL_SRC_NOTE" ] || POLICY_SRC="${LOCAL_SRC:+$LOCAL_SRC/$POLICY}"
 if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" ]; then
   if [ -L "$TARGET_DIR/$POLICY" ] || [ -L "$TARGET_DIR/.safe-ai-skill" ]; then
     cmp -s "$POLICY_SRC" "$TARGET_DIR/$POLICY" \

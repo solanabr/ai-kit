@@ -12,11 +12,11 @@ disable-model-invocation: true
    CONFIG_DIR=$( [ -d .claude ] && echo .claude || echo .agents )
    INSTR_FILE=$( [ "$CONFIG_DIR" = .claude ] && echo CLAUDE.md || echo AGENTS.md )
    ```
-2. **Un-ignore.** Remove the marked block and leave the `ext/` and local-only sections alone. Writing through a temp file keeps it portable across GNU and BSD sed. If the block is already gone, continue.
+2. **Un-ignore.** Remove the marked block and leave the `ext/` and local-only sections alone. Writing through a temp file keeps it portable across GNU and BSD sed; `mktemp` makes it outside the repo, where a cloned repo cannot plant a link at its name. If the block is already gone, continue.
    ```bash
    if [ -f .gitignore ] && grep -qF ">>> solana-ai-kit config" .gitignore; then
-     sed '/# >>> solana-ai-kit config/,/# <<< solana-ai-kit config <<</d' .gitignore > .gitignore.tmp \
-       && mv .gitignore.tmp .gitignore
+     tmp="$(mktemp)" && sed '/# >>> solana-ai-kit config/,/# <<< solana-ai-kit config <<</d' .gitignore > "$tmp" \
+       && cat "$tmp" > .gitignore && rm -f "$tmp"
    fi
    ```
 3. **Stage.** Since `ext/` is still ignored, this records agents, commands, skills and settings but not the submodule trees.

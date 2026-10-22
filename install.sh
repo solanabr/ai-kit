@@ -242,7 +242,7 @@ agents_paths() {
   for f in "$@"; do
     [ -f "$f" ] && grep -q '\.claude/' "$f" || continue
     sed -E '/\.agents\//!{s#(^|[^[:alnum:]_./~-])\.claude/#\1.agents/#g;s#([$][{]CLAUDE_PROJECT_DIR:-[.][}])/\.claude/#\1/.agents/#g;}' \
-      "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
+      "$f" > "$TEMP_DIR/rewrite.tmp" && cat "$TEMP_DIR/rewrite.tmp" > "$f" && rm -f "$TEMP_DIR/rewrite.tmp"
   done
 }
 # Claude Code strips HTML comments before the model sees them; Codex and opencode
@@ -268,7 +268,7 @@ strip_md_comments() {
     END { if (inc) {
             print "strip_md_comments: unterminated <!-- in " FILENAME > "/dev/stderr"
             exit 1 } }
-  ' "$1" > "$1.tmp" && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
+  ' "$1" > "$TEMP_DIR/rewrite.tmp" && cat "$TEMP_DIR/rewrite.tmp" > "$1" && rm -f "$TEMP_DIR/rewrite.tmp"
 }
 if [ "$AGENTS_ONLY" = true ]; then
   R="$TEMP_DIR/repo"
@@ -395,8 +395,8 @@ with open(sys.argv[1], "w", encoding="utf-8") as f:
     return 0
   fi
   if grep -q '"tier"' "$1" 2>/dev/null; then
-    sed "s/\"tier\"[[:space:]]*:[[:space:]]*\"[a-z]*\"/\"tier\": \"$2\"/" "$1" > "$1.tmp" \
-      && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
+    sed "s/\"tier\"[[:space:]]*:[[:space:]]*\"[a-z]*\"/\"tier\": \"$2\"/" "$1" > "$TEMP_DIR/rewrite.tmp" \
+      && cat "$TEMP_DIR/rewrite.tmp" > "$1" && rm -f "$TEMP_DIR/rewrite.tmp"
     return 0
   fi
   return 1
@@ -514,11 +514,14 @@ GITIGNORE="$TARGET_DIR/.gitignore"
 end_with_newline() { [ ! -s "$1" ] || [ -z "$(tail -c1 "$1")" ] || printf '\n' >> "$1"; }
 # The kit schema's key blocks (comment lines plus KEY=) whose key the project's own
 # .env.schema does not declare, each after a blank line. The kit's header, its root
-# decorators and `# ---`, is never copied.
+# decorators and `# ---`, is never copied. A project key counts in every spelling
+# varlock accepts (`export KEY=`, indented, `KEY = v`); missing one would append a
+# second declaration, and varlock lets the later one win.
 missing_schema_blocks() {  # <kit-schema> <project-schema>
   awk '
     function flush() { if (key != "" && !(key in have)) printf "\n%s", blk; blk = ""; key = "" }
-    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); if (l ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { sub(/=.*/, "", l); have[l] = 1 }; next }
+    FILENAME == ARGV[1] { l = $0; sub(/\r$/, "", l); sub(/^[ \t]*(export[ \t]+)?/, "", l)
+      if (l ~ /^[A-Za-z_][A-Za-z0-9_]*[ \t]*=/) { sub(/[ \t]*=.*/, "", l); have[l] = 1 }; next }
     !body { if ($0 ~ /^# ---/) body = 1; next }
     /^[[:space:]]*$/ { flush(); next }
     { blk = blk $0 "\n"; if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { key = $0; sub(/=.*/, "", key) } }
@@ -526,7 +529,9 @@ missing_schema_blocks() {  # <kit-schema> <project-schema>
   ' "$2" "$1"
 }
 append_ignore() {  # append a pattern once (exact-line match; Git for Windows' CRs ignored)
-  tr -d '\r' < "$GITIGNORE" | grep -qxF "$1" && return 0
+  # Two patterns rather than `tr | grep -q`: under pipefail, grep stopping at an early
+  # match kills tr with SIGPIPE, and a large file then reads as "not found".
+  grep -qxF -e "$1" -e "$1"$'\r' "$GITIGNORE" && return 0
   end_with_newline "$GITIGNORE"
   printf '%s\n' "$1" >> "$GITIGNORE"
 }
@@ -634,12 +639,19 @@ if [ -f "$SCHEMA_SRC" ] && [ ! -L "$TARGET_DIR/.env.schema" ]; then
   if [ ! -e "$TARGET_DIR/.env.schema" ]; then
     cp "$SCHEMA_SRC" "$TARGET_DIR/.env.schema"
     ok "Created .env.schema (varlock: key names and which are secret, no values; commit it)"
+  elif [ -f "$TARGET_DIR/.env.schema" ] && [ ! -r "$TARGET_DIR/.env.schema" ]; then
+    warn "Your .env.schema is not readable, so it was not checked for the kit's keys"
   elif [ -f "$TARGET_DIR/.env.schema" ]; then
     SCHEMA_ADD="$(missing_schema_blocks "$SCHEMA_SRC" "$TARGET_DIR/.env.schema")"
     if [ -n "$SCHEMA_ADD" ]; then
-      end_with_newline "$TARGET_DIR/.env.schema"
-      printf '%s\n' "$SCHEMA_ADD" >> "$TARGET_DIR/.env.schema"
-      ok "Added the kit's keys to your .env.schema: $(printf '%s\n' "$SCHEMA_ADD" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')"
+      SCHEMA_KEYS="$(printf '%s\n' "$SCHEMA_ADD" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d '=' | tr '\n' ' ')"
+      if [ -w "$TARGET_DIR/.env.schema" ]; then
+        end_with_newline "$TARGET_DIR/.env.schema"
+        printf '%s\n' "$SCHEMA_ADD" >> "$TARGET_DIR/.env.schema"
+        ok "Added the kit's keys to your .env.schema: ${SCHEMA_KEYS% }"
+      else
+        warn "Your .env.schema is not writable, so the kit's keys were not added: ${SCHEMA_KEYS% }"
+      fi
     fi
   fi
 fi

@@ -209,16 +209,37 @@ assert_eq "1" "$(grep -cxF '.env.local' "$TEMP_DIR/.gitignore")" "a last line wi
 assert_eq "0" "$(grep -c 'env\.local\.memsearch' "$TEMP_DIR/.gitignore")" "...instead of being glued to the next append"
 
 echo "[.gitignore with CRLF endings]"
-sed 's/$/\r/' "$TEMP_DIR/.gitignore" > "$WORK/gi" && cat "$WORK/gi" > "$TEMP_DIR/.gitignore"
+# Start from known lines, .memsearch/ among them, so the second assertion can fail too.
+{ tr -d '\r' < "$TEMP_DIR/.gitignore" | awk '$0 != ".memsearch/"'; printf '.memsearch/\n'; } | sed 's/$/\r/' > "$WORK/gi"
+cat "$WORK/gi" > "$TEMP_DIR/.gitignore"
 SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > /dev/null 2>&1
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.env')" "a re-install over a CRLF .gitignore adds no second .env line"
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.memsearch/')" "...nor a second .memsearch/ line"
 
+# grep -q stopping at an early match used to kill `tr` with SIGPIPE under pipefail, so a
+# large .gitignore whose match came first read as "not found" and got a second line.
+echo "[a large .gitignore]"
+{ printf '.env.local\n'; seq 1 4000 | sed 's|.*|generated/path-&/|'; tr -d '\r' < "$TEMP_DIR/.gitignore" | awk '$0 != ".env.local"'; } > "$WORK/gi"
+cat "$WORK/gi" > "$TEMP_DIR/.gitignore"
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$TEMP_DIR" > /dev/null 2>&1
+assert_eq "1" "$(grep -cxF '.env.local' "$TEMP_DIR/.gitignore")" "a re-install over a large .gitignore whose match comes first adds no second line"
+
 # install.sh, update.sh and skills.sh each print an upstream URL; their redaction must
 # not drift apart, and skills.sh's fetch line must not carry credentials either.
 echo "[redact_url]"
-DEFS="$(for f in install.sh .claude/bin/update.sh .claude/bin/skills.sh; do grep -h '^redact_url()' "$REPO_ROOT/$f"; done | sort -u | wc -l | tr -d ' ')"
-assert_eq "1" "$DEFS" "install.sh, update.sh and skills.sh define redact_url identically"
+DEFS="$(for f in install.sh .claude/bin/update.sh .claude/bin/skills.sh; do grep -h '^redact_url()' "$REPO_ROOT/$f" || true; done)"
+assert_eq "3" "$(printf '%s\n' "$DEFS" | grep -c '^redact_url()' || true)" "install.sh, update.sh and skills.sh each define redact_url"
+assert_eq "1" "$(printf '%s\n' "$DEFS" | sort -u | wc -l | tr -d ' ')" "...identically"
+# The two helpers install.sh and update.sh both carry must not drift apart either.
+fn_def() {  # fn_def <file> <name>: a one-line definition, or the block up to its closing }
+  awk -v f="$2" 'index($0, f "() {") == 1 { print; if ($0 ~ /; }$/) exit; on = 1; next }
+    on { print; if ($0 ~ /^}/) exit }' "$1"
+}
+for fn in end_with_newline missing_schema_blocks; do
+  ONE="$(fn_def "$REPO_ROOT/install.sh" "$fn")"
+  assert_contains "$ONE" "$fn() {" "install.sh defines $fn"
+  assert_eq "$ONE" "$(fn_def "$REPO_ROOT/.claude/bin/update.sh" "$fn")" "...and update.sh defines it identically"
+done
 SK_OUT="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC= SOLANA_CLAUDE_LOCAL_SRC= SOLANA_AI_KIT_UPSTREAM="file://tok3n-s3cr3t@/nonexistent/no-such-repo.git" bash .claude/bin/skills.sh add jupiter 2>&1 || true)"
 assert_contains "$SK_OUT" "Fetching the pinned packs from file:///nonexistent/no-such-repo.git" "skills.sh names the upstream without its credentials"
 assert_eq "0" "$(printf '%s' "$SK_OUT" | grep -c 'tok3n-s3cr3t')" "...and never prints them"

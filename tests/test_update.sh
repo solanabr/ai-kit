@@ -163,6 +163,10 @@ mkdir -p "$TEMP_DIR/empty-src"
   bash .claude/bin/update.sh) > "$TEMP_DIR/fetch.out" 2> "$TEMP_DIR/fetch.err" || true
 assert_file_contains "$TEMP_DIR/fetch.err" "SOLANA_AI_KIT_LOCAL_SRC=$TEMP_DIR/empty-src has no .claude/" \
   "a local source without .claude/ is named when the fallback fetch fails"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC='' SOLANA_CLAUDE_LOCAL_SRC="$TEMP_DIR/empty-src" SOLANA_AI_KIT_UPSTREAM="$DEAD_URL" \
+  bash .claude/bin/update.sh) > "$TEMP_DIR/fetch.out" 2> "$TEMP_DIR/fetch.err" || true
+assert_file_contains "$TEMP_DIR/fetch.err" "SOLANA_CLAUDE_LOCAL_SRC=$TEMP_DIR/empty-src has no .claude/" \
+  "...under the legacy variable's name when that is the one set"
 rm -rf "$TEMP_DIR/empty-src"; rm -f "$TEMP_DIR/fetch.out" "$TEMP_DIR/fetch.err"
 
 # --- Retired kit defaults: what kit <= 2.1.0 wrote into settings.json and .mcp.json ---
@@ -500,6 +504,13 @@ done
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.memsearch/')" "a CRLF .gitignore keeps one .memsearch/ line across two updates"
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.claude/worktrees/')" "a CRLF .gitignore keeps one .claude/worktrees/ line across two updates"
 
+# grep -q stopping at an early match used to kill `tr` with SIGPIPE under pipefail, so a
+# large .gitignore whose match came first read as "not found" and got a second line.
+{ printf '.memsearch/\n'; seq 1 4000 | sed 's|.*|generated/path-&/|'; tr -d '\r' < "$TEMP_DIR/.gitignore" | awk '$0 != ".memsearch/"'; } > "$FW_DIR/gi"
+cat "$FW_DIR/gi" > "$TEMP_DIR/.gitignore" && rm -f "$FW_DIR/gi"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+assert_eq "1" "$(grep -cxF '.memsearch/' "$TEMP_DIR/.gitignore")" "an update over a large .gitignore whose match comes first adds no second line"
+
 # --- .gitignore: no glued last line, no write through a planted scratch file ---
 # A last line without a newline would be glued to the next append (`.env.local` then
 # `.memsearch/` became `.env.local.memsearch/`, un-ignoring .env.local). And the scratch
@@ -522,6 +533,21 @@ assert_eq "PRECIOUS" "$(cat "$FW_DIR/victim")" "update.sh never writes through a
 assert_eq "1" "$(sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$TEMP_DIR/.gitignore" | grep -cxF '.safe-ai-skill/')" \
   "...while the edit that uses the scratch file ran: .safe-ai-skill/ is back in the kit block"
 rm -f "$TEMP_DIR/.gitignore.tmp"
+
+# The JSON rewrites went through fixed names as well, so a repo could plant a link at
+# any of them. A fresh install's first /update rewrites security.json and settings.json,
+# and a firewall apply rewrites them again.
+echo "[json scratch files]"
+JP="$(new_tmp)" || exit 1
+SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash "$REPO_ROOT/install.sh" "$JP" > "$QUIET_LOG" 2>&1 || quiet_fail "install.sh"
+PLANTED="security.json.firewall.tmp settings.json.mcp.tmp security.json.hooks.tmp settings.json.hooks.tmp .settings.json.firewall.tmp .security.json.firewall.tmp"
+for n in $PLANTED; do printf 'PRECIOUS\n' > "$FW_DIR/victim-$n"; ln -s "$FW_DIR/victim-$n" "$JP/.claude/$n"; done
+(cd "$JP" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+(cd "$JP" && CLAUDE_PROJECT_DIR="$JP" bash .claude/bin/firewall.sh apply relaxed) > "$QUIET_LOG" 2>&1 || quiet_fail "firewall.sh apply"
+HIT=""
+for n in $PLANTED; do [ "$(cat "$FW_DIR/victim-$n")" = PRECIOUS ] || HIT="$HIT $n"; done
+assert_eq "" "$HIT" "neither /update nor firewall.sh writes through a link planted at a fixed scratch-file name"
+rm -rf "$JP"
 
 # --- .env.schema: an existing schema gets the kit's missing keys ---
 # .env receives every kit key, and varlock treats a key its schema does not declare as

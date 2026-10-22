@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # The varlock .env.schema: shipped at the kit root, copied into a project by install.sh in
-# both modes when absent, added by /update when missing, never overwritten or merged into,
-# and never gitignored, since it holds no values and is meant to be committed. Its key
+# both modes when absent, added by /update when missing, never overwritten (the kit's
+# missing key blocks are appended instead), and never gitignored, since it holds no values and is meant to be committed. Its key
 # parity with .env.example is checked in tests/test_env_keys.sh.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -99,5 +99,38 @@ check_mode() {
 
 check_mode claude .claude
 check_mode agents .agents --agents
+
+# A kit key the project declares in another spelling varlock accepts is declared: an
+# appended second declaration would win and override the project's own decorators.
+echo "[a kit key in the project's own spelling]"
+FIRST_KEY="$(grep -m1 -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$REPO_ROOT/$SCHEMA" | tr -d '=')"
+n=0
+for form in "export $FIRST_KEY=" "  $FIRST_KEY=" "$FIRST_KEY = "; do
+  n=$((n + 1)); p="$(new_project "spelling-$n")"
+  printf '# ---\n# @required\n%s\n' "$form" > "$p/$SCHEMA"
+  install_kit "$p"
+  assert_eq "0" "$(grep -cE "^$FIRST_KEY=" "$p/$SCHEMA" || true)" "install.sh reads '$form' as declaring $FIRST_KEY, and adds no second declaration"
+done
+printf '# ---\n# @required\nexport %s=\n' "$FIRST_KEY" > "$p/$SCHEMA"
+out="$(update_kit "$p" .claude)" || true
+assert_eq "0" "$(grep -cE "^$FIRST_KEY=" "$p/$SCHEMA" || true)" "update.sh does the same for 'export $FIRST_KEY='"
+
+# A schema the user cannot write is left alone, with the missing keys named, and the
+# rest of the run goes on: the merge used to abort /update at that line, every run.
+echo "[a schema that cannot be written]"
+p="$(new_project readonly)"
+install_kit "$p"
+cp "$TEMP_DIR/own-schema" "$p/$SCHEMA" && chmod 444 "$p/$SCHEMA"
+if [ -w "$p/$SCHEMA" ]; then
+  echo "  SKIP: running as a user who can write a read-only file (root?)"
+else
+  install_kit "$p"
+  assert_eq "same" "$(same "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "install.sh leaves a read-only $SCHEMA as it was, and finishes"
+  out="$(update_kit "$p" .claude)" || true
+  assert_contains "$out" "Update complete" "update.sh finishes over a read-only $SCHEMA"
+  assert_contains "$out" "[skipped] $SCHEMA is not writable — kit keys missing:" "...and names the keys it could not add"
+  assert_eq "same" "$(same "$TEMP_DIR/own-schema" "$p/$SCHEMA")" "...leaving the file as it was"
+fi
+chmod 644 "$p/$SCHEMA"
 
 print_summary

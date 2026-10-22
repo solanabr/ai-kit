@@ -203,6 +203,12 @@ if [ -f "$SCHEMA" ]; then
       dec = ""
     }' "$SCHEMA")"
   assert_eq "" "$UNDECLARED" "every .env.schema key declares @sensitive (or @sensitive=false) and @optional"
+  # install.sh and /update copy a missing key's block as a unit, keyed on its KEY= line,
+  # so a block holding two keys would be skipped or duplicated whole.
+  SHARED="$(awk '
+    /^[[:space:]]*$/ { n = 0; next }
+    /^[A-Za-z_][A-Za-z0-9_]*=/ { if (++n == 2) { k = $0; sub(/=.*/, "", k); print k " shares a block with the key above it" } }' "$SCHEMA")"
+  assert_eq "" "$SHARED" "every .env.schema block holds one KEY= line"
 fi
 
 # ── installed by install.sh ─────────────────────────────────────────────────

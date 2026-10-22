@@ -104,6 +104,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 
 MODE, TIER_ARG, DRY, TARGET, CONFIG, GIT_COMMON = sys.argv[1:7]
 DRY = DRY == "true"
@@ -1725,16 +1726,19 @@ def dump(obj):
 
 def write_atomic(path, text):
     directory = os.path.dirname(path) or "."
-    tmp = os.path.join(directory, "." + os.path.basename(path) + ".firewall.tmp")
     mode = None
     try:
         mode = os.stat(path).st_mode & 0o7777
     except OSError:
-        pass
-    with open(tmp, "w", encoding="utf-8") as f:
+        um = os.umask(0)
+        os.umask(um)
+        mode = 0o666 & ~um
+    # mkstemp creates the scratch file itself (O_EXCL, random name), so a link a cloned
+    # repo plants at a fixed name beside the target cannot redirect the write.
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix="." + os.path.basename(path) + ".")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
-    if mode is not None:
-        os.chmod(tmp, mode)
+    os.chmod(tmp, mode)
     os.replace(tmp, path)
 
 
