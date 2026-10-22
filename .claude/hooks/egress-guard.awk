@@ -11,7 +11,11 @@
 #            where the glob rule anchored on the bare subcommand cannot see it
 #   GITCFG   `-c` or `--config-env` behind another git-level option, where the
 #            `git -c` and `git --config-env` rules cannot see it
-#   DENY  a secret reaches a network command — as a body, as an argument, via a
+#   GHSECRET  a `gh api` write to a secrets or variables endpoint — the
+#            `gh secret set` / `gh variable set` deny, reached by the REST API
+#   GHACTION  a `gh api` write that dispatches a workflow, creates a deployment
+#            or changes an environment
+#   DENYa secret reaches a network command — as a body, as an argument, via a
 #         reader in the same statement, or named in inline interpreter code
 #   ASK1  a request body or upload sourced from a file or from stdin
 #   ASK2  an inline request body (literal data)
@@ -535,6 +539,155 @@ function gcfg_scan(stage,   n, T) {
   return "sets git config for this one command with " GW_CFG " behind another git-level option, where a key such as core.fsmonitor, core.pager or alias.* names a program git runs"
 }
 
+# ---- gh api writes to the endpoints the gh subcommand denies cover (#159) ----
+#
+# `Bash(gh secret set *)` and `Bash(gh variable set *)` deny at every tier, but the
+# REST API reaches the same endpoints, and `Bash(gh *)` is in permissions.allow:
+#
+#   gh api --method PUT  repos/O/R/actions/secrets/NAME -f encrypted_value=… -f key_id=…
+#   gh api --method POST repos/O/R/actions/workflows/ID/dispatches -f ref=main
+#
+# Medium and High deny `Bash(gh api *)` outright; at Relaxed both ran with no prompt.
+# A glob cannot separate them from the POST that adds a comment or a label — which
+# is most of what `gh api` is for — because it sees neither the method nor the
+# path as such.  This pass reads both.
+#
+# THE METHOD.  gh's own rule: `-X`/`--method` wins (the last one, as pflag keeps it);
+# without one, any `-f`/`-F`/`--raw-field`/`--field`/`--input` makes it a POST,
+# and otherwise it is a GET.  PUT, POST and PATCH are writes.  A method the hook
+# cannot read — `-X "$M"`, `-X $(…)` — counts as a write, since it is only ever
+# consulted for an endpoint below, where guessing GET would be the silent hole.
+# DELETE is left alone: `gh secret delete` and `gh variable delete` are open at
+# every tier, and removing a secret hands nothing to anyone.
+#
+# THE ENDPOINT.  Every positional word after `gh api` is tested — gh takes exactly
+# one, so a second is a gh usage error rather than a false positive, and testing
+# them all means an operand-taking flag this list lacks costs nothing.  The owner
+# and repository segments are skipped by position (`repos/O/R/…`, `orgs/O/…`,
+# `user/…`), so a repository NAMED `deployments` or `secrets` is not read as the
+# endpoint; when one of them is an expansion (`repos/$GITHUB_REPOSITORY/…`, one
+# word standing for two) the shorter skip is tried as well.  A leading slash, a
+# full https URL, a GHES `api/v3/` prefix and a query string are all stripped,
+# and gh's `{owner}`/`{repo}`/`{branch}` placeholders are rewritten before the
+# split, because unquoted they would otherwise read as brace groups.
+#
+#   GHSECRET  …/actions|dependabot|codespaces/secrets|variables…, at repository,
+#             organization and user level, and environments/E/secrets|variables.
+#             The `gh secret set` / `gh variable set` deny, by another route.
+#   GHACTION  workflow dispatches, repository_dispatch (`repos/O/R/dispatches`),
+#             deployments (Pages deployments included) and environments — a run,
+#             a deploy, or a change to the protection rules that gate one.
+#
+# Everything else stays silent at every tier: issues, pulls, comments, labels,
+# reactions, releases, and any GET.  So does a commit message or an issue body
+# that merely names one of these paths, since only argument position is read.
+#
+# KNOWN MISSES, stated: an endpoint held entirely in a variable (`gh api "$EP"`),
+# a path the shell assembles after the hook has read it, `gh api graphql` (no
+# secrets mutation exists there, but `createDeployment` does), and gh run from a
+# script the agent wrote.  Off disables the hook, as it disables every gate.
+
+# gha_operand — a `gh api` option that takes a value.  Missing one puts its value
+# where the endpoint is looked for, which is harmless because every positional is
+# tested; the cost is only that a value could look like a path.
+function gha_operand(o) {
+  return (o == "-X" || o == "--method" || o == "-f" || o == "--raw-field" \
+       || o == "-F" || o == "--field" || o == "--input" || o == "-H" || o == "--header" \
+       || o == "-p" || o == "--preview" || o == "-q" || o == "--jq" || o == "-t" \
+       || o == "--template" || o == "--cache" || o == "--hostname")
+}
+
+# gha_rest — classify the endpoint from segment s on, past owner and repository.
+function gha_rest(P, n, s,   a, b, c, d) {
+  a = (s <= n) ? P[s] : ""; b = (s + 1 <= n) ? P[s + 1] : ""
+  c = (s + 2 <= n) ? P[s + 2] : ""; d = (s + 3 <= n) ? P[s + 3] : ""
+  if ((a == "actions" || a == "dependabot" || a == "codespaces") && (b == "secrets" || b == "variables"))
+    return "GHSECRET"
+  if (a == "environments" && (c == "secrets" || c == "variables")) return "GHSECRET"
+  if (a == "dispatches" || a == "deployments" || a == "environments") return "GHACTION"
+  if (a == "actions" && b == "workflows" && d == "dispatches") return "GHACTION"
+  if (a == "pages" && b == "deployments") return "GHACTION"
+  return ""
+}
+
+function gha_class(ep,   p, n, P, s, alt, k) {
+  p = tolower(unmark(ep))
+  sub(/^[a-z][a-z0-9+.-]*:\/\/[^\/]*/, "", p)   # a full URL: scheme and host
+  sub(/[?#].*$/, "", p)                         # query string, fragment
+  sub(/^\/+/, "", p)
+  sub(/^api\/v3\//, "", p)                      # GHES
+  n = split(p, P, /\/+/)
+  alt = 0
+  if (P[1] == "repos") { s = 4; if (P[2] ~ /\$/ || P[3] ~ /\$/) alt = 3 }
+  else if (P[1] == "repositories" || P[1] == "orgs") s = 3
+  else if (P[1] == "user") s = 2
+  else return ""
+  k = gha_rest(P, n, s)
+  if (k == "" && alt) k = gha_rest(P, n, alt)
+  return k
+}
+
+# ghapi_scan — one pipeline stage.  Returns "<CLASS> <reason>", or "".
+function ghapi_scan(stage,   n, T, i, j, tok, o, v, has, meth, body, nep, EP, k, ch, rest) {  n = tokenize(stage, T); if (n == 0) return ""
+  # Command position, then the subcommand: `echo gh api …` and a commit message
+  # naming one are data, and so is `gh issue create --body "gh api …"`.
+  if (cmdword_x(T, n, 1, 1) != "gh" || CWI + 1 > n || T[CWI + 1] != "api") return ""
+  meth = ""; body = 0; nep = 0
+  for (i = CWI + 2; i <= n; i++) {
+    tok = T[i]
+    if (substr(tok, 1, 2) == "--") {
+      o = tok; v = ""; has = 0
+      if (o ~ /=/) { v = o; sub(/^[^=]*=/, "", v); sub(/=.*$/, "", o); has = 1 }
+      if (!gha_operand(o)) continue             # --paginate, --silent, --include …
+      if (!has) { v = (i < n) ? T[i + 1] : ""; i++ }
+      if (o == "--method") meth = v
+      else if (o == "--field" || o == "--raw-field" || o == "--input") body = 1
+      continue
+    }
+    if (substr(tok, 1, 1) == "-" && length(tok) > 1) {
+      # A short cluster: booleans (-i) then at most one option that takes a value,
+      # attached (-XPUT, -iXPUT) or as the next word.
+      rest = substr(tok, 2)
+      for (j = 1; j <= length(rest); j++) {
+        ch = substr(rest, j, 1)
+        if (!gha_operand("-" ch)) continue
+        v = substr(rest, j + 1); sub(/^=/, "", v)
+        if (v == "") { v = (i < n) ? T[i + 1] : ""; i++ }
+        if (ch == "X") meth = v
+        else if (ch == "f" || ch == "F") body = 1
+        break
+      }
+      continue
+    }
+    EP[++nep] = tok
+  }
+  if (meth == "") meth = body ? "POST" : "GET"
+  meth = toupper(unmark(meth))
+  if (meth !~ /\$/ && meth != "PUT" && meth != "POST" && meth != "PATCH") return ""
+  for (k = 1; k <= nep; k++) {
+    o = gha_class(EP[k])
+    if (o == "GHSECRET")
+      return o " writes a repository, organization or environment secret or variable through gh api (" meth " " unmark(EP[k]) "), which is what gh secret set and gh variable set do"
+    if (o == "GHACTION")
+      return o " dispatches a workflow, creates a deployment or changes an environment through gh api (" meth " " unmark(EP[k]) ")"
+  }
+  return ""
+}
+
+# gh_placeholders — gh expands {owner}, {repo} and {branch} itself, so they reach it
+# literally; split_cmd would read an unquoted one as a brace group and cut the
+# endpoint in three.  ${owner} is a shell expansion and is left alone.
+function gh_placeholders(s,   out, pre) {
+  out = ""
+  while (match(s, /\{(owner|repo|branch)\}/)) {
+    pre = substr(s, 1, RSTART - 1)
+    if (substr(pre, length(pre), 1) == "$") out = out pre substr(s, RSTART, RLENGTH)
+    else out = out pre toupper(substr(s, RSTART + 1, RLENGTH - 2))
+    s = substr(s, RSTART + RLENGTH)
+  }
+  return out s
+}
+
 BEGIN {
   SQ = sprintf("%c", 39)
   SECRETRE = ENVIRON["KIT_SECRET_RE"]
@@ -579,6 +732,7 @@ END {
     text = text l "\n"
   }
 
+  gtext = split_cmd(gh_placeholders(text))
   text = split_cmd(text)
   nst = split(text, ST, "\001")
 
@@ -600,6 +754,19 @@ END {
       if (why != "") { print "GITCFG " why; exit }
       why = gd_scan(STG[g])
       if (why != "") { print "GITDESTRUCT " why; exit }
+    }
+  }
+  # The gh api pass, in pass 0 for the same reason, over its own split of the text:
+  # the one with gh's {owner}/{repo}/{branch} placeholders rewritten.
+  ngst = split(gtext, GST, "\001")
+  for (q = 1; q <= ngst; q++) {
+    stmt = GST[q]
+    if (stmt !~ /[^ \t\002]/) continue
+    nstg = split(stmt, STG, "\002")
+    ngstg = unwrap(STG, nstg)
+    for (g = 1; g <= ngstg; g++) {
+      why = ghapi_scan(STG[g])
+      if (why != "") { print why; exit }
     }
   }
 

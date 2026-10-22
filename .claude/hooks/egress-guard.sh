@@ -51,6 +51,12 @@
 # where the `git -c` and `git --config-env` rules cannot see them.  Same file,
 # same headers.
 #
+# And `gh api` writes (PUT/POST/PATCH, explicit or implied by -f/-F/--input) to
+# the endpoints the `gh secret set` / `gh variable set` denies cover — denied at
+# every active tier — and to workflow dispatches, deployments and environments,
+# which ask at Relaxed and deny at Medium and High.  GHSECRET and GHACTION in
+# egress-guard.awk; the rationale is above ghapi_scan there.
+#
 # stdin: PreToolUse JSON.  Exit 0 = silent, exit 2 = blocked, stdout JSON = ask.
 
 set -u
@@ -260,6 +266,25 @@ case $CLASS in
     # wrappers no subcommand rule can see past; another option in front of either one
     # is not a different command.  See gcfg_scan's header.
     kit_deny "$WHY. git -c and git --config-env are denied at every tier, because a one-shot config value can make any git command run a program, and an option in front of either is not a different command — this hook is what makes those rules mean what they say. If the user needs the value set, they run the command themselves."
+    ;;
+  GHSECRET)
+    # Every active tier, headless included, because the rules this backs up —
+    # `Bash(gh secret set *)` and `Bash(gh variable set *)` — deny at every tier and
+    # the REST call is the same write by another spelling.  A ladder here would make
+    # Relaxed's copy of those two rules decorative: the agent would use the API.
+    kit_deny "This command $WHY. Both of those are denied at every tier, and the REST endpoint is the same write — a stored secret or variable is read by every later workflow run. Reading is not gated (GET, gh secret list, gh variable list). If the user wants the value set, they set it themselves."
+    ;;
+  GHACTION)
+    # Medium and High already deny the bare command with `Bash(gh api *)`; a
+    # wrapper in front of it (`command gh api`, `sh -c`, `timeout 5`) is not a
+    # different command, so the hook gives it the rule's answer.  Relaxed has no
+    # such rule and `gh workflow run` itself is open there, so a deny would be
+    # stricter than the subcommand: it asks instead, which kit_ask makes silent in
+    # a headless run — the publish gate's shape, and CI-safe for the same reason.
+    if [ "$TIERN" -ge 2 ]; then
+      kit_deny "This command $WHY. The $TIER firewall tier denies gh api outright, and a wrapper in front of it is not a different command. Drop to Relaxed if this is intended."
+    fi
+    kit_ask "This command $WHY. It starts a run or a deploy, or changes the rules that gate one — confirm the repository, the workflow or environment and the ref before approving."
     ;;
   DENY)
     kit_deny "$WHY. Sending credentials or key material off the machine is not allowed at any tier. If the user needs this uploaded, they do it themselves."
