@@ -145,15 +145,38 @@ if [ -n "$LOCAL_SRC_NOTE" ]; then echo "Warning: $LOCAL_SRC_NOTE: $(redact_url "
 # install whose /update predates kit-ref.sh, which fetches main once and so receives the
 # caller that fetches the tag next time. It is reported, not redone, because the copy
 # loop has already applied main by here and a second clone would double the fetch.
+# A requested main is not noted: kit-ref.sh prints it on purpose while no release above
+# its floor exists, so /update would print the note on every run until one does, and
+# this script cannot tell that main from one a user typed, which is just as deliberate.
+# Any other ref that is not a release tag (a branch, a sha) still gets the note.
 if [ -z "$LOCAL_SRC" ] || [ -n "$LOCAL_SRC_NOTE" ]; then
-  if ! printf '%s\n' "$BRANCH" | grep -qxE 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+  if ! grep -qxE 'v[0-9]+\.[0-9]+\.[0-9]+' <<<"$BRANCH"; then
     if [ -z "${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}" ]; then
       echo "Note: no ref was requested, so this fetched $BRANCH, not a release. /update fetches the latest release tag; from a shell:" >&2
       echo "  SOLANA_AI_KIT_BRANCH=\"\$(bash $CONFIG_NAME/bin/kit-ref.sh)\" bash $CONFIG_NAME/bin/update.sh" >&2
-    else
+    elif [ "$BRANCH" != main ]; then
       echo "Note: fetched $BRANCH, which is not a release tag; $CONFIG_NAME/VERSION may not describe what was installed." >&2
     fi
   fi
+fi
+# A fetched VERSION below the installed one is a downgrade: an install that followed
+# main, or a ref chosen by hand, moving back to an older release. The copy loop above
+# has already applied it, so this warns rather than refuses, and says what it leaves
+# behind: files only the newer version shipped stay on disk, and settings.json keeps
+# what it wrote there, since the RULE_SET_VERSION re-apply below runs only when the
+# record is behind and the hook migration only appends. Only X.Y.Z on both sides is
+# compared; anything else (a first update, a VERSION nobody wrote) says nothing.
+version_lt() {  # version_lt <a> <b>: a sorts below b, field by field as numbers
+  awk -v a="$1" -v b="$2" 'BEGIN { split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 < y[i] + 0)
+    exit 1 }'
+}
+if grep -qvxE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$CURRENT_VERSION
+$NEW_VERSION"; then
+  :
+elif version_lt "$NEW_VERSION" "$CURRENT_VERSION"; then
+  echo "Warning: this fetched v$NEW_VERSION, older than the installed v$CURRENT_VERSION ($BRANCH). Files only v$CURRENT_VERSION shipped stay on disk, and the permission rules and hook entries it wrote into settings.json are kept." >&2
+  echo "  To stay on the newer version: SOLANA_AI_KIT_BRANCH=main bash $CONFIG_NAME/bin/update.sh" >&2
 fi
 
 # hooks/ arrived after that frozen UPDATE_DIRS list, which cannot grow. Same

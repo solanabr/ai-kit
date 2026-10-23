@@ -40,6 +40,8 @@ less /tmp/solana-ai-kit-install.sh
 bash /tmp/solana-ai-kit-install.sh
 ```
 
+The installer clones whatever repository `SOLANA_AI_KIT_UPSTREAM` (legacy `SOLANA_CLAUDE_UPSTREAM`) names when either is set in the shell that runs it, as `/update` and `skills.sh` do, so a value you did not set yourself installs someone else's kit: check with `env | grep _UPSTREAM` first.
+
 The `docs/` directory you are reading is not part of an install: the installer copies named `.claude/` subdirectories plus a handful of root files, so the kit's own documentation, tests and scripts stay in the kit repository.
 
 When the installer finishes, start Claude Code in the project:

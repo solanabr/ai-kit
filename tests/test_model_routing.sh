@@ -38,7 +38,7 @@ check_model() {
   elif [ -z "$model" ]; then
     echo "  PASS: $rel inherits the session model"
     PASS=$((PASS + 1))
-  elif printf '%s' "$model" | grep -qiE "$FABLE_VALUE_RE"; then
+  elif grep -qiE "$FABLE_VALUE_RE" <<<"$model"; then
     echo "  FAIL: $rel hardcodes a Fable model (model: $model)"
     FAIL=$((FAIL + 1))
   elif [[ " $allowed " == *" $model "* ]]; then
@@ -77,7 +77,7 @@ echo "[User-invoked commands inherit the session model]"
 MID_SESSION_SWITCH=""
 for f in "$REPO_ROOT"/.claude/commands/*.md; do
   front="$(awk 'NR==1 && $0!="---"{exit} NR==1{next} $0=="---"{exit} {print}' "$f")"
-  printf '%s' "$front" | grep -q '^disable-model-invocation:[[:space:]]*true' || continue
+  grep -q '^disable-model-invocation:[[:space:]]*true' <<<"$front" || continue
   model="$(fm_model "$f")"
   [ -z "$model" ] && continue
   MID_SESSION_SWITCH="$MID_SESSION_SWITCH

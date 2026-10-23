@@ -78,7 +78,7 @@ assert_eq "$EXPECTED" "$OUT" "every spelling parses: export, indentation, spaces
 # THE assertion. Everything else in this file exists to protect it.
 echo "[no value ever reaches stdout]"
 TOTAL=$((TOTAL + 1))
-if printf '%s' "$OUT" | grep -qF "$MARKER"; then
+if grep -qF "$MARKER" <<<"$OUT"; then
   echo "  FAIL: the value leaked into stdout"
   FAIL=$((FAIL + 1))
 else
@@ -92,7 +92,7 @@ for extra in --raw --value --values -v --show --print --verbose --json --all --u
   LEAK="$( (bash "$HELPER" "$FIXTURE" "$extra"; bash "$HELPER" "$extra" "$FIXTURE") 2>&1 )"
   set -e
   TOTAL=$((TOTAL + 1))
-  if printf '%s' "$LEAK" | grep -qF "$MARKER"; then
+  if grep -qF "$MARKER" <<<"$LEAK"; then
     echo "  FAIL: '$extra' makes env-keys.sh print a value"
     FAIL=$((FAIL + 1))
   else
@@ -105,7 +105,7 @@ for var in ENV_KEYS_RAW ENV_KEYS_SHOW_VALUES SAK_ENV_KEYS_RAW VERBOSE DEBUG RAW;
   LEAK="$(env "$var=1" bash "$HELPER" "$FIXTURE" 2>&1)"
   set -e
   TOTAL=$((TOTAL + 1))
-  if printf '%s' "$LEAK" | grep -qF "$MARKER"; then
+  if grep -qF "$MARKER" <<<"$LEAK"; then
     echo "  FAIL: \$$var makes env-keys.sh print a value"
     FAIL=$((FAIL + 1))
   else
@@ -148,7 +148,7 @@ for bad in "$WORK/notes.txt" /etc/hosts "$WORK/env" "$WORK/environment"; do
   BAD_RC=$?
   set -e
   TOTAL=$((TOTAL + 1))
-  if [ "$BAD_RC" -eq 1 ] && printf '%s' "$BAD_OUT" | grep -q HELPER_UNAVAILABLE; then
+  if [ "$BAD_RC" -eq 1 ] && grep -q HELPER_UNAVAILABLE <<<"$BAD_OUT"; then
     echo "  PASS: refuses a non-env path with HELPER_UNAVAILABLE: $(basename "$bad")"
     PASS=$((PASS + 1))
   else

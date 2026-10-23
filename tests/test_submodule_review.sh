@@ -23,7 +23,7 @@ assert_file_not_contains "$REPO_ROOT/.github/dependabot.yml" "time to be noticed
 assert_file_contains "$REPO_ROOT/CLAUDE.md" "auto-merge" "CLAUDE.md says submodule bumps are not auto-merged"
 
 refute_contains() {
-  if printf '%s' "$1" | grep -qF -- "$2"; then assert_eq "absent" "present" "$3"; else assert_eq "absent" "absent" "$3"; fi
+  if grep -qF -- "$2" <<<"$1"; then assert_eq "absent" "present" "$3"; else assert_eq "absent" "absent" "$3"; fi
 }
 
 g() { git -c user.name=t -c user.email=t@t -c protocol.file.allow=always "$@"; }

@@ -225,7 +225,7 @@ set -e
 assert_cmd_success "cmp -s '$WORK/link/before.json' '$WORK/link/real-settings.json'" \
   "a symlinked settings.json is left byte-identical (not written through)"
 TOTAL=$((TOTAL + 1))
-if [ "$LINK_RC" -ne 0 ] || printf '%s' "$LINK_OUT" | grep -qiE 'symlink|symbolic|skip'; then
+if [ "$LINK_RC" -ne 0 ] || grep -qiE 'symlink|symbolic|skip' <<<"$LINK_OUT"; then
   echo "  PASS: firewall.sh refuses a symlinked settings.json and says so"
   PASS=$((PASS + 1))
 else
@@ -719,7 +719,7 @@ for r in "Bash(claude *)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C *)" "Bash(
          "Bash(git --config-env*)" "Bash(git reflog delete *)" "Bash(git reflog drop *)" \
          "Bash(git --exec-path=*)"; do
   TOTAL=$((TOTAL + 1))
-  if printf '%s\n' "$DENY_LIVE" | grep -qxF "$r"; then
+  if grep -qxF "$r" <<<"$DENY_LIVE"; then
     echo "  PASS: the never-allowed set denies $r"
     PASS=$((PASS + 1))
   else
@@ -1076,8 +1076,8 @@ DENY_HIGH="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.high.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
 TOTAL=$((TOTAL + 1))
-if printf '%s\n' "$DENY_HIGH" | grep -qF 'Edit(/.claude/security.json)' \
-   && ! printf '%s\n' "$DENY_HIGH" | grep -qF 'Read(/.claude/security.json)'; then
+if grep -qF 'Edit(/.claude/security.json)' <<<"$DENY_HIGH" \
+   && ! grep -qF 'Read(/.claude/security.json)' <<<"$DENY_HIGH"; then
   echo "  PASS: the kit's own config is self-protected with Edit(...), not Read(...)"
   PASS=$((PASS + 1))
 else

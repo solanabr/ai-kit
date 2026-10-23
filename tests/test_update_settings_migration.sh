@@ -178,7 +178,7 @@ AFTER_ONE="$(shasum -a 256 "$SETTINGS" | awk '{print $1}')"
 RUN2="$(run_update)"
 assert_eq "$AFTER_ONE" "$(shasum -a 256 "$SETTINGS" | awk '{print $1}')" "a second /update leaves settings.json byte-identical"
 TOTAL=$((TOTAL + 1))
-if printf '%s\n' "$RUN2" | grep -q "] registered"; then
+if grep -q "] registered" <<<"$RUN2"; then
   echo "  FAIL: the second run registered hooks again"
   FAIL=$((FAIL + 1))
 else

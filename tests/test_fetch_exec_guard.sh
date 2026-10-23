@@ -90,7 +90,7 @@ run() {
   ERR="$(cat "$WORK/err")"
   if [ "$RC" -eq 2 ]; then
     DECISION=deny
-  elif printf '%s' "$OUT" | grep -q 'not blocked'; then
+  elif grep -q 'not blocked' <<<"$OUT"; then
     DECISION=note
   else
     DECISION=silent
@@ -304,7 +304,7 @@ assert_contains "$ERR" "High firewall tier" "the High block names the tier"
 # Relaxed's report must not look like a decision: a decision is the JSON object
 # kit_ask/kit_deny emit, and anything else on stdout is transcript output.
 run relaxed "npx -y some-random-cli my-app"
-assert_eq "no" "$(printf '%s' "$OUT" | grep -q 'permissionDecision' && echo yes || echo no)" \
+assert_eq "no" "$(grep -q 'permissionDecision' <<<"$OUT" && echo yes || echo no)" \
   "the Relaxed note carries no permissionDecision"
 
 # A project with no package.json at all declares nothing, so a fetch there is a
@@ -441,7 +441,7 @@ run high "npx -y create-solana-dapp my-app"
 assert_contains "$OUT" "KIT_FETCH_EXEC_ALLOW" "the High pass names the allowlist variable"
 assert_contains "$OUT" "fetch-exec-guard.sh" "the High pass names the file the list lives in"
 assert_contains "$OUT" "create-solana-dapp" "the High pass names the package"
-assert_eq "no" "$(printf '%s' "$OUT" | grep -q 'permissionDecision' && echo yes || echo no)" \
+assert_eq "no" "$(grep -q 'permissionDecision' <<<"$OUT" && echo yes || echo no)" \
   "the High pass is a note, not a decision object"
 
 # The list is in the guard, not in settings.json: `/update` copies hooks/ and

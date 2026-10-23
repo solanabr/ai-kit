@@ -20,7 +20,7 @@ for f in "$AGENTS_DIR"/*.md; do
     frontmatter="$(sed -n '/^---$/,/^---$/p' "$f" | head -20 || true)"
 
     TOTAL=$((TOTAL + 1))
-    if echo "$frontmatter" | grep -q "^name:"; then
+    if grep -q "^name:" <<<"$frontmatter"; then
       echo "  PASS: $name has name:"
       PASS=$((PASS + 1))
     else
@@ -29,7 +29,7 @@ for f in "$AGENTS_DIR"/*.md; do
     fi
 
     TOTAL=$((TOTAL + 1))
-    if echo "$frontmatter" | grep -q "^description:"; then
+    if grep -q "^description:" <<<"$frontmatter"; then
       echo "  PASS: $name has description:"
       PASS=$((PASS + 1))
     else

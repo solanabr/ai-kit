@@ -55,7 +55,7 @@ open(path, "w", encoding="utf-8").write(text[:start] + entry + text[end:])
 PY
 }
 
-is_sha() { printf '%s\n' "$1" | grep -qxE '[0-9a-f]{40}'; }
+is_sha() { grep -qxE '[0-9a-f]{40}' <<<"$1"; }
 not_listed() { case " $2 " in *" $1 "*) return 1 ;; esac; }
 top_dirs() { find "$1" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//'; }
 sorted() { printf '%s\n' "$@" | awk 'NF' | sort | tr '\n' ' ' | sed 's/ $//'; }
@@ -206,7 +206,7 @@ refused() {  # refused <message> <expected output> <key> <JSON value>
   local out status=0
   out="$(try_add "$3" "$4")" || status=$?
   TOTAL=$((TOTAL + 1))
-  if [ "$status" -ne 0 ] && printf '%s' "$out" | grep -qF -- "$2"; then
+  if [ "$status" -ne 0 ] && grep -qF -- "$2" <<<"$out"; then
     echo "  PASS: $1"
     PASS=$((PASS + 1))
   else

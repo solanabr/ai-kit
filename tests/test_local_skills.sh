@@ -109,7 +109,7 @@ PY
 
 # The kit ships two skills under .claude/skills/<name>/, so a report with no PASS or FAIL
 # row means the producer stopped, not that there was nothing to check.
-if ! printf '%s\n' "$SKILL_REPORT" | grep -qE '^(PASS|FAIL)	'; then
+if ! grep -qE '^(PASS|FAIL)	' <<<"$SKILL_REPORT"; then
   SKILL_REPORT="FAIL	the kit-skill checker reported no checks at all"
 fi
 while IFS=$'\t' read -r status message; do

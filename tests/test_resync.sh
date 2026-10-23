@@ -86,7 +86,7 @@ else
 fi
 
 TOTAL=$((TOTAL + 1))
-if [ "$RC" -eq 0 ] && echo "$OUTPUT" | grep -q "All skill paths resolve correctly."; then
+if [ "$RC" -eq 0 ] && grep -q "All skill paths resolve correctly." <<<"$OUTPUT"; then
   echo "  PASS: resync.sh resolves paths against its target dir, not the caller's cwd"
   PASS=$((PASS + 1))
 else

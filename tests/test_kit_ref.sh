@@ -98,5 +98,22 @@ fi
 FLOOR_REF="$(sed -n 's/^TAG_FLOOR="\(.*\)"$/\1/p' "$KIT_REF")"
 FLOOR_INSTALL="$(sed -n 's/.*awk -v floor="\([0-9.]*\)".*/\1/p' "$REPO_ROOT/install.sh")"
 assert_eq "$FLOOR_REF" "$FLOOR_INSTALL" "install.sh and kit-ref.sh share the tag floor ($FLOOR_REF)"
+# A third copy: skills.sh add fetches the tag an install's VERSION names only above the
+# floor, so a raised floor there alone would send every install between the two to main.
+SKILLS_SH="$REPO_ROOT/.claude/bin/skills.sh"
+floor_of() { sed -n 's/.*awk -v floor="\([0-9.]*\)".*/\1/p' "$1"; }
+assert_eq "$FLOOR_REF" "$(floor_of "$SKILLS_SH")" "skills.sh add shares the tag floor ($FLOOR_REF)"
+# Control: a skills.sh whose floor moved is told apart, so the assertion above can fail.
+sed 's/awk -v floor="[0-9.]*"/awk -v floor="9.9.9"/' "$SKILLS_SH" > "$TEMP_DIR/skills-moved.sh"
+assert_eq "9.9.9" "$(floor_of "$TEMP_DIR/skills-moved.sh")" "a moved skills.sh floor reads back as the moved value"
+# And the floor is what skills.sh compares against: the tag named for each VERSION.
+# The awk program is lifted from skills.sh, so a rewrite that stops reading floor fails here.
+SKILLS_AWK="$(sed -n '/branch="$(awk -v floor=/,/CONFIG_DIR\/VERSION/p' "$SKILLS_SH" \
+  | sed -e '1s/.*awk -v floor="[0-9.]*" '"'"'//' -e '$d' | sed '$s/'"'"' \\$//')"
+for pair in "2.4.0:" "2.3.9:" "2.4.1:v2.4.1" "2.10.0:v2.10.0" "3.0.0:v3.0.0" "2.5.0-rc1:"; do
+  v="${pair%%:*}"; want="${pair#*:}"
+  got="$(echo "solana-ai-kit $v" | awk -v floor="$FLOOR_REF" "$SKILLS_AWK")"
+  assert_eq "$want" "$got" "skills.sh add: VERSION $v fetches ${want:-main}"
+done
 
 print_summary

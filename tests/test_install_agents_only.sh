@@ -494,6 +494,29 @@ same (ext/p/skills/same, ext/p2/skills/same)" "$DUPES" "duplicates lists each na
 assert_file_contains "$WORK/d-agents.err" "3 skill names are registered more than once" "budget warns on stderr about the names left"
 assert_file_contains "$WORK/d-agents.err" "skills.sh duplicates" "...and says how to see where they come from"
 assert_eq "" "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>/dev/null)" "a second run removes nothing"
+# The names come from packs the user chose, so the warning is said once per change of
+# the set, not on every add, /update and install (#273 review).
+DREC="$WORK/d-agents/.agents/skills/duplicate-names.txt"
+assert_eq "differs
+extra
+same" "$(grep -v '^#' "$DREC" 2>/dev/null)" "the names warned about are recorded in skills/duplicate-names.txt"
+assert_eq "" "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>&1)" "an unchanged set of names is not warned about again"
+# Control: without the record the same install warns again, so the check above can fail.
+rm -f "$DREC"
+assert_contains "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>&1)" "3 skill names are registered more than once" \
+  "with the record gone, the same set is warned about again"
+skill_copy "$WORK/d-agents/.agents/skills/ext/p3/skills/fresh" fresh
+skill_copy "$WORK/d-agents/.agents/skills/ext/p4/skills/fresh" fresh
+skill_copy "$WORK/d-agents/.agents/skills/ext/p4/skills/fresh" fresh x.md
+assert_contains "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>&1)" "4 skill names are registered more than once" \
+  "a new duplicated name changes the set, so it warns again"
+rm -rf "$WORK/d-agents/.agents/skills/ext/p3" "$WORK/d-agents/.agents/skills/ext/p4"
+assert_contains "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>&1)" "3 skill names are registered more than once" \
+  "...and so does a name leaving it"
+rm -rf "$WORK/d-agents/.agents/skills/ext/p/plugins/x/skills/differs" "$WORK/d-agents/.agents/skills/ext/p/plugins/x/skills/extra" \
+  "$WORK/d-agents/.agents/skills/ext/p2"
+assert_eq "" "$(bash "$WORK/d-agents/.agents/bin/skills.sh" budget 2>&1)" "no duplicates left: nothing to warn about"
+assert_file_not_exists "$DREC" "...and no record left behind"
 assert_eq "" "$(bash "$WORK/d-claude/.claude/bin/skills.sh" budget 2>&1)" "a .claude/ install is left as pinned, silently"
 assert_dir_exists "$WORK/d-claude/.claude/skills/ext/p/plugins/x/skills/same" "...every copy still there"
 

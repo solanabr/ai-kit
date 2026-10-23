@@ -185,7 +185,7 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
   assert_contains "$OUT" "MAINNET (from command flag)" "-um resolves to mainnet"
   run "$CHAIN" "$WORK" "CONFIRM_MAINNET=1 solana program deploy target/deploy/x.so" "https://mainnet.helius-rpc.com/?api-key=k123"
   assert_contains "$OUT" "MAINNET (from solana config)" "an env prefix no longer skips the confirmation"
-  assert_eq "no" "$(printf '%s' "$OUT" | grep -q k123 && echo yes || echo no)" "RPC API keys stay out of the prompt"
+  assert_eq "no" "$(grep -q k123 <<<"$OUT" && echo yes || echo no)" "RPC API keys stay out of the prompt"
   run "$CHAIN" "$WORK" "solana program close --buffers -ud"
   assert_contains "$OUT" '"permissionDecision":"ask"' "reclaiming buffer SOL asks instead of failing"
 
@@ -302,7 +302,7 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
   assert_contains "$OUT" "MAINNET" "an ANCHOR_PROVIDER_URL prefix beats a devnet Anchor.toml"
   assert_contains "$OUT" "ANCHOR_PROVIDER_URL" "the prompt names ANCHOR_PROVIDER_URL as the source"
   run "$CHAIN" "$WORK/mainnet" "ANCHOR_PROVIDER_URL=https://api.devnet.solana.com anchor deploy"
-  assert_eq "no" "$(printf '%s' "$OUT" | grep -q MAINNET && echo yes || echo no)" \
+  assert_eq "no" "$(grep -q MAINNET <<<"$OUT" && echo yes || echo no)" \
     "an ANCHOR_PROVIDER_URL devnet prefix is not labelled MAINNET despite a mainnet Anchor.toml"
   assert_contains "$OUT" '"permissionDecision":"ask"' "it still asks on devnet"
   run "$CHAIN" "$WORK" "solana program deploy target/deploy/x.so -C $WORK/mainnet-cli.yml"
@@ -311,7 +311,7 @@ for FILE in "$REPO_ROOT/.claude/settings.json" "$REPO_ROOT/plugin/hooks/hooks.js
   assert_contains "$OUT" "MAINNET" "--config <config> resolves the cluster from that config file"
   run "$CHAIN" "$WORK" "solana program deploy target/deploy/x.so -C $WORK/devnet-cli.yml" \
     "https://api.mainnet-beta.solana.com"
-  assert_eq "no" "$(printf '%s' "$OUT" | grep -q MAINNET && echo yes || echo no)" \
+  assert_eq "no" "$(grep -q MAINNET <<<"$OUT" && echo yes || echo no)" \
     "-C pointing at devnet is not labelled MAINNET even when the default config is mainnet"
 
   # Headless: Medium and High hard-fail on an ask by design, but an unconditional ask on
@@ -325,7 +325,7 @@ echo "[SessionStart]"
 SESSION="$(hook "$REPO_ROOT/.claude/settings.json" SessionStart 'SessionStart')"
 OUT="$(printf '{"hook_event_name":"SessionStart","source":"startup"}' | PATH="$WORK/bin:$PATH" FAKE_RPC='https://mainnet.helius-rpc.com/?api-key=k123' CLAUDE_PROJECT_DIR="$REPO_ROOT" sh -c "$SESSION")"
 assert_contains "$OUT" "Solana CLI: RPC https://mainnet.helius-rpc.com, wallet 11111111111111111111111111111111." "Claude gets one line with the RPC host and wallet"
-assert_eq "no" "$(printf '%s' "$OUT" | grep -q k123 && echo yes || echo no)" "the RPC API key stays out of the session context"
+assert_eq "no" "$(grep -q k123 <<<"$OUT" && echo yes || echo no)" "the RPC API key stays out of the session context"
 PLUGIN_SESSION="$(hook "$REPO_ROOT/plugin/hooks/hooks.json" SessionStart 'SessionStart')"
 if command -v jq >/dev/null 2>&1; then
   assert_contains "$OUT" '"systemMessage"' "the banner goes to the user as a systemMessage, not into context"
@@ -349,7 +349,7 @@ if command -v jq >/dev/null 2>&1; then
     # clause wherever a .claude/security.json is readable. What has to hold is that
     # the banner and the context name the same cluster and wallet.
     assert_contains "$AC" "Solana CLI: RPC https://mainnet.helius-rpc.com, wallet 11111111111111111111111111111111." "$V: Claude gets the same RPC and wallet in additionalContext"
-    assert_eq "no" "$(printf '%s' "$SM" | grep -q k123 && echo yes || echo no)" "$V: the RPC API key stays out of the banner"
+    assert_eq "no" "$(grep -q k123 <<<"$SM" && echo yes || echo no)" "$V: the RPC API key stays out of the banner"
   done
   # Without the Solana CLI the user is told so instead of seeing an empty line.
   mkdir -p "$WORK/nosolana"
@@ -361,7 +361,7 @@ OUT="$(printf '{"hook_event_name":"SessionStart","source":"compact"}' | PATH="$W
 # The property is that a compact re-adds the context line and NOT the banner; the line
 # itself grew a firewall-tier clause, so match on shape rather than pinning it verbatim.
 assert_contains "$OUT" "Solana CLI: RPC https://api.devnet.solana.com, wallet 11111111111111111111111111111111." "after /compact or /clear the context line is re-added"
-assert_eq "no" "$(printf '%s' "$OUT" | grep -q 'SOLANA\|systemMessage' && echo yes || echo no)" "after /compact or /clear the banner is not re-sent"
+assert_eq "no" "$(grep -q 'SOLANA\|systemMessage' <<<"$OUT" && echo yes || echo no)" "after /compact or /clear the banner is not re-sent"
 OUT="$(printf '{"source":"startup"}' | PATH="$WORK/bin:$PATH" CLAUDE_PROJECT_DIR="$REPO_ROOT" CLAUDE_PLUGIN_ROOT="$REPO_ROOT/plugin" sh -c "$PLUGIN_SESSION")"
 assert_eq "" "$OUT" "the plugin SessionStart stays quiet next to a full install"
 
@@ -398,7 +398,7 @@ if [ -f "$REPO_ROOT/.claude/security.json" ]; then
   for t in relaxed high; do
     OUT="$(session_start "$t")"
     TOTAL=$((TOTAL + 1))
-    if printf '%s' "$OUT" | grep -q "$t" && printf '%s' "$OUT" | grep -qiE 'firewall|tier'; then
+    if grep -q "$t" <<<"$OUT" && grep -qiE 'firewall|tier' <<<"$OUT"; then
       echo "  PASS: SessionStart names the $t tier"
       PASS=$((PASS + 1))
     else
@@ -408,11 +408,11 @@ if [ -f "$REPO_ROOT/.claude/security.json" ]; then
   done
   # A healthy record is quiet; a drifted one warns the user, not the context.
   OUT="$(session_start relaxed)"
-  assert_eq "no" "$(printf '%s' "$OUT" | grep -qiE 'does not match|mismatch|drift' && echo yes || echo no)" \
+  assert_eq "no" "$(grep -qiE 'does not match|mismatch|drift' <<<"$OUT" && echo yes || echo no)" \
     "no mismatch warning when the record matches the live policy"
   OUT="$(session_start relaxed mismatch)"
   TOTAL=$((TOTAL + 1))
-  if printf '%s' "$OUT" | grep -q '"systemMessage"'; then
+  if grep -q '"systemMessage"' <<<"$OUT"; then
     echo "  PASS: a declared-vs-enforced mismatch is reported as a systemMessage"
     PASS=$((PASS + 1))
   else
@@ -421,7 +421,7 @@ if [ -f "$REPO_ROOT/.claude/security.json" ]; then
   fi
   # Whatever it says, an RPC key still never reaches the prompt.
   OUT="$(FAKE_RPC='https://mainnet.helius-rpc.com/?api-key=k123' session_start high mismatch)"
-  assert_eq "no" "$(printf '%s' "$OUT" | grep -q k123 && echo yes || echo no)" \
+  assert_eq "no" "$(grep -q k123 <<<"$OUT" && echo yes || echo no)" \
     "the tier line and the mismatch warning both keep the RPC API key out"
 else
   echo "  FAIL: .claude/security.json is missing, so the tier line cannot be checked"

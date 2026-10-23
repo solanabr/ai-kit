@@ -35,7 +35,7 @@ assert_file_exists "$TEMP_DIR/.claude/VERSION" ".claude/VERSION exists after upd
 # --- VERSION is valid semver ---
 VERSION_CONTENT="$(cat "$TEMP_DIR/.claude/VERSION")"
 TOTAL=$((TOTAL + 1))
-if echo "$VERSION_CONTENT" | grep -qE '(^|[[:space:]])[0-9]+\.[0-9]+\.[0-9]+$'; then
+if grep -qE '(^|[[:space:]])[0-9]+\.[0-9]+\.[0-9]+$' <<<"$VERSION_CONTENT"; then
   echo "  PASS: VERSION content is valid semver ($VERSION_CONTENT)"
   PASS=$((PASS + 1))
 else
@@ -168,6 +168,59 @@ assert_file_contains "$TEMP_DIR/fetch.err" "SOLANA_AI_KIT_LOCAL_SRC=$TEMP_DIR/em
 assert_file_contains "$TEMP_DIR/fetch.err" "SOLANA_CLAUDE_LOCAL_SRC=$TEMP_DIR/empty-src has no .claude/" \
   "...under the legacy variable's name when that is the one set"
 rm -rf "$TEMP_DIR/empty-src"; rm -f "$TEMP_DIR/fetch.out" "$TEMP_DIR/fetch.err"
+
+# --- The note about a fetched ref that is not a release tag ---
+# /update passes kit-ref.sh's ref, which is main until a release above the floor exists,
+# so a note on main fired on every /update. A requested main is quiet; any other
+# non-release ref still gets the note. The fixture is a file:// upstream holding this
+# checkout's kit on main and on a branch, so the clone runs offline.
+echo "[ref note]"
+REF_UP="$TEMP_DIR/ref-upstream"
+mkdir -p "$REF_UP"
+cp -r "$REPO_ROOT/.claude" "$REF_UP/.claude"
+for f in CLAUDE-solana.md .mcp.json .env.example .env.schema; do
+  if [ -f "$REPO_ROOT/$f" ]; then cp "$REPO_ROOT/$f" "$REF_UP/$f"; fi
+done
+(cd "$REF_UP" && export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid \
+  GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid \
+  && git init -q -b main && git add -A && git commit -q --no-gpg-sign -m fixture && git branch feature)
+ref_update() {  # ref_update <branch>: stderr of an update fetching <branch> from the fixture
+  (cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC='' SOLANA_CLAUDE_LOCAL_SRC='' \
+    SOLANA_AI_KIT_UPSTREAM="file://$REF_UP" SOLANA_AI_KIT_BRANCH="$1" \
+    bash .claude/bin/update.sh) > "$TEMP_DIR/ref.out" 2> "$TEMP_DIR/ref.err" || true
+}
+ref_update main
+assert_file_contains "$TEMP_DIR/ref.out" "Update complete" "an update fetching main from a file:// upstream completes"
+assert_file_not_contains "$TEMP_DIR/ref.err" "not a release tag" "a requested main (kit-ref.sh's answer before a release) prints no note"
+# Control: the same run on a branch prints it, so the assertion above can fail.
+ref_update feature
+assert_file_contains "$TEMP_DIR/ref.err" "fetched feature, which is not a release tag" "a requested ref that is neither a tag nor main is still noted"
+
+# --- Fetching an older VERSION than the one installed ---
+# The copy loop applies whatever was fetched, so a downgrade (an install that followed
+# main moving to an older release) is warned about, never silent.
+echo "[downgrade warning]"
+KIT_VERSION="$(awk '{print $NF}' "$REPO_ROOT/.claude/VERSION")"
+echo "solana-ai-kit 99.0.0" > "$TEMP_DIR/.claude/VERSION"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$TEMP_DIR/ref.out" 2> "$TEMP_DIR/ref.err" || true
+assert_file_contains "$TEMP_DIR/ref.err" "this fetched v$KIT_VERSION, older than the installed v99.0.0" \
+  "an update to a lower VERSION warns that it is a downgrade"
+assert_file_contains "$TEMP_DIR/ref.err" "SOLANA_AI_KIT_BRANCH=main" "...and says how to stay on the newer version"
+# Controls: the same VERSION, and an older installed one, are not downgrades.
+for v in "$KIT_VERSION" 0.0.1; do
+  echo "solana-ai-kit $v" > "$TEMP_DIR/.claude/VERSION"
+  (cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$TEMP_DIR/ref.out" 2> "$TEMP_DIR/ref.err" || true
+  assert_file_not_contains "$TEMP_DIR/ref.err" "older than the installed" "no downgrade warning from v$v to v$KIT_VERSION"
+done
+# A field compares as a number, not as text: 2.10.0 is newer than 2.9.0.
+echo "solana-ai-kit 2.9.0" > "$TEMP_DIR/.claude/VERSION"
+cp -r "$REF_UP" "$TEMP_DIR/v210-src"
+echo "solana-ai-kit 2.10.0" > "$TEMP_DIR/v210-src/.claude/VERSION"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$TEMP_DIR/v210-src" bash .claude/bin/update.sh) > "$TEMP_DIR/ref.out" 2> "$TEMP_DIR/ref.err" || true
+assert_file_not_contains "$TEMP_DIR/ref.err" "older than the installed" "v2.9.0 to v2.10.0 is not a downgrade"
+rm -rf "$REF_UP" "$TEMP_DIR/v210-src"; rm -f "$TEMP_DIR/ref.out" "$TEMP_DIR/ref.err"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 
 # --- Retired kit defaults: what kit <= 2.1.0 wrote into settings.json and .mcp.json ---
 echo "[retired kit defaults]"
@@ -445,9 +498,9 @@ assert_eq "high" "$(fw_tier)" "the declared tier is preserved by the catch-up"
 # Idempotent: a second run has nothing to say and changes nothing.
 cp "$FW_SETTINGS" "$FW_DIR/mcp.before"
 FW_OUT="$(fw_update)"
-assert_eq "no" "$(printf '%s' "$FW_OUT" | grep -q 'PreToolUse matcher' && echo yes || echo no)" \
+assert_eq "no" "$(grep -q 'PreToolUse matcher' <<<"$FW_OUT" && echo yes || echo no)" \
   "a second update does not report the matcher migration again"
-assert_eq "no" "$(printf '%s' "$FW_OUT" | grep -q 'firewall rule set v' && echo yes || echo no)" \
+assert_eq "no" "$(grep -q 'firewall rule set v' <<<"$FW_OUT" && echo yes || echo no)" \
   "a second update does not report the rule-set catch-up again"
 assert_cmd_success "cmp -s '$FW_DIR/mcp.before' '$FW_SETTINGS'" \
   "a second update leaves settings.json byte-identical"

@@ -31,7 +31,8 @@ set -euo pipefail
 # core-only); update.sh keeps those and the core packs. skills/kit-packs.txt lists
 # every ext/ pack the kit put here, so a pack a later kit drops is removed without
 # touching folders the user made. skills/<id>.lock records an upstream pack's commit and
-# folders. Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a local checkout
+# folders; skills/duplicate-names.txt (--agents) the names budget last warned about.
+# Env: SOLANA_AI_KIT_LOCAL_SRC=/path/to/kit copies from a local checkout
 # (offline, tests); SOLANA_AI_KIT_UPSTREAM and SOLANA_AI_KIT_BRANCH override the
 # source (default: the release tag this install's VERSION names, else main);
 # SOLANA_AI_KIT_PACK_MIRROR=/dir fetches upstream pack <id>
@@ -42,6 +43,7 @@ CONFIG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_NAME="$(basename "$CONFIG_DIR")"
 LIST_FILE="extensions.txt"
 PACKS_FILE="kit-packs.txt"
+DUPES_FILE="duplicate-names.txt"
 
 # strip_pack_load_surfaces: what a vendored pack must not bring into a project.
 # shellcheck source=_pack_strip.sh
@@ -604,15 +606,21 @@ cmd_add() {
       # tag that cannot be cloned (a VERSION nobody tagged yet) falls back to main too.
       branch="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}"
       if [ -z "$branch" ]; then
-        branch="$(awk '{ v = $NF; split(v, x, ".")
-          if (v ~ /^[0-9]+\.[0-9]+\.[0-9]+$/ && (x[1] > 2 || (x[1] == 2 && (x[2] > 4 || (x[2] == 4 && x[3] > 0))))) print "v" v }' \
+        # The floor is kit-ref.sh's TAG_FLOOR and install.sh's; tests/test_kit_ref.sh
+        # holds all three copies to one value.
+        branch="$(awk -v floor="2.4.0" '{ v = $NF; split(v, x, "."); split(floor, y, ".")
+          if (v !~ /^[0-9]+\.[0-9]+\.[0-9]+$/) next
+          for (i = 1; i <= 3; i++) if (x[i] + 0 != y[i] + 0) { if (x[i] + 0 > y[i] + 0) print "v" v; next } }' \
           "$CONFIG_DIR/VERSION" 2>/dev/null || true)"
       fi
       tmp="$(mktemp -d)"
       echo "Fetching the pinned packs from $(redact_url "$url") (${branch:-main})..."
       if [ -z "${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}" ] && [ -n "$branch" ]; then
-        git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit" 2>/dev/null \
-          || { echo "  $branch is not on the upstream; using main" >&2; rm -rf "${tmp:?}/kit"; branch=""; }
+        # git's own error goes with the fallback notice: a tag nobody pushed and a network
+        # or auth failure fail alike here, and only git can say which one this was.
+        git clone -q --depth 1 --branch "$branch" "$url" "$tmp/kit" 2>"$tmp/clone.err" \
+          || { echo "  could not clone $branch ($(tail -n 1 "$tmp/clone.err" 2>/dev/null)); trying main, so the pins checked below are main's" >&2
+               rm -rf "${tmp:?}/kit"; branch=""; }
       fi
       [ -d "$tmp/kit" ] || git clone -q --depth 1 --branch "${branch:-main}" "$url" "$tmp/kit"
       for id in $todo; do paths+=(".claude/skills/ext/$id"); done
@@ -820,18 +828,33 @@ duplicate_skill_names() {
         END { for (k in n) if (n[k] > 1) print k " (" w[k] ")" }' | LC_ALL=C sort
 }
 
+# The duplicate-name warning comes from packs the user chose, and only removing a pack
+# changes it, so printed on every add, /update and install it is noise that buries the
+# budget warning after it. It prints when the set of names differs from the one
+# recorded in skills/$DUPES_FILE, which it then rewrites: once per change, whether a
+# pack added a name or dropped one. No duplicates left, no file.
 cmd_budget() {
-  local n removed dupes
+  local n removed dupes names rec
   [ "$CONFIG_NAME" = ".agents" ] || return 0
   removed="$(drop_duplicate_skills "$CONFIG_DIR")"
   [ "${removed:-0}" = 0 ] || echo "✓ Removed $removed duplicate skill copies packs ship twice (byte-identical), so each registers once"
   dupes="$(duplicate_skill_names "$CONFIG_DIR")"
-  if [ -n "$dupes" ]; then
+  names="$(printf '%s\n' "$dupes" | awk 'NF { print $1 }')"
+  rec="$CONFIG_DIR/skills/$DUPES_FILE"
+  if [ -z "$names" ]; then
+    rm -f "$rec"
+  elif [ "$names" != "$(grep -v '^#' "$rec" 2>/dev/null || true)" ]; then
     {
-      echo "! $(printf '%s\n' "$dupes" | grep -c .) skill names are registered more than once from $CONFIG_NAME/skills/: $(short_list "$(printf '%s\n' "$dupes" | cut -d' ' -f1 | tr '\n' ' ')")"
+      echo "! $(printf '%s\n' "$names" | grep -c .) skill names are registered more than once from $CONFIG_NAME/skills/: $(short_list "$(printf '%s\n' "$names" | tr '\n' ' ')")"
       echo "  Mostly different skills that share a name. Codex lists every copy, each taking a share of its"
       echo "  description budget; opencode keeps one per name. Where each comes from: bash $CONFIG_NAME/bin/skills.sh duplicates"
+      echo "  Said once: this repeats only when that set changes ($CONFIG_NAME/skills/$DUPES_FILE)."
     } >&2
+    {
+      echo "# Skill names registered more than once, as bin/skills.sh last reported them. It warns"
+      echo "# again only when this set changes; delete this file to see the warning again."
+      printf '%s\n' "$names"
+    } > "$rec" 2>/dev/null || true
   fi
   n="$(registered_skills "$CONFIG_DIR")"
   [ "${n:-0}" -gt "$CODEX_SKILL_LIMIT" ] || return 0
@@ -865,6 +888,6 @@ case "${1:-list}" in
   pins) shift; cmd_pins "$@" ;;
   budget) cmd_budget ;;
   duplicates) duplicate_skill_names "$CONFIG_DIR" ;;
-  -h|--help|help) sed -n '4,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '4,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command '$1' (use: list, add <id>...)" ;;
 esac

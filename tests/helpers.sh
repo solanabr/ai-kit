@@ -203,7 +203,7 @@ assert_contains() {
   local substring="$2"
   local message="${3:-String contains '$substring'}"
   TOTAL=$((TOTAL + 1))
-  if echo "$string" | grep -qF "$substring"; then
+  if grep -qF "$substring" <<<"$string"; then
     echo "  PASS: $message"
     PASS=$((PASS + 1))
   else
@@ -252,7 +252,7 @@ assert_cmd_fails_with() {
   if [ "$rc" -eq 0 ]; then
     echo "  FAIL: $message (command succeeded)"
     FAIL=$((FAIL + 1))
-  elif printf '%s\n' "$out" | grep -qF "$needle"; then
+  elif grep -qF "$needle" <<<"$out"; then
     echo "  PASS: $message"
     PASS=$((PASS + 1))
   else
