@@ -34,19 +34,30 @@ jobs:
         shell: bash
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+    # The tag contributes install.sh and nothing else: the build script runs from the
+    # default branch (or the branch a dispatch names), so no code from the tag executes,
+    # and a backfill of a pre-#278 tag reaches the script's RELEASE_REF refusal instead
+    # of a missing file. The write token is set only on the two gh steps.
     steps:
       # SHA-pinned like every workflow here: this job holds contents: write.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          path: tag
           persist-credentials: false
 
       - name: Stamp the installer and checksum it
-        run: bash .github/scripts/release-installer.sh "$TAG" "$RUNNER_TEMP/assets"
+        run: bash .github/scripts/release-installer.sh "$TAG" "$RUNNER_TEMP/assets" tag/install.sh
 
       - name: Create the release if the tag has none
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --title "$TAG" \
@@ -54,6 +65,8 @@ jobs:
           fi
 
       - name: Upload install.sh and install.sh.sha256
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$TAG" --clobber \
             "$RUNNER_TEMP/assets/install.sh" "$RUNNER_TEMP/assets/install.sh.sha256"

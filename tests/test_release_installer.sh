@@ -91,7 +91,18 @@ assert_eq main "$(cloned "$OUT/install.sh" SOLANA_AI_KIT_UPSTREAM="$UP" SOLANA_A
 echo "[workflow]"
 assert_file_contains "$WORKFLOW" 'tags: ["v[0-9]+.[0-9]+.[0-9]+"]' "runs on a pushed vX.Y.Z tag"
 assert_file_contains "$WORKFLOW" "workflow_dispatch:" "can be run by hand to backfill a tag"
-assert_file_contains "$WORKFLOW" ".github/scripts/release-installer.sh" "builds the assets with the tested script"
+assert_file_contains "$WORKFLOW" 'release-installer.sh "$TAG" "$RUNNER_TEMP/assets" tag/install.sh' \
+  "builds the assets with the default branch's script from the tag's install.sh"
+assert_file_contains "$WORKFLOW" "path: tag" "the tag is checked out into a subdirectory, not the root"
+assert_file_contains "$WORKFLOW" "github.event.repository.default_branch" "the root checkout is the default branch on a tag push"
+assert_eq 2 "$(grep -c 'persist-credentials: false' "$WORKFLOW")" "neither checkout keeps a token on disk"
+# The write token only on the steps that call gh, never job-wide where the build script
+# would see it.
+JOB_ENV="$(awk '/^    env:/ { on = 1; next } on && /^    [a-z]/ { exit } on' "$WORKFLOW")"
+assert_contains "$JOB_ENV" "TAG:" "the job-level env block is read (control)"
+assert_eq "" "$(printf '%s\n' "$JOB_ENV" | grep 'GH_TOKEN' || true)" "GH_TOKEN is not in the job-level env"
+assert_eq 2 "$(grep -cE '^          GH_TOKEN: [$][{][{] github.token [}][}]$' "$WORKFLOW")" \
+  "GH_TOKEN is set on the two gh steps alone"
 assert_file_contains "$WORKFLOW" '"$RUNNER_TEMP/assets/install.sh" "$RUNNER_TEMP/assets/install.sh.sha256"' \
   "uploads both assets"
 assert_file_contains "$WORKFLOW" "sha256sum -c install.sh.sha256" "verifies the published pair after upload"
@@ -99,6 +110,5 @@ assert_file_contains "$WORKFLOW" "sha256sum -c install.sh.sha256" "verifies the 
 assert_eq "contents: read" "$(awk '/^permissions:/ { getline; sub(/^[[:space:]]+/, ""); print; exit }' "$WORKFLOW")" \
   "the workflow default token is read-only"
 assert_eq 1 "$(grep -cE '^[[:space:]]+contents: write$' "$WORKFLOW")" "contents: write is granted once, to the job"
-assert_file_contains "$WORKFLOW" "persist-credentials: false" "the checkout keeps no token on disk"
 
 print_summary
