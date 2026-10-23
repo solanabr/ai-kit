@@ -207,6 +207,12 @@ echo "solana-ai-kit 99.0.0" > "$TEMP_DIR/.claude/VERSION"
 assert_file_contains "$TEMP_DIR/ref.err" "this fetched v$KIT_VERSION, older than the installed v99.0.0" \
   "an update to a lower VERSION warns that it is a downgrade"
 assert_file_contains "$TEMP_DIR/ref.err" "SOLANA_AI_KIT_BRANCH=main" "...and says how to stay on the newer version"
+# A dry run copies nothing, so it says the downgrade would happen, not that it did.
+echo "solana-ai-kit 99.0.0" > "$TEMP_DIR/.claude/VERSION"
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run) > "$TEMP_DIR/ref.out" 2> "$TEMP_DIR/ref.err" || true
+assert_file_contains "$TEMP_DIR/ref.err" "this would downgrade to v$KIT_VERSION from the installed v99.0.0" \
+  "a dry run says the downgrade would happen"
+assert_file_not_contains "$TEMP_DIR/ref.err" "this fetched v$KIT_VERSION, older than" "...and not that it was applied"
 # Controls: the same VERSION, and an older installed one, are not downgrades.
 for v in "$KIT_VERSION" 0.0.1; do
   echo "solana-ai-kit $v" > "$TEMP_DIR/.claude/VERSION"

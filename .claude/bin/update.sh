@@ -175,7 +175,11 @@ if grep -qvxE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$CURRENT_VERSION
 $NEW_VERSION"; then
   :
 elif version_lt "$NEW_VERSION" "$CURRENT_VERSION"; then
-  echo "Warning: this fetched v$NEW_VERSION, older than the installed v$CURRENT_VERSION ($BRANCH). Files only v$CURRENT_VERSION shipped stay on disk, and the permission rules and hook entries it wrote into settings.json are kept." >&2
+  if [ "$DRY_RUN" = true ]; then
+    echo "Warning: this would downgrade to v$NEW_VERSION from the installed v$CURRENT_VERSION ($BRANCH). Files only v$CURRENT_VERSION shipped would stay on disk, and the permission rules and hook entries it wrote into settings.json would be kept." >&2
+  else
+    echo "Warning: this fetched v$NEW_VERSION, older than the installed v$CURRENT_VERSION ($BRANCH). Files only v$CURRENT_VERSION shipped stay on disk, and the permission rules and hook entries it wrote into settings.json are kept." >&2
+  fi
   echo "  To stay on the newer version: SOLANA_AI_KIT_BRANCH=main bash $CONFIG_NAME/bin/update.sh" >&2
 fi
 

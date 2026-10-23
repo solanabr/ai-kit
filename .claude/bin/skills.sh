@@ -843,7 +843,7 @@ cmd_budget() {
   rec="$CONFIG_DIR/skills/$DUPES_FILE"
   if [ -z "$names" ]; then
     rm -f "$rec"
-  elif [ "$names" != "$(grep -v '^#' "$rec" 2>/dev/null || true)" ]; then
+  elif [ "$names" != "$(awk '!/^#/ && NF { print $1 }' "$rec" 2>/dev/null || true)" ]; then
     {
       echo "! $(printf '%s\n' "$names" | grep -c .) skill names are registered more than once from $CONFIG_NAME/skills/: $(short_list "$(printf '%s\n' "$names" | tr '\n' ' ')")"
       echo "  Mostly different skills that share a name. Codex lists every copy, each taking a share of its"
