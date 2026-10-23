@@ -17,10 +17,18 @@ set -euo pipefail
 # order, so it survives merging. That is why every tier-varying path decision lives
 # in sandbox.filesystem and every tier-varying command decision lives in a hook.
 #
-# What each apply removes: exactly the strings recorded in
-# .claude/security.json -> enforced.ruleIds. Every other entry in those lists —
-# including rules the user added — is left in place, in its original order, ahead of
-# the regenerated block.
+# What each apply removes: exactly the strings recorded in .claude/security.json ->
+# enforced.ruleIds (a record from before #165, which may hold the user's rules too, is
+# first narrowed by kit_owned()). Every other entry in those lists — including rules
+# the user added — is left in place, in its original order, ahead of the regenerated
+# block. ruleIds records only that block, never what was already there.
+#
+# One case cannot be told apart: a user rule byte-identical to a kit rule in the same
+# list. On the first apply (no record yet) it is taken as the kit's, since the kit
+# wrote these lists before ruleIds existed; after that, it is the kit's if the kit
+# wrote it first and the user's if the user did. A rule that must outlive every tier
+# change belongs in .claude/settings.local.json, which merges with this file and which
+# the generator never touches.
 #
 # Usage:
 #   bash .claude/bin/firewall.sh show                 # report declared vs enforced
@@ -160,10 +168,13 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           keeps working, and High already has it, since its Edit deny reaches the
 #           sandbox (git_common_edit_deny).
 RULE_SET_VERSION = 9
+# enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
+# without it predate #165, when a first apply recorded the user's own rules as well.
+RULEIDS_SCOPE = "generated"
 # The four user tiers. `maintainer` is deliberately not one of them: it is a variant of
-# its base tier for the kit's own repository, so it is absent from bootstrap_ids() (no
-# install ever wrote its rules before enforced.ruleIds existed) and from every loop that
-# means "each tier a user can pick".
+# its base tier for the kit's own repository, so it is absent from every loop that means
+# "each tier a user can pick". emittable() adds it back, because that one means "every
+# string the generator can write".
 TIERS = ("off", "relaxed", "medium", "high")
 MAINTAINER_BASE = "relaxed"
 RANK = {t: i for i, t in enumerate(TIERS)}
@@ -1703,9 +1714,10 @@ ORDER = {
     "sandbox.filesystem": ("denyRead", "allowRead", "denyWrite", "allowWrite"),
 }
 
-# Rules the kit shipped before the firewall that no tier re-emits. Removed once, on the
-# first apply, alongside the union of every tier's own rules. After that, removal is
-# driven purely by enforced.ruleIds.
+# Rules the kit once wrote that no tier re-emits: the pre-firewall set, and what rule
+# sets 1-9 dropped. Read through kit_owned(), which decides removal for a first apply
+# and for a record written before #165. A record written since lists exactly what was
+# generated, so a rule a later rule set drops needs no entry here.
 LEGACY_RULE_IDS = [
     # superseded deny rules, each replaced by a form its evasion cannot walk around
     "Bash(mkfs *)",
@@ -1766,6 +1778,39 @@ LEGACY_RULE_IDS = [
     "gh pr *",
     "gh run *",
     "gh issue *",
+    # Pre-firewall denies (v1.5.0-v2.1.0) this list missed. Until #165 the first apply
+    # recorded them and the second removed them; kit_owned() needs them named instead.
+    "Bash(solana program deploy *mainnet*)",
+    "Bash(spl-token set-authority *)",
+    "Bash(solana withdraw-from-stake-account *)",
+    # Emitted by an earlier rule set and dropped since (#165). Measured by generating
+    # all four tiers from every commit that touched this file: these 24 strings are the
+    # whole difference, and none moved between lists. Missing here, one recorded by a
+    # pre-#165 apply would be kept as the user's — worst for the two allows.
+    "Bash(command *)",
+    "Bash(xargs *)",
+    "Bash(bun publish*)",
+    "Bash(cargo owner *)",
+    "Bash(cargo publish*)",
+    "Bash(cargo yank *)",
+    "Bash(npm exec *)",
+    "Bash(npm publish*)",
+    "Bash(npm run *deploy*)",
+    "Bash(npm run *publish*)",
+    "Bash(npm run *release*)",
+    "Bash(npm run deploy*)",
+    "Bash(npm run publish*)",
+    "Bash(npm run release*)",
+    "Bash(pnpm publish*)",
+    "Bash(yarn npm publish*)",
+    "Bash(yarn publish*)",
+    "Edit(~/.claude/**)",
+    "Read(//Library/Keychains)",
+    "Read(//Library/Keychains/**)",
+    "Read(~/Library/Group Containers/2BUA8C4S2C.com.1password)",
+    "Read(~/Library/Group Containers/2BUA8C4S2C.com.1password/**)",
+    "Read(~/Library/Keychains)",
+    "Read(~/Library/Keychains/**)",
 ]
 
 
@@ -1873,15 +1918,55 @@ def reorder(root):
         node[last] = ordered       # replacing a value keeps the key's position
 
 
-def bootstrap_ids():
-    """Everything the kit could have written before enforced.ruleIds existed."""
-    ids = set(LEGACY_RULE_IDS)
-    for tier in TIERS:
+def emittable():
+    """{list path: every string some tier, maintainer included, emits into that list}.
+
+    Per list, not one flat set, so on a first apply a user's allow that equals a rule
+    some tier denies is not taken for the kit's. Maintainer is in it although no user
+    picks it: maintainer -> relaxed has to remove the exclusion only maintainer emits.
+    """
+    out = {path: set() for path in MANAGED_LISTS}
+    for tier in TIERS + ("maintainer",):
         lists, _ = plan(tier)
-        for groups in lists.values():
+        for path, groups in lists.items():
             for group in groups:
-                ids.update(e for e in group if e)
-    return ids
+                out[path].update(e for e in group if e)
+    return out
+
+
+def machine_git_entry(path, entry):
+    """The shape git_common_write() / git_common_edit_deny() emit on SOME machine.
+
+    Both name an absolute git common dir, so what an earlier apply recorded can differ
+    from what this machine generates: a moved checkout, or a file generated elsewhere.
+    Matched by shape, an absolute path to a `.git` dir, so a recorded one still goes.
+    """
+    if path == "sandbox.filesystem.allowWrite":
+        target = entry
+    elif path == "permissions.deny":
+        m = re.match(r"^Edit\(/(/.*)/(config|hooks|hooks/\*\*)\)$", entry)
+        if not m:
+            return False
+        target = re.sub(r"\\(.)", r"\1", m.group(1))
+    else:
+        return False
+    base = target.rstrip("/")
+    return base.startswith("/") and (base.endswith(".git") or "/.git/" in base + "/")
+
+
+def kit_owned(owned, path, entry, recorded):
+    """Could the kit have written `entry` into list `path`?
+
+    First apply (recorded=False): there is no record, and a string some tier emits into
+    that list is indistinguishable from one the kit wrote before ruleIds existed, so it
+    is taken as the kit's. A record from before #165 (recorded=True) removes a recorded
+    entry only if this holds too: those first applies recorded the user's own rules as
+    the kit's, and a recorded string no tier, no retired rule set and no machine path
+    could have produced is the user's. It is kept, and leaves the record on this apply.
+    """
+    if entry in owned[path] or entry in LEGACY_RULE_IDS:
+        return True
+    return recorded and machine_git_entry(path, entry)
 
 
 def diff(before, after):
@@ -1970,14 +2055,51 @@ if tier == "maintainer" and not is_kit_checkout():
         "the denies that stop an agent rewriting its own guard hooks or starting a "
         "nested `claude`. For a project, use relaxed: firewall.sh apply relaxed" % TARGET)
 
+machine_common = git_common_outside()
+if machine_common and tier != "maintainer" and is_kit_checkout():
+    # #165: a linked worktree of the kit's repository resolves its git common dir to
+    # the main checkout, an absolute path on this machine. git_common_write() and, at
+    # High, git_common_edit_deny() would put it in the settings.json every install
+    # copies. Refused, not rewritten: a relative form (`../../.git`) is a different
+    # directory on every machine whose layout differs, so it would grant shell writes
+    # to whatever .git sits there, where the absolute path is merely inert. Leaving the
+    # entry out instead breaks git under the sandbox in this very worktree. Maintainer
+    # is exempt: it is local-only, and validate.sh refuses committing it.
+    msg = ("%s is a linked worktree or sits inside another repository (its git common "
+           "dir is %s, outside it), so the generated file would carry that machine path "
+           "into the settings.json every install copies. Regenerate the committed files "
+           "from a clean non-git copy: d=$(mktemp -d) && git archive HEAD | tar -x -C "
+           "\"$d\" && (cd \"$d\" && bash .claude/bin/firewall.sh apply %s) && cp "
+           "\"$d\"/.claude/settings.json \"$d\"/.claude/security.json .claude/ -- or, "
+           "for local work in this worktree only: firewall.sh apply maintainer"
+           % (TARGET, machine_common, tier))
+    if not DRY:
+        die("refusing to write: " + msg)
+    print("  WARNING: a real apply would be refused: " + msg)
+
 lists, scalars = plan(tier)
 
-if enforced_before.get("ruleSetVersion"):
-    remove = set(enforced_before.get("ruleIds") or [])
-    first_apply = False
-else:
-    remove = bootstrap_ids()
-    first_apply = True
+# What this apply removes, by the kind of record the last one left:
+#   none (first apply)  any entry the kit could have written (kit_owned).
+#   exact               every recorded entry. RULEIDS_SCOPE marks a record that holds
+#                       only the generated block, which every apply since #165 writes.
+#   unmarked            a recorded entry the kit could have written. An earlier first
+#                       apply recorded the user's rules too, so the record alone cannot
+#                       be trusted; kit_owned() tells them apart, once — this apply
+#                       writes an exact record.
+first_apply = not enforced_before.get("ruleSetVersion")
+recorded_ids = set() if first_apply else set(enforced_before.get("ruleIds") or [])
+exact_record = enforced_before.get("ruleIdsScope") == RULEIDS_SCOPE
+owned = None if exact_record else emittable()
+
+
+def removable(path, entry):
+    if first_apply:
+        return kit_owned(owned, path, entry, False)
+    if exact_record:
+        return entry in recorded_ids
+    return entry in recorded_ids and kit_owned(owned, path, entry, True)
+
 
 print("firewall: %s -> %s%s" % (
     enforced_before.get("tier") or "unapplied", tier, " (dry run)" if DRY else ""))
@@ -1986,19 +2108,29 @@ rule_ids = []
 seen_ids = set()
 changed = 0
 foreign_kept = 0
+reclaimed = 0
 
 for path in MANAGED_LISTS:
     node, last = container(settings, path, True)
     current = node.get(last)
     before = [e for e in current if isinstance(e, str)] if isinstance(current, list) else []
-    kept = [e for e in before if e not in remove]
+    kept = [e for e in before if not removable(path, e)]
     foreign_kept += len(kept)
-    block = flatten(lists[path], bool(kept))
+    reclaimed += sum(1 for e in kept if e in recorded_ids)
+    # A kept entry equal to a generated one stays where the user put it and stays theirs:
+    # the block skips it, and it is not recorded, so a later tier that stops emitting the
+    # rule leaves it in place. Only a later apply can meet this; a first apply has
+    # already taken every such string as the kit's.
+    kept_set = set(kept)
+    block = flatten([[e for e in g if e not in kept_set] for g in lists[path]], bool(kept))
     final = kept + block
     after = [e for e in final if e != MARK]
 
-    for entry in after:
-        if entry not in seen_ids:
+    # ruleIds is what the generator wrote on this apply and nothing else (#165): built
+    # from `final`, it recorded every foreign rule a first apply found, and the next
+    # apply deleted them.
+    for entry in block:
+        if entry != MARK and entry not in seen_ids:
             seen_ids.add(entry)
             rule_ids.append(entry)
 
@@ -2054,6 +2186,7 @@ security["enforced"] = {
     "target": SETTINGS_REL,
     "sha256": digest,
     "ruleIds": rule_ids,
+    "ruleIdsScope": RULEIDS_SCOPE,
 }
 
 settings_text = dump(settings)
@@ -2062,6 +2195,9 @@ security_text = dump(security)
 if first_apply and foreign_kept:
     print("  note: %d rule(s) already in those lists were not written by any tier and "
           "were left in place, ahead of the generated block." % foreign_kept)
+if reclaimed:
+    print("  note: %d rule(s) an earlier apply recorded as the kit's were never written by "
+          "any tier; they are yours, were kept, and are no longer recorded (#165)." % reclaimed)
 if not changed:
     print("  already in sync — no rule changes")
 

@@ -585,6 +585,7 @@
       "~/.config/solana",
       "~/Library/Caches",
       ".git"
-    ]
+    ],
+    "ruleIdsScope": "generated"
   }
 }

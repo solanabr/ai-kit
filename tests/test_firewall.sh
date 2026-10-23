@@ -153,6 +153,96 @@ assert_cmd_success "cmp -s '$WORK/medium-first.json' '$WORK/proj/.claude/setting
   "high -> medium restores the medium bytes exactly (no High-only rule left behind)"
 fw relaxed
 
+# ── the user's own rules survive every apply, the first included (#165) ──────
+# ruleIds used to be built from the final lists, so a first apply recorded the rules it
+# found as the kit's and the second deleted them: allow=2 ruleIds=0 -> 2/2 -> 0/0.
+echo "[the user's own rules (#165)]"
+OWN="$WORK/own"
+mkdir -p "$OWN/.claude/bin"
+cp "$FIREWALL" "$OWN/.claude/bin/firewall.sh"
+own_fw() {
+  set +e
+  FW_OUT="$( (cd "$OWN" && CLAUDE_PROJECT_DIR="$OWN" bash .claude/bin/firewall.sh apply "$@") 2>&1 )"
+  RC=$?
+  set -e
+}
+# own_state <rule>... -> "<in lists> <in ruleIds> <scope>" counts over the given rules
+own_state() {
+  python3 - "$OWN" "$@" <<'PY' 2>/dev/null || echo __ERROR__
+import json, sys
+root, rules = sys.argv[1], sys.argv[2:]
+s = json.load(open(root + "/.claude/settings.json"))
+e = json.load(open(root + "/.claude/security.json")).get("enforced") or {}
+live = []
+def walk(o):
+    if isinstance(o, dict):
+        for v in o.values(): walk(v)
+    elif isinstance(o, list):
+        live.extend(x for x in o if isinstance(x, str))
+walk(s)
+ids = e.get("ruleIds") or []
+print(sum(live.count(r) for r in rules), sum(r in ids for r in rules), e.get("ruleIdsScope") or "unscoped")
+PY
+}
+U1="Bash(mytool *)"; U2="Bash(./scripts/dev.sh *)"
+printf '{\n  "permissions": {\n    "allow": ["%s", "%s"]\n  }\n}\n' "$U1" "$U2" > "$OWN/.claude/settings.json"
+printf '{\n  "tier": "relaxed"\n}\n' > "$OWN/.claude/security.json"
+assert_eq "2 0 unscoped" "$(own_state "$U1" "$U2")" "start: two user allow rules, no record"
+own_fw
+assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "first apply keeps both user rules and does not record them as the kit's"
+own_fw
+assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "second apply still has both (they used to be deleted here)"
+own_fw high
+own_fw relaxed
+assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "relaxed -> high -> relaxed keeps both"
+
+# A record a pre-fix first apply wrote: the user's rules sit in ruleIds beside the kit's,
+# with no ruleIdsScope. A recorded string no tier, no retired rule set and no machine
+# path could have produced is the user's and is kept; the kit's own stale entries still
+# go: a retired allow, and an absolute .git path recorded on some other machine.
+python3 - "$OWN/.claude/security.json" "$OWN/.claude/settings.json" "$U1" "$U2" <<'PY'
+import json, sys
+sec_p, set_p, u1, u2 = sys.argv[1:5]
+sec, s = json.load(open(sec_p)), json.load(open(set_p))
+e = sec["enforced"]
+e.pop("ruleIdsScope")
+e["ruleIds"] += [u1, u2, "Bash(xargs *)", "/elsewhere/repo/.git", "Edit(//elsewhere/repo/.git/config)"]
+s["permissions"]["allow"].append("Bash(xargs *)")
+s["permissions"]["deny"].append("Edit(//elsewhere/repo/.git/config)")
+s["sandbox"]["filesystem"]["allowWrite"].append("/elsewhere/repo/.git")
+json.dump(sec, open(sec_p, "w")); json.dump(s, open(set_p, "w"))
+PY
+assert_eq "2 2 unscoped" "$(own_state "$U1" "$U2")" "planted: a pre-fix record holding the user's rules"
+own_fw
+assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "a pre-fix record: the user's rules are kept and leave the record"
+assert_contains "$FW_OUT" "are yours, were kept" "a pre-fix record: the apply says it kept them"
+assert_eq "0 0 generated" "$(own_state "Bash(xargs *)" "/elsewhere/repo/.git" "Edit(//elsewhere/repo/.git/config)")" \
+  "a pre-fix record: a retired kit rule and another machine's .git entries are still removed"
+
+# A user rule byte-identical to a kit rule cannot be told apart from it. On a first apply
+# it is the kit's (the kit wrote these lists before any record existed). After that, the
+# first writer owns it: a rule the user had before a tier emitted it stays theirs, is
+# not duplicated, and survives the tier that stops emitting it.
+X_HIGH="$(python3 -c "
+import json, sys
+h = json.load(open(sys.argv[1]))['permissions']['deny']; r = set(json.load(open(sys.argv[2]))['permissions']['deny'])
+print(next(x for x in h if x not in r))" "$WORK/high.json" "$WORK/once.json" 2>/dev/null || echo __ERROR__)"
+python3 - "$OWN/.claude/settings.json" "$X_HIGH" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1])); s["permissions"]["deny"].insert(0, sys.argv[2])
+json.dump(s, open(sys.argv[1], "w"))
+PY
+own_fw high
+assert_eq "1 0 generated" "$(own_state "$X_HIGH")" "a user rule High also emits: one copy at High, still not recorded"
+own_fw relaxed
+assert_eq "1 0 generated" "$(own_state "$X_HIGH")" "...and it survives the descent to Relaxed, which does not emit it"
+X_RELAXED="Bash(cargo build*)"
+printf '{\n  "permissions": {\n    "allow": ["%s", "%s"]\n  }\n}\n' "$X_RELAXED" "$U1" > "$OWN/.claude/settings.json"
+printf '{\n  "tier": "relaxed"\n}\n' > "$OWN/.claude/security.json"
+own_fw
+assert_eq "1 1 generated" "$(own_state "$X_RELAXED")" "first apply: a user rule identical to a kit rule is taken as the kit's (documented)"
+assert_eq "1 0 generated" "$(own_state "$U1")" "first apply: the user rule beside it is not"
+
 # ── harvest every tier once, then assert over the four generated files ──────
 for t in $TIERS; do
   fw "$t"
@@ -972,6 +1062,45 @@ json.dump(s, open(sys.argv[2], "w"))
 PY
   assert_contains "$(python3 "$WORK/edit_deny.py" "$WORK/planted-wt.json" denied "$COMMON/config" 2>&1)" \
     "$COMMON/config" "planted: without the absolute rules a worktree's common config is writable, and the check says so"
+
+  # #165: in a linked worktree of the KIT's repository the same absolute path would land
+  # in the settings.json every install copies. Refused there for every user tier, dry
+  # run aside; maintainer is local-only and still applies. A user project's worktree is
+  # unaffected (above): it needs the path, and on any other machine the path is inert.
+  for wt in "$WT_SIB" "$WT_MAIN/.claude/worktrees/inner"; do
+    WT_LABEL="$(basename "$wt")"
+    cp "$REPO_ROOT/.claude/settings.json" "$SECURITY" "$wt/.claude/"
+    touch "$wt/CLAUDE-solana.md" "$wt/install.sh"
+    cp "$wt/.claude/settings.json" "$WORK/wt-kit-before.json"
+    cp "$wt/.claude/security.json" "$WORK/wt-kit-before-sec.json"
+    for t in relaxed high; do
+      set +e
+      WT_OUT="$( (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash .claude/bin/firewall.sh apply "$t") 2>&1 )"; WT_RC=$?
+      set -e
+      TOTAL=$((TOTAL + 1))
+      if [ "$WT_RC" -ne 0 ] && printf '%s' "$WT_OUT" | grep -q "refusing to write" \
+         && cmp -s "$WORK/wt-kit-before.json" "$wt/.claude/settings.json" \
+         && cmp -s "$WORK/wt-kit-before-sec.json" "$wt/.claude/security.json"; then
+        echo "  PASS: kit worktree '$WT_LABEL' at $t: apply refused, both files untouched"
+        PASS=$((PASS + 1))
+      else
+        echo "  FAIL: kit worktree '$WT_LABEL' at $t: apply not refused (exit $WT_RC): $(printf '%s' "$WT_OUT" | head -2)"
+        FAIL=$((FAIL + 1))
+      fi
+    done
+    set +e
+    WT_OUT="$( (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash .claude/bin/firewall.sh apply relaxed --dry-run) 2>&1 )"; WT_RC=$?
+    set -e
+    assert_eq "0" "$WT_RC" "kit worktree '$WT_LABEL': --dry-run still reports (exit 0)"
+    assert_contains "$WT_OUT" "would be refused" "kit worktree '$WT_LABEL': --dry-run says a real apply would be refused"
+    set +e
+    (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash .claude/bin/firewall.sh apply maintainer) > "$WORK/wt-apply.log" 2>&1; WT_RC=$?
+    set -e
+    assert_eq "0" "$WT_RC" "kit worktree '$WT_LABEL': maintainer, the local-only tier, still applies"
+    assert_file_contains "$wt/.claude/settings.json" "$COMMON" \
+      "kit worktree '$WT_LABEL': maintainer grants the common dir, so git keeps working there"
+    rm -f "$wt/CLAUDE-solana.md" "$wt/install.sh"
+  done
 fi
 
 # The kit installed in a monorepo's subfolder: the parent repository's .git is the common
