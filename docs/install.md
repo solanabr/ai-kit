@@ -26,7 +26,7 @@ curl -fsSL https://aikit.superteam.codes | bash
 
 `aikit.superteam.codes` and `aikit.superteam.codes/install.sh` both redirect to [`install.sh` on `main`](https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh).
 
-**Verify before you run it.** Download the installer, read it, then run the copy you read:
+**Verify before you run it.** Download the installer, read it, then run the copy you read. To also check it against a release's published checksum, and install exactly that release, use [a release installer](#verify-a-release-installer) instead:
 
 ```bash
 curl -fsSL https://aikit.superteam.codes/install.sh -o /tmp/solana-ai-kit-install.sh
@@ -59,6 +59,32 @@ Installed config is gitignored by default — see [the README](../README.md#conf
 | `--agents` | Install into `.agents/` with `AGENTS.md` instead of `.claude/` with `CLAUDE.md` — see [below](#codex-opencode-and-other-agents) |
 | `--with <ids>` | Install skill extensions at install time, e.g. `--with sendai,jupiter`; `--with all` installs every pack. See [skill-packs.md](skill-packs.md) |
 | `--tier <tier>` | Start on a [firewall tier](firewall.md) other than the default Relaxed. Ignored with `--agents`, which installs no firewall |
+
+### Verify a release installer
+
+Every release from v2.5.0 on carries `install.sh` and `install.sh.sha256` as assets, so you can check that the installer you downloaded is the one the release shipped before you run it. Pick a tag from the [releases page](https://github.com/solanabr/ai-kit/releases) and download both into an empty directory outside your project (replace `vX.Y.Z` with it):
+
+```bash
+mkdir -p /tmp/ai-kit-installer && cd /tmp/ai-kit-installer
+```
+
+```bash
+curl -fsSLO https://github.com/solanabr/ai-kit/releases/download/vX.Y.Z/install.sh
+```
+
+```bash
+curl -fsSLO https://github.com/solanabr/ai-kit/releases/download/vX.Y.Z/install.sh.sha256
+```
+
+Then check it and, only if it matches, install into your project (replace `/path/to/your-project` with its full path, since you are not in it). On Linux without `shasum`, `sha256sum -c install.sh.sha256` reads the same file:
+
+```bash
+shasum -a 256 -c install.sh.sha256 && bash install.sh /path/to/your-project
+```
+
+The release installer installs the release it came from, not the newest tag: the attached copy has its `RELEASE_REF` line set to that tag, the only line that differs from `install.sh` at the tag, and the checksum covers that copy. `SOLANA_AI_KIT_BRANCH` still overrides it when set in your shell. To see the one-line difference from a clone, run `diff <(git show vX.Y.Z:install.sh) /tmp/ai-kit-installer/install.sh`. `/update` later moves the project to the latest release as usual.
+
+What the checksum proves: the file you hold is the file attached to that GitHub release, so a truncated download, or a proxy or mirror that altered it, fails the check. Both files come from the same release, so it does not protect against someone who can publish releases on the repository. The installer then clones the kit at that tag over HTTPS; the checksum covers the installer, not that clone.
 
 ## From a clone
 

@@ -1,0 +1,70 @@
+name: Release installer
+
+# Attach install.sh and install.sh.sha256 to every vX.Y.Z release (#278), so a user can
+# check that the installer they downloaded is the one a release shipped before running it
+# (docs/install.md#verify-a-release-installer). The attached install.sh has RELEASE_REF
+# stamped to the tag, so it installs that release rather than the newest tag at run time;
+# the checksum covers the stamped file. Tags are mostly pushed without a release, so the
+# job creates one when it is missing. workflow_dispatch backfills or repairs a tag.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the installer to (vX.Y.Z)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-installer-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # SHA-pinned like every workflow here: this job holds contents: write.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+
+      - name: Stamp the installer and checksum it
+        run: bash .github/scripts/release-installer.sh "$TAG" "$RUNNER_TEMP/assets"
+
+      - name: Create the release if the tag has none
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes "Changes: [.claude/CHANGELOG.md](https://github.com/$GH_REPO/blob/$TAG/.claude/CHANGELOG.md). Verify-then-run: [docs/install.md](https://github.com/$GH_REPO/blob/$TAG/docs/install.md#verify-a-release-installer)."
+          fi
+
+      - name: Upload install.sh and install.sh.sha256
+        run: |
+          gh release upload "$TAG" --clobber \
+            "$RUNNER_TEMP/assets/install.sh" "$RUNNER_TEMP/assets/install.sh.sha256"
+
+      # The user's path, from the public download URLs: both files fetched side by side
+      # and the checksum checked, so a bad upload turns this run red, not a user's install.
+      - name: Download and verify the published pair
+        run: |
+          d="$RUNNER_TEMP/verify"; mkdir -p "$d"; cd "$d"
+          base="https://github.com/$GH_REPO/releases/download/$TAG"
+          curl -fsSLO "$base/install.sh"
+          curl -fsSLO "$base/install.sh.sha256"
+          sha256sum -c install.sh.sha256
+          grep -qx "RELEASE_REF=\"$TAG\"" install.sh

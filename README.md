@@ -48,7 +48,7 @@ curl -fsSL https://aikit.superteam.codes | bash
 
 `aikit.superteam.codes` and `aikit.superteam.codes/install.sh` both redirect to [`install.sh` on `main`](https://raw.githubusercontent.com/solanabr/ai-kit/main/install.sh).
 
-**Verify before you run it.** Same installer, with a review step: download it, read it, then run the copy you read.
+**Verify before you run it.** Same installer, with a review step: download it, read it, then run the copy you read. To check it against a release's published SHA-256 instead, see [verify a release installer](docs/install.md#verify-a-release-installer).
 
 ```bash
 curl -fsSL https://aikit.superteam.codes/install.sh -o /tmp/solana-ai-kit-install.sh

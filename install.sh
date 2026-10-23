@@ -16,6 +16,11 @@ set -euo pipefail
 
 REPO_URL="${SOLANA_AI_KIT_UPSTREAM:-https://github.com/solanabr/ai-kit.git}"
 SCRIPT_VERSION="dev"
+# Empty in the repo, so the curl | bash route keeps resolving the latest release tag.
+# The copy attached to a GitHub release has this line stamped with that release's tag by
+# .github/scripts/release-installer.sh (#278), so a downloaded, checksum-verified
+# installer installs the version it was released with. SOLANA_AI_KIT_BRANCH still wins.
+RELEASE_REF=""
 
 # Parse flags
 AGENTS_ONLY=false
@@ -141,8 +146,9 @@ if [ -n "$LOCAL_SRC" ] && [ -d "$LOCAL_SRC/.claude" ]; then
 else
   # The ref: SOLANA_AI_KIT_BRANCH when set, else the latest release tag, else main — the
   # rule .claude/bin/kit-ref.sh applies for /update, so both entry points land on the
-  # same ref (#125; tests/test_kit_ref.sh). It is inline because a curl | bash install
-  # has no kit on disk to call yet. Only vX.Y.Z tags above v2.4.0 count: releases up to
+  # same ref (#125; tests/test_kit_ref.sh). A release asset's stamped RELEASE_REF sits
+  # between the env override and the tag lookup, and is empty everywhere else. It is
+  # inline because a curl | bash install has no kit on disk to call yet. Only vX.Y.Z tags above v2.4.0 count: releases up to
   # there ship an /update that fetches main, so landing on one would leave the install
   # flipping between that tag and main on every /update. Keep the two copies in step.
   # A failed lookup must reach the fallback below: under set -e with pipefail a failing
@@ -151,7 +157,7 @@ else
   # The env overrides are update.sh's, legacy SOLANA_CLAUDE_* names included, so the two
   # scripts can be pointed at the same upstream and ref.
   REPO_URL="${SOLANA_AI_KIT_UPSTREAM:-${SOLANA_CLAUDE_UPSTREAM:-$REPO_URL}}"
-  BRANCH="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-}}"
+  BRANCH="${SOLANA_AI_KIT_BRANCH:-${SOLANA_CLAUDE_BRANCH:-$RELEASE_REF}}"
   if [ -z "$BRANCH" ]; then
     BRANCH=$(git ls-remote --tags --refs "$REPO_URL" 'refs/tags/v*' 2>/dev/null \
       | awk -v floor="2.4.0" '
