@@ -15,7 +15,7 @@
 #            `gh secret set` / `gh variable set` deny, reached by the REST API
 #   GHACTION  a `gh api` write that dispatches a workflow, creates a deployment
 #            or changes an environment
-#   DENYa secret reaches a network command — as a body, as an argument, via a
+#   DENY  a secret reaches a network command — as a body, as an argument, via a
 #         reader in the same statement, or named in inline interpreter code
 #   ASK1  a request body or upload sourced from a file or from stdin
 #   ASK2  an inline request body (literal data)
