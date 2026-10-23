@@ -195,6 +195,9 @@ assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "second apply still has bot
 own_fw high
 own_fw relaxed
 assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "relaxed -> high -> relaxed keeps both"
+# Control for the refused dry run below: one a real apply would carry out exits 0.
+own_fw high --dry-run
+assert_eq "0" "$RC" "--dry-run of an apply that would succeed exits 0"
 
 # A record a pre-fix first apply wrote: the user's rules sit in ruleIds beside the kit's,
 # with no ruleIdsScope. A recorded string no tier, no retired rule set and no machine
@@ -206,18 +209,29 @@ sec_p, set_p, u1, u2 = sys.argv[1:5]
 sec, s = json.load(open(sec_p)), json.load(open(set_p))
 e = sec["enforced"]
 e.pop("ruleIdsScope")
-e["ruleIds"] += [u1, u2, "Bash(xargs *)", "/elsewhere/repo/.git", "Edit(//elsewhere/repo/.git/config)"]
+machine = ["/elsewhere/repo/.git", "/elsewhere/bare.git", "/elsewhere/super/.git/modules/libs/proj"]
+deny = ["Edit(//elsewhere/repo/.git/config)", "Edit(//elsewhere/super/.git/modules/libs/proj/hooks/**)"]
+mine = "/home/me/other/.git/objects"
+e["ruleIds"] += [u1, u2, "Bash(xargs *)", mine] + machine + deny
 s["permissions"]["allow"].append("Bash(xargs *)")
-s["permissions"]["deny"].append("Edit(//elsewhere/repo/.git/config)")
-s["sandbox"]["filesystem"]["allowWrite"].append("/elsewhere/repo/.git")
+s["permissions"]["deny"] += deny
+s["sandbox"]["filesystem"]["allowWrite"] += machine + [mine]
 json.dump(sec, open(sec_p, "w")); json.dump(s, open(set_p, "w"))
 PY
 assert_eq "2 2 unscoped" "$(own_state "$U1" "$U2")" "planted: a pre-fix record holding the user's rules"
 own_fw
 assert_eq "2 0 generated" "$(own_state "$U1" "$U2")" "a pre-fix record: the user's rules are kept and leave the record"
 assert_contains "$FW_OUT" "are yours, were kept" "a pre-fix record: the apply says it kept them"
-assert_eq "0 0 generated" "$(own_state "Bash(xargs *)" "/elsewhere/repo/.git" "Edit(//elsewhere/repo/.git/config)")" \
-  "a pre-fix record: a retired kit rule and another machine's .git entries are still removed"
+assert_contains "$FW_OUT" ".claude/settings.local.json, which the generator never touches" \
+  "a pre-fix record: the kept note points at settings.local.json for rules that must outlive a tier change"
+assert_eq "0 0 generated" "$(own_state "Bash(xargs *)" "/elsewhere/repo/.git" "/elsewhere/bare.git" \
+  "/elsewhere/super/.git/modules/libs/proj" "Edit(//elsewhere/repo/.git/config)" \
+  "Edit(//elsewhere/super/.git/modules/libs/proj/hooks/**)")" \
+  "a pre-fix record: a retired kit rule and another machine's .git entries (worktree, bare, submodule) are still removed"
+# Only the three shapes a git common dir resolves to are the kit's. A path inside some
+# other repository's .git that the user granted is not one, and is kept like their allows.
+assert_eq "1 0 generated" "$(own_state "/home/me/other/.git/objects")" \
+  "a pre-fix record: a user's allowWrite inside another repository's .git is kept and leaves the record"
 
 # A user rule byte-identical to a kit rule cannot be told apart from it. On a first apply
 # it is the kit's (the kit wrote these lists before any record existed). After that, the
@@ -1091,8 +1105,11 @@ PY
     set +e
     WT_OUT="$( (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash .claude/bin/firewall.sh apply relaxed --dry-run) 2>&1 )"; WT_RC=$?
     set -e
-    assert_eq "0" "$WT_RC" "kit worktree '$WT_LABEL': --dry-run still reports (exit 0)"
-    assert_contains "$WT_OUT" "would be refused" "kit worktree '$WT_LABEL': --dry-run says a real apply would be refused"
+    assert_eq "1" "$WT_RC" "kit worktree '$WT_LABEL': --dry-run exits 1, as the refused apply would"
+    assert_contains "$WT_OUT" "WARNING: a real apply would be refused" "kit worktree '$WT_LABEL': --dry-run says a real apply would be refused"
+    assert_contains "$WT_OUT" "were not written" "kit worktree '$WT_LABEL': --dry-run still reports the whole plan"
+    assert_eq "same" "$(cmp -s "$WORK/wt-kit-before.json" "$wt/.claude/settings.json" && echo same || echo changed)" \
+      "kit worktree '$WT_LABEL': --dry-run left settings.json untouched"
     set +e
     (cd "$wt" && CLAUDE_PROJECT_DIR="$wt" bash .claude/bin/firewall.sh apply maintainer) > "$WORK/wt-apply.log" 2>&1; WT_RC=$?
     set -e
@@ -1106,7 +1123,8 @@ fi
 # The kit installed in a monorepo's subfolder: the parent repository's .git is the common
 # dir, outside the project, so git_common_write() grants it to the shell. High denies its
 # config and hooks/ by absolute path, and that Edit deny reaches the sandbox as a write
-# deny too. Below High nothing does, deliberately, as for a linked worktree above. A plain
+# deny too. Below High nothing does, deliberately, as for a linked worktree above, and
+# neither does the maintainer tier, built from Relaxed's plan (asserted below). A plain
 # repository gets no absolute .git entry at any tier: its .git is inside the project.
 echo "[a monorepo parent's .git, and a plain repository]"
 MONO="$WORK/mono"
@@ -1141,7 +1159,8 @@ print(' '.join([r for r in deny if sys.argv[2] in r] + [p for p in dw if p.start
   # is that case, and the tier exists so `git submodule update --init` works there), and
   # the --exec-path= deny, which is not one of its four omissions.
   touch "$MONO/app/CLAUDE-solana.md" "$MONO/app/install.sh"
-  (cd "$MONO/app" && CLAUDE_PROJECT_DIR="$MONO/app" bash .claude/bin/firewall.sh apply maintainer) > "$WORK/mono-apply.log" 2>&1 || true
+  (cd "$MONO/app" && CLAUDE_PROJECT_DIR="$MONO/app" bash .claude/bin/firewall.sh apply maintainer) > "$WORK/mono-maintainer-apply.log" 2>&1 || true
+  FAIL_BEFORE=$FAIL
   assert_eq "maintainer none yes" "$(python3 -c "
 import json, sys
 s = json.load(open(sys.argv[1]))
@@ -1151,6 +1170,9 @@ fence = [r for r in deny if sys.argv[2] in r] + [p for p in dw if p.startswith(s
 tier = (json.load(open(sys.argv[3])).get('enforced') or {}).get('tier')
 print(tier, ' '.join(fence) or 'none', 'yes' if 'Bash(git --exec-path=*)' in deny else 'no')" "$MONO/app/.claude/settings.json" "$MCOMMON" "$MONO/app/.claude/security.json" 2>/dev/null)" \
     "monorepo at maintainer: no fence on the parent's .git, and git --exec-path= is denied"
+  if [ "$FAIL" -ne "$FAIL_BEFORE" ]; then
+    echo "    maintainer apply output (tail):"; tail -5 "$WORK/mono-maintainer-apply.log" | sed 's/^/      /'
+  fi
   rm -f "$MONO/app/CLAUDE-solana.md" "$MONO/app/install.sh"
   for t in off relaxed medium high; do
     assert_eq "none" "$(python3 -c "

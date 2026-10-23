@@ -50,7 +50,8 @@ Usage: firewall.sh <show|apply> [off|relaxed|medium|high|maintainer] [--dry-run]
   maintainer  Relaxed minus the denies that stop work on the kit itself. Only for a
               checkout of the solana-ai-kit repository; refused anywhere else.
 
-  --dry-run   Report what would change; write nothing.
+  --dry-run   Report what would change; write nothing. Exits 1, as the apply
+              would, when a real apply would be refused.
 USAGE
 }
 
@@ -1939,7 +1940,14 @@ def machine_git_entry(path, entry):
 
     Both name an absolute git common dir, so what an earlier apply recorded can differ
     from what this machine generates: a moved checkout, or a file generated elsewhere.
-    Matched by shape, an absolute path to a `.git` dir, so a recorded one still goes.
+    Matched by shape, so a recorded one still goes. `git rev-parse --git-common-dir`
+    resolves to one of three shapes it can be told by, measured by generating High in
+    each layout: `<root>/.git` (a linked worktree, a monorepo subfolder), `<name>.git`
+    (a worktree of a bare repository named that way) and `<super>/.git/modules/<path>`
+    (a project that is itself a submodule). Anything under a `.git` dir but not one of
+    those, such as a user's `/home/me/other/.git/objects`, is the user's. A bare
+    repository named otherwise or a `--separate-git-dir` resolves to an arbitrary
+    path, which no shape can tell from a user's; one recorded is kept, and is inert.
     """
     if path == "sandbox.filesystem.allowWrite":
         target = entry
@@ -1951,7 +1959,7 @@ def machine_git_entry(path, entry):
     else:
         return False
     base = target.rstrip("/")
-    return base.startswith("/") and (base.endswith(".git") or "/.git/" in base + "/")
+    return re.match(r"^/.*\.git(/modules/.+)?$", base) is not None
 
 
 def kit_owned(owned, path, entry, recorded):
@@ -2056,6 +2064,7 @@ if tier == "maintainer" and not is_kit_checkout():
         "nested `claude`. For a project, use relaxed: firewall.sh apply relaxed" % TARGET)
 
 machine_common = git_common_outside()
+would_refuse = False
 if machine_common and tier != "maintainer" and is_kit_checkout():
     # #165: a linked worktree of the kit's repository resolves its git common dir to
     # the main checkout, an absolute path on this machine. git_common_write() and, at
@@ -2075,6 +2084,9 @@ if machine_common and tier != "maintainer" and is_kit_checkout():
            % (TARGET, machine_common, tier))
     if not DRY:
         die("refusing to write: " + msg)
+    # The dry run still reports the whole plan, then exits 1 as the apply would, so a
+    # script gating on its status does not pass. Keep the WARNING prefix: it is grepped.
+    would_refuse = True
     print("  WARNING: a real apply would be refused: " + msg)
 
 lists, scalars = plan(tier)
@@ -2198,12 +2210,19 @@ if first_apply and foreign_kept:
 if reclaimed:
     print("  note: %d rule(s) an earlier apply recorded as the kit's were never written by "
           "any tier; they are yours, were kept, and are no longer recorded (#165)." % reclaimed)
+if (first_apply and foreign_kept) or reclaimed:
+    # A kept rule equal to one a tier emits is owned by whoever wrote it first, so it is
+    # not certain to outlive a tier change. The local file is the one place that is.
+    print("  note: a rule that must survive every tier change belongs in %s/settings.local.json, "
+          "which the generator never touches." % CONFIG)
 if not changed:
     print("  already in sync — no rule changes")
 
 if DRY:
     print("  dry run: %s and %s were not written" % (SETTINGS_REL, SECURITY_REL))
-    raise SystemExit(0)
+    if would_refuse:
+        print("  dry run: exit 1, because a real apply would be refused (WARNING above)")
+    raise SystemExit(1 if would_refuse else 0)
 
 write_atomic(SETTINGS, settings_text)
 write_atomic(SECURITY, security_text)

@@ -24,7 +24,7 @@ Report the declared tier, the enforced tier, whether they agree, and the recorde
    bash .claude/bin/firewall.sh apply
    ```
    Write it through Bash, not the Edit tool: at `high`, `Edit(/.claude/security.json)` is denied so an agent cannot rewrite its own policy. The Bash form works at every tier.
-3. Report the script's change list (rules added, rules removed) and tell the user to restart Claude Code.
+3. Report the script's change list (rules added, rules removed) and any `note:` lines, and tell the user to restart Claude Code.
 
 ## Guardrails
 
