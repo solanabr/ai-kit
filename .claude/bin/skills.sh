@@ -131,7 +131,11 @@ gitlink() {
   git -C "$1" ls-files -s -- "$2" 2>/dev/null | awk '$1 == "160000" { print $2 }' || true
 }
 
-has_line() { printf '%s\n' "$1" | grep -qxF -- "$2"; }
+# Pipe-free on purpose: under pipefail, `printf … | grep -q` fails whenever grep exits on
+# its first match before printf has written the rest, which a long list makes routine on
+# Linux and which read as "line absent". A needle spanning several lines must match them
+# consecutively, where grep -F took each as its own pattern; no caller passes one.
+has_line() { [[ $'\n'"$1"$'\n' == *$'\n'"$2"$'\n'* ]]; }
 
 has_word() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
 
@@ -156,7 +160,7 @@ short_list() {
 
 # An Agent Skills name: lowercase letters and digits in hyphen-separated words. Also
 # keeps a registry or lock entry from naming a path outside skills/.
-valid_name() { printf '%s\n' "$1" | grep -qxE '[a-z0-9]+(-[a-z0-9]+)*'; }
+valid_name() { grep -qxE '[a-z0-9]+(-[a-z0-9]+)*' <<<"$1"; }
 
 # A lock still at "commit pending" is a copy that never finished: not installed.
 installed() {
@@ -304,7 +308,7 @@ ensure_upstream() {
   commit="$(entry_value "$reg" "$id" commit)"
   url="$(entry_value "$reg" "$id" source)"
   [ -z "${SOLANA_AI_KIT_PACK_MIRROR:-}" ] || url="$SOLANA_AI_KIT_PACK_MIRROR/$id"
-  if ! printf '%s\n' "$commit" | grep -qxE '[0-9a-f]{40}'; then
+  if ! grep -qxE '[0-9a-f]{40}' <<<"$commit"; then
     echo "skills.sh: $id: the registry commit must be a full 40-character SHA" >&2
     return 1
   fi
@@ -371,7 +375,7 @@ check_pin() {
   local reg="$1" src="$2" id="$3" path want have
   path="$(entry_value "$reg" "$id" path)"
   want="$(entry_value "$reg" "$id" commit)"
-  if ! printf '%s\n' "$want" | grep -qxE '[0-9a-f]{40}'; then
+  if ! grep -qxE '[0-9a-f]{40}' <<<"$want"; then
     echo "skills.sh: $id: the registry records no 40-character commit for it" >&2
     return 1
   fi

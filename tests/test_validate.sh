@@ -28,8 +28,18 @@ cp "$REPO_ROOT/validate.sh" "$REPO_ROOT/.env.example" "$REPO_ROOT/.mcp.json" "$T
 # plugin/ is mostly symlinks into .claude/; -P copies them as links, so they resolve inside the fixture
 cp -RP "$REPO_ROOT/plugin" "$TEMP_DIR/"
 
+# why_failed — after a run that should have passed, print the lines validate.sh failed
+# on, or its last ten lines when none says FAIL or ERROR, so a failure in CI says what it
+# was rather than only that it happened.
+why_failed() {
+  [ "$RC" = 0 ] || awk '/FAIL|ERROR|Error|error:/ && n++ < 20 { print "    validate.sh: " $0 }
+    { last[NR % 10] = $0 }
+    END { if (!n) for (i = NR - 9; i <= NR; i++) if (i > 0) print "    validate.sh (tail): " last[i % 10] }' <<<"$OUT"
+}
+
 OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "0" "$RC" "validate.sh exits 0 when the ext/ submodules are not checked out"
+why_failed
 assert_contains "$OUT" "checks skipped because submodules aren't initialized" "summary reports the skipped checks"
 
 # Links between kit files are checked too, in agents and commands as well as skills
@@ -76,6 +86,7 @@ UPDATE_SH="$TEMP_DIR/.claude/bin/update.sh"
 cp "$UPDATE_SH" "$TEMP_DIR/update.sh.orig"
 OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
 assert_eq "0" "$RC" "validate.sh passes with the shipped VERSION and update.sh's case"
+why_failed
 
 printf 'solana-ai-kit 2.1.0\n' > "$TEMP_DIR/.claude/VERSION"
 OUT="$(cd "$TEMP_DIR" && bash validate.sh 2>&1)" && RC=0 || RC=$?
