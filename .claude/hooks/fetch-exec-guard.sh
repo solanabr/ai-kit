@@ -125,8 +125,8 @@ REASON="\`$RUNNER\` downloads $PKG from the internet and executes it, and $PKG i
 # kit_note — report without deciding.  stdout at exit 0 is transcript output,
 # never a decision (a decision has to be the JSON kit_ask/kit_deny emit), so
 # this cannot block and cannot hard-fail a headless run.  It deliberately is
-# NOT kit_ask: `permissions.ask` is empty at every tier, so a hook ask is the
-# only ask that can fire, and an ask is a hard failure under `claude -p`.
+# NOT kit_ask: below High `permissions.ask` is empty, so a hook ask is the only
+# ask that can fire there, and an ask is a hard failure under `claude -p`.
 kit_note() {
   printf 'solana-ai-kit firewall (%s tier, not blocked): %s\n' "$TIER" "$(_kit_reason "$1")"
   exit 0

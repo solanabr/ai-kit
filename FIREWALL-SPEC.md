@@ -17,7 +17,9 @@ Verified in-session, twice:
 
 The design is unchanged, for a reason that has nothing to do with reliability: **an `ask` is a hard failure under `claude -p`, and a hook can decide not to prompt when there is no interactive user.** That is what makes Relaxed CI-safe, and no permission rule can express it. So prompts stay in the hooks — not because `ask` does not work, but because `ask` cannot be made CI-safe. `validate.sh` now rejects a bare `Bash` entry in `permissions.ask`, which is the real defect this section was circling.
 
-> **Every prompt is expressed as a hook returning `permissionDecision: "ask"`. Every hard block is hook `exit 2` or a `permissions.deny` rule. No tier distinction rests on `permissions.ask`.**
+> **Below High, every prompt is expressed as a hook returning `permissionDecision: "ask"`, and no tier distinction rests on `permissions.ask`. Every hard block is hook `exit 2` or a `permissions.deny` rule.**
+
+Rule set 11 makes one exception, at High alone: two ask rules, `Workflow` and `Bash(dangerouslyDisableSandbox:true)`, before a workflow starts and before a command is retried outside the sandbox. Claude Code enforces an explicit ask rule in every permission mode, `bypassPermissions` included, and High is interactive-only, so the CI argument above does not reach it. Off, Relaxed and Medium still emit none.
 
 Hooks demonstrably work here — the secrets hook blocked three of my own commands, and the on-chain gate blocked `--final` via exit 2.
 

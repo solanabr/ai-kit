@@ -517,6 +517,20 @@ assert_eq "0" "$(python3 -c "
 import json
 p = json.load(open('$WORK/gen.off.json')).get('permissions') or {}
 print(len(p.get('ask') or []))" 2>/dev/null)" "off emits zero permissions.ask entries"
+assert_eq "0" "$(python3 -c "
+import json
+p = json.load(open('$WORK/gen.medium.json')).get('permissions') or {}
+print(len(p.get('ask') or []))" 2>/dev/null)" "medium emits zero permissions.ask entries"
+
+# ── High asks before a workflow and before an unsandboxed retry, and nothing else ──
+# Claude Code enforces an explicit ask rule in every permission mode, bypassPermissions
+# included. High is interactive-only, so an ask there pauses where below High it would fail.
+echo "[high's ask rules]"
+assert_eq "Bash(dangerouslyDisableSandbox:true)|Workflow" "$(python3 -c "
+import json
+p = json.load(open('$WORK/gen.high.json')).get('permissions') or {}
+print('|'.join(sorted(p.get('ask') or [])))" 2>/dev/null)" \
+  "high emits exactly two permissions.ask entries: Workflow and Bash(dangerouslyDisableSandbox:true)"
 
 # ── what each tier lets the agent write under .claude/ and ~/.claude/ ───────
 # Asserted as an effective permission on a PATH, not as the presence of a rule string,

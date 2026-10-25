@@ -187,7 +187,11 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           recall set-up line runs at Off and Relaxed; `sh -c`, `bash -lc` and `zsh -c`
 #           keep their every-tier denies. `Bash(bash .claude/bin/decisions.sh *)` and
 #           `Bash(bash .claude/bin/report-page.sh *)` join the allow list.
-RULE_SET_VERSION = 10
+#   10 -> 11: High asks before a workflow starts (`Workflow`) and before a command is
+#           retried outside the sandbox (`Bash(dangerouslyDisableSandbox:true)`): the
+#           first permissions.ask entries any tier emits, and High's alone (ASK_HIGH).
+#           Off, Relaxed and Medium generate the same bytes they did at 10.
+RULE_SET_VERSION = 11
 # enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
 # without it predate #165, when a first apply recorded the user's own rules as well.
 RULEIDS_SCOPE = "generated"
@@ -565,6 +569,27 @@ DENY_SELF_PROTECTION = [
     "Edit(~/.claude/shell-snapshots/**)",
     # Where a local `claude` install lives; writing it replaces the binary.
     "Edit(~/.claude/local/**)",
+]
+
+# High only, and the only permissions.ask entries any tier emits. They are rules rather
+# than hook prompts because Claude Code enforces an explicit ask rule itself in every
+# permission mode, bypassPermissions included: its permission-modes docs list one among
+# the actions no mode auto-approves. A content-scoped Bash ask firing under bypass is the
+# kit's own measurement (T2, FIREWALL-SPEC.md §1.1); for these two it is the
+# documentation's word, not yet measured here. Below High an ask hard-fails
+# `claude -p`, which is why the lower tiers keep their prompts in hooks that go silent
+# headless; High is interactive-only.
+#   * Workflow: one call can start up to 1,000 agents, and under bypass the run starts
+#     immediately. This puts the user in front of every workflow, whoever asked for it.
+#   * Bash(dangerouslyDisableSandbox:true): a command the sandbox blocked can be retried
+#     outside it, and an allow rule matching the command approves that retry with no
+#     prompt; the docs give this rule precedence over a matching allow. It does not reach
+#     a line led by an excluded command, which leaves the sandbox with no parameter at
+#     all (docs/firewall.md: "An excluded command lifts the sandbox for the whole
+#     command line").
+ASK_HIGH = [
+    "Workflow",
+    "Bash(dangerouslyDisableSandbox:true)",
 ]
 
 # High only. The two places in a repository that make git run a program later, outside
@@ -1750,14 +1775,15 @@ def plan(tier):
 
     lists = {
         "permissions.allow": ALLOW,
-        # No tier emits permissions.ask. Verified in-session: `git clean -n` matched
-        # Bash(git clean *) in ask and ran silently with no prompt, while `sudo -n true`
-        # matched deny and was blocked. The ask layer is inert here (sandboxed Bash
-        # auto-allow, or bypass suppressing ask — indistinguishable from inside, and
-        # both demand the same fix). Every prompt the kit wants is a hook returning
-        # permissionDecision "ask"; every hard block is a deny rule or hook exit 2.
-        # It is also what keeps Relaxed CI-safe: an ask is a hard failure under -p.
-        "permissions.ask": [],
+        # High alone emits permissions.ask (ASK_HIGH says why each rule is there). An
+        # earlier note here called the ask layer inert, from `git clean -n` running past
+        # Bash(git clean *); FIREWALL-SPEC.md §1.1 (T2) corrects it: a content-scoped ask
+        # fires in default and bypass mode, and only a bare Bash/Bash(*) ask is voided
+        # for sandboxed commands, which validate.sh rejects. Every other prompt the kit
+        # wants is a hook returning permissionDecision "ask", and every hard block a deny
+        # rule or hook exit 2. Below High an ask is still a hard failure under -p, which
+        # is what keeps Relaxed CI-safe.
+        "permissions.ask": [ASK_HIGH] if high else [],
         # Tier-varying deny groups, all of them: DENY_SELF_PROTECTION,
         # DENY_GIT_CONFIG_AND_HOOKS and DENY_ENV_READ at High, DENY_ENV_WRITE at Medium
         # alone, DENY_GH_API, DENY_GH_HOSTS_READ, DENY_PROCESS_KILL,

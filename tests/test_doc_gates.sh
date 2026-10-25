@@ -32,11 +32,14 @@ source "$SCRIPT_DIR/helpers.sh"
 #      it names none), a guard mechanism by appearing in that guard's comment-stripped
 #      source — and every mechanism a row names must be exercised by at least one of its
 #      literals, so a mechanism cannot be named for cover.
-#   3. A row promising an "approval prompt" must name a hook, because permissions.ask is
-#      empty at every tier by design (an ask is a hard failure under `claude -p`, so the
-#      prompts live in the hooks). README.md's Firewall-tiers table is held to the weaker
-#      half of the same contract: every backticked literal in its on-chain/destructive
-#      column must resolve to a deny rule at that row's own tier, or to some guard.
+#   3. A row promising an "approval prompt" must name a hook or an ask rule. Below High,
+#      permissions.ask is empty by design (an ask is a hard failure under `claude -p`, so
+#      those prompts live in hooks that go silent headless); High, interactive-only, emits
+#      ask rules, and each must be covered by a gate row that names an ask rule, so none
+#      can be added without the table saying what it gates. README.md's Firewall-tiers
+#      table is held to the weaker half of the same contract: every backticked literal in
+#      its on-chain/destructive column must resolve to a deny rule at that row's own tier,
+#      or to some guard.
 #
 # Backticks in the gate table therefore mean "literal command text some mechanism must
 # cover". Metasyntax — a metavariable, the name of a command form — stays outside them,
@@ -284,7 +287,7 @@ all_guards = registered(os.path.join(ROOT, ".claude/settings.json"))
 any_corpus = "\n".join(guard_corpus(g) for g in all_guards)
 
 named_guards, named_configs, named_commands = set(), set(), set()
-plugin_rows, prompt_rows = [], 0
+plugin_rows, prompt_rows, ask_lits = [], 0, []
 
 for n, cells in enumerate(gate_rows, 1):
     gate, where = cells[0], (cells[1] if len(cells) > 1 else "")
@@ -307,18 +310,29 @@ for n, cells in enumerate(gate_rows, 1):
         elif m == "plugin":
             plugin_rows.append(gate)
 
-    # A promised prompt can only come from a hook: permissions.ask is empty at every
-    # tier (asserted below), so a row that promises one and names no hook is exactly
-    # the class of wrong claim this suite exists for.
+    # A promised prompt comes from a hook, or from an ask rule, which only High emits and
+    # only for what a row naming one documents (asserted below). A row that promises one
+    # and names neither is exactly the class of wrong claim this suite exists for.
     if re.search(r"approval prompt", what, re.I):
         prompt_rows += 1
-        if any(m.startswith("hook:") for m in mech):
-            ok("%s promises an approval prompt and names a hook for it" % tag)
+        if any(m.startswith("hook:") or m == "rules:ask" for m in mech):
+            ok("%s promises an approval prompt and names a hook or an ask rule for it" % tag)
         else:
-            bad("%s promises an approval prompt but names no hook (%s); permissions.ask "
-                "is empty at every tier, so nothing would prompt" % (tag, ", ".join(mech)))
+            bad("%s promises an approval prompt but names no hook or ask rule (%s), so "
+                "nothing would prompt" % (tag, ", ".join(mech)))
 
     lits = re.findall(r"`([^`]+)`", gate)
+    if "rules:ask" in mech:
+        ask_lits += lits
+        # Only High emits ask rules, and each must name what it gates, so a row resting on
+        # one at another tier, or with no literal to resolve, is a promise nothing keeps.
+        if tiers != ("high",):
+            bad("%s names an ask rule but claims %s; only High emits ask rules"
+                % (tag, ",".join(tiers)))
+        elif not lits:
+            bad("%s names an ask rule but no literal for it to gate" % tag)
+        else:
+            ok("%s rests on an ask rule at High, for a named literal" % tag)
     if not lits:
         continue                    # a row about the tier knob itself, or the sandbox
 
@@ -409,14 +423,34 @@ if plugin_rows:
         else:
             ok("%s is enabled in settings.json, so its own hooks do run" % ", ".join(wanted))
 
-# The precondition the prompt rule rests on, and the reason every prompt is a hook.
+# The precondition the prompt rule rests on. Below High, permissions.ask is empty, so a
+# documented prompt there must be a hook; each of High's ask rules must be one a gate row
+# documents, so an ask cannot be added without the table saying what it gates.
+def documents(lit, rule):
+    """Does a gate-row literal name this ask rule exactly: the rule itself, its specifier,
+    or the parameter a Tool(param:value) specifier tests? A substring is not enough, or a
+    `Workflow` row would document an unrelated mcp__ci__startWorkflow."""
+    if lit == rule:
+        return True
+    m = re.match(r"^[A-Za-z_][A-Za-z0-9_]*\((.*)\)$", rule)
+    return bool(m) and lit in (m.group(1), m.group(1).split(":", 1)[0])
+
+
 for tier in TIERS:
-    n = len(rules(tier, "ask"))
-    if n:
-        bad("%s emits %d permissions.ask entries; the gate table's prompts are documented "
-            "as hooks because ask is empty and hard-fails headless" % (tier, n))
+    asks = rules(tier, "ask")
+    if tier != "high":
+        if asks:
+            bad("%s emits %d permissions.ask entries; below High an ask hard-fails headless, "
+                "so its prompts belong in hooks" % (tier, len(asks)))
+        else:
+            ok("%s emits no permissions.ask entries (so a documented prompt must be a hook)" % tier)
+        continue
+    undocumented = [a for a in asks if not any(documents(lit, a) for lit in ask_lits)]
+    if undocumented:
+        bad("high emits permissions.ask entries no gate row documents: %s" % ", ".join(undocumented))
     else:
-        ok("%s emits no permissions.ask entries (so a documented prompt must be a hook)" % tier)
+        ok("high emits %d permissions.ask entries, each documented by a gate row naming an ask rule"
+           % len(asks))
 
 # ── README.md: the Firewall-tiers table ───────────────────────────────────
 heads, tier_rows = table(README, "Tier")

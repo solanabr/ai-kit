@@ -911,7 +911,7 @@ assert_eq "ok" "$PARENS" "no mcp__ permission rule carries parentheses (Claude C
 # ── rule set 5: the gates the docs promised with nothing behind them ─────────
 #
 # Three user-facing surfaces advertised approval prompts for these and no mechanism
-# covered any of them: permissions.ask is empty at every tier, Bash(solana-keygen *) and
+# covered any of them: permissions.ask was empty at every tier, Bash(solana-keygen *) and
 # Bash(gh *) sit in allow, and the only git push denies were the --mirror pair. Each
 # family below is asserted at the tier it is supposed to act at AND at a tier it is
 # supposed to stay quiet at, because a gate that fires everywhere is its own defect.
