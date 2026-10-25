@@ -15,7 +15,7 @@ Run each `gh` and network `git` call bare, as the whole Bash command: a pipe, re
    Where an order in force already covers these PRs, record it with `supersede <id>` and the same options instead; a review that order required still applies unless the user dropped it.
 3. **No review named** anywhere: require a `/review-round` sheet for the head commit with nothing open at Critical or High and no item waiting on the user. This default only ever adds a check.
 4. **Re-read the order before each merge.** Once it has expired or been superseded, stop.
-5. **Settle the merge method** before the first PR, so the train never stops for it: the method the order names, else a merge-method principle in force, else the one `gh repo view --json viewerDefaultMergeMethod` returns. `gh repo view` is not among the commands that leave the sandbox, so where it cannot authenticate, ask the user now rather than guess, and record the answer so no later run asks again:
+5. **Settle the merge method** before the first PR, so the train never stops for it: the method the order names, else a merge-method principle in force, else the one `gh repo view --json viewerDefaultMergeMethod` returns. Two merge-method principles in force that disagree are a conflict: report it and ask the user rather than pick one, then record their answer with `supersede <id>` for each. `gh repo view` is not among the commands that leave the sandbox, so where it cannot authenticate, ask the user now rather than guess, and record the answer so no later run asks again:
    `bash .claude/bin/decisions.sh add --kind principle --by you --decision 'Merge pull requests in this repository with --<method>' --words '<their words, verbatim>'`
 
 ## Per PR, in the order's sequence

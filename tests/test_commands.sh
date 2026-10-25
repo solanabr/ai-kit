@@ -44,6 +44,10 @@ assert_file_contains "$CMDS_DIR/firewall.md" "firewall.sh" "firewall.md calls bi
 SHIP_FRONT="$(awk 'NR==1 && $0!="---"{exit} NR==1{next} $0=="---"{exit} {print}' "$CMDS_DIR/ship.md")"
 assert_eq "disable-model-invocation: true" "$(printf '%s\n' "$SHIP_FRONT" | grep -x 'disable-model-invocation:[[:space:]]*true' || true)" \
   "/ship is user-only (disable-model-invocation: true in its frontmatter)"
+# It settles the merge method before the first PR, so the train never stops partway for it,
+# and two merge-method principles that disagree are reported, never resolved by picking one.
+assert_file_contains "$CMDS_DIR/ship.md" "**Settle the merge method** before the first PR" "/ship settles the merge method before the first PR"
+assert_file_contains "$CMDS_DIR/ship.md" "that disagree are a conflict" "/ship reports two disagreeing merge-method principles as a conflict"
 
 echo ""
 echo "[test_commands] Checking /explore, the short aliases and composition..."
@@ -110,6 +114,10 @@ for f in CLAUDE-solana.md CLAUDE.md; do
     assert_file_contains "$REPO_ROOT/$f" "$needle" "$f carries: $needle"
   done
 done
+# The decision record never outranks the user: their newest explicit instruction wins, and
+# the session supersedes the entry it overrides.
+assert_file_contains "$REPO_ROOT/CLAUDE-solana.md" "newest explicit instruction beats anything recorded earlier, the decision record included" \
+  "CLAUDE-solana.md: the user's newest explicit instruction beats the decision record"
 assert_file_contains "$CMDS_DIR/parallel.md" "## Composition" "parallel.md carries the composition rules"
 assert_file_contains "$CMDS_DIR/adversarial.md" "(parallel.md#composition)" "adversarial.md points at /parallel's composition rules"
 for f in parallel.md adversarial.md; do
