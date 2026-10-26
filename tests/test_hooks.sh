@@ -2028,6 +2028,40 @@ quiet "$M_EGRESS" "echo $BS\$'$BS""x67it' push --force origin main"
 quiet "$M_SECRETS" "echo \$'cat ~/.config/solana/id.json'"
 quiet "$M_FETCH" "echo \$'it$BS's; npx -y x'" "$MUT_ANSIREG"
 quiet "$M_CHAIN" "echo \$'it$BS's; then anchor deploy --provider.cluster mainnet'" "$MUT_ANSIQ"
+# `$$` is the PID, so `$$'…'` opens a plain '…' where a backslash escapes nothing:
+# `echo $$'\' ; npx -y x ; echo 'x'` runs the npx. Read as `$` and $'…', the gated
+# command was quoted, on its line and as a heredoc's opener line. Every guard, both
+# shapes. brace_once and kit_hd_subst track quotes of their own and learn $'…' too.
+MUT_PID="$(mutant pid lib-tokenize.awk 'function kit_pid(s, i) { return substr(s, i, 2) == "$$"' 'function kit_pid(s, i) { return 0 && substr(s, i, 2) == "$$"')" || MUT_PID=
+MUT_ANSIBR="$(mutant ansibr secrets-guard.awk 'if (c == "$" && substr(s, i + 1, 1) == SQ) { q = "ansi"; i++; continue }' 'if (0) { q = "ansi"; i++; continue }')" || MUT_ANSIBR=
+MUT_ANSIHS="$(mutant ansihs lib-tokenize.awk '{ KHS_Q = "e"; i++; continue }' '{ KHS_Q = SQ; i++; continue }')" || MUT_ANSIHS=
+for M in "$MUT_PID" "$MUT_ANSIBR" "$MUT_ANSIHS"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+P="echo \$\$'$BS' ; @ ; echo 'x'"
+same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$MUT_PID"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$MUT_PID"
+same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$MUT_PID"
+# The patterns anchored on a statement start read past quotes on one line, so these
+# three held without kit_pid; asserted, with no control to move.
+PID_HOOKS=("$M_EGRESS" "$M_EGRESS" "$M_CHAIN")
+PID_CMDS=("npm publish" "git push --force origin main" "$DA")
+for t in relaxed medium high; do
+  for k in 0 1 2; do
+    run_bash "${PID_HOOKS[$k]}" "$t" "${PID_CMDS[$k]}"; b="$DECISION"
+    run_bash "${PID_HOOKS[$k]}" "$t" "${P//@/${PID_CMDS[$k]}}"
+    assert_eq "$b" "$DECISION" "[$t] $b, as its bare form: ${P//@/${PID_CMDS[$k]}}"
+  done
+done
+P="echo \$\$'$BS' a ' <<X '${NL}@${NL}X"
+same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$MUT_PID"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$MUT_PID"
+same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$MUT_PID"
+same "$M_EGRESS" ask deny deny "npm publish" "${P//@/npm publish}" "$MUT_PID"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "${P//@/git push --force origin main}" "$MUT_PID"
+same "$M_CHAIN" ask ask deny "$DA" "${P//@/$DA}" "$MUT_PID"
+same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"
+same "$M_FETCH" silent silent deny "npx -y x" "cat <<X${NL}\$(echo \$'$BS')' ; npx -y x)${NL}X" "$MUT_ANSIHS"
 # The decoder itself, one escape at a time: what tokenize hands every guard.
 printf '%s\n' '{ n = tokenize(split_cmd($0), T); o = ""; for (i = 1; i <= n; i++) o = o (i > 1 ? "|" : "") T[i]; print o }' > "$WORK/ansi.awk"
 ansi_tok() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/ansi.awk"; }
@@ -2041,6 +2075,8 @@ assert_eq "abx|\\z|\\x|n" "$(ansi_tok "\$'ab\\0cd'x \$'\\z' \$'\\x' \$'\\556'")"
   "a NUL ends the string, an unknown escape is kept, an octal byte wraps at 256"
 assert_eq "\$\\x6epm|\$'npm'|\$npm" "$(ansi_tok "$BS\$'\\x6epm' \"\$'npm'\" '\$'npm")" \
   "an escaped \$, a \$' inside double quotes and a \$ closing '…' open no \$'…'"
+assert_eq "\$\$a$BS|b|\$\$n|\$a" "$(ansi_tok "\$\$'a$BS' b \$\$\$'${BS}x6e' $BS\$\$'a'")" \
+  "\$\$ is the PID: \$\$'…' is a plain '…', \$\$\$'…' a PID and a \$'…', and \\\$\$'…' a \$ and a \$'…'"
 # --- The firewall-friction PR's hook halves, checked for the property that puts them
 # --- in a hook at all: the rm/kill floor and the nested-claude deny hold at EVERY
 # --- active tier (the rm/kill pass runs BEFORE egress-guard's Off early-exit, so Off

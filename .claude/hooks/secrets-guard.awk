@@ -137,7 +137,13 @@ function brace_once(s,   L, i, c, q, depth, j, comma, pre, post, nseg, SEG, k, w
   L = length(s); q = ""
   for (i = 1; i <= L; i++) {
     c = substr(s, i, 1)
+    # q is "ansi" inside $'…', where a backslash escapes the next character, `\'`
+    # included (#301): read as '…', `echo $'\'' ; cat ~/.{npmrc,netrc}` left the
+    # list quoted.  `$$` is the PID, so `$$'…'` opens a plain '…' (kit_pid).
+    if (q == "ansi") { if (c == "\\") i++; else if (c == SQ) q = ""; continue }
     if (q != "") { if (c == q) q = ""; else if (c == "\\" && q == "\"") i++; continue }
+    if (kit_pid(s, i)) { i++; continue }
+    if (c == "$" && substr(s, i + 1, 1) == SQ) { q = "ansi"; i++; continue }
     if (c == SQ || c == "\"") { q = c; continue }
     if (c == "\\") { i++; continue }
     if (c == "$" && substr(s, i + 1, 1) == "{") { i++; continue }   # ${VAR}, not a brace list

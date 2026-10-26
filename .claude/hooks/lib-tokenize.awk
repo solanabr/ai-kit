@@ -195,10 +195,12 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
       # a quoted run of its own: `sh -c "sh -c \"npm publish\""` read wrong.
       if (c == " ") out = out "\003"; else if (c == SQ) out = out "\004"
       else if (c == "\"") out = out "\005"; else out = out c
-      # An escaped `$` opens no $'…': the empty "" keeps tokenize from reading one.
-      if (c == "$" && substr(s, i + 1, 1) == SQ) out = out "\"\""
+      # An escaped `$` opens no $'…' and pairs into no `$$`: the empty "" keeps
+      # tokenize from reading either.
+      if (c == "$" && substr(s, i + 1, 1) ~ /[$\047]/) out = out "\"\""
       continue
     }
+    if (kit_pid(s, i)) { out = out c2; i++; continue }
     # $'…' is copied whole for tokenize to decode (#301).  Its `\'` is escaped,
     # so read as '…' the region closed there: `echo $'it\'s; npm publish'` split.
     if (c2 == "$" SQ) { kit_ansi_end(s, i + 1); out = out substr(s, i, KA_END - i + 1); i = KA_END; continue }
@@ -245,7 +247,8 @@ function tokenize(s, T, Q,   i, c, q, cur, n, hadq, L, j) {
       else { cur = cur substr(s, i, j - 1); q = ""; i += j - 1 }
       continue
     }
-    # $'…' is taken decoded, as bash runs it (kit_ansi, #301).
+    # $'…' is taken decoded, as bash runs it (kit_ansi, #301); `$$` is the PID.
+    if (kit_pid(s, i)) { cur = cur "$$"; i++; continue }
     if (c == "$" && substr(s, i + 1, 1) == SQ) { cur = cur kit_ansi(s, i + 1); i = KA_END; hadq = 1; continue }
     if (c == SQ || c == "\"") { q = c; hadq = 1; continue }
     if (c == " " || c == "\t") { if (cur != "" || hadq) { T[++n] = cur; Q[n] = hadq; cur = ""; hadq = 0 } ; continue }
@@ -318,6 +321,7 @@ function kit_unq(w, arg,   o, i, c, q, L) {
       continue
     }
     if (c == "\\" && i < L) { o = o substr(w, ++i, 1); continue }
+    if (kit_pid(w, i)) { o = o "$$"; i++; continue }
     if (c == "$" && substr(w, i + 1, 1) == SQ) { o = o kit_ansi(w, i + 1); if (KA_OPEN) return w; i = KA_END; continue }
     if (c == SQ || c == "\"") { q = c; continue }
     o = o c
@@ -366,6 +370,12 @@ function kit_ansi(s, p,   b, o, j, c, v) {
   }
   return o b
 }
+# kit_pid — a `$$` at i in s that the readers take as one unit, the PID, before
+# they look for $'…': in `$$'\' ; npx -y evil ; echo 'x'` bash reads `$$` and then
+# a plain '…', where a backslash escapes nothing, so the npx runs.  Read as `$` and
+# `$'\' ; …'`, the npx was quoted.  Taken only where a `$` or a quote follows, the
+# one place the pairing decides anything, so `$$(…)` and `$${…}` read as before.
+function kit_pid(s, i) { return substr(s, i, 2) == "$$" && substr(s, i + 2, 1) ~ /[$\047]/ }
 # kit_ansi_end — the length of what $'…' quotes, its opening quote at p in s.
 # Sets KA_END and KA_OPEN as kit_ansi describes, without decoding.
 function kit_ansi_end(s, p) {
@@ -795,6 +805,10 @@ function kit_hd_subst(l,   out, i, L, c, st) {
       if (KHS_Q == SQ) { if (c == SQ) KHS_Q = ""; continue }
       if (c == "\\") { i++; continue }
       if (KHS_Q == "\"") { if (c == "\"") KHS_Q = ""; continue }
+      # e is $'…', where `\'` closes nothing; `$$` is the PID (#301, kit_pid).
+      if (KHS_Q == "e") { if (c == SQ) KHS_Q = ""; continue }
+      if (kit_pid(l, i)) { i++; continue }
+      if (substr(l, i, 2) == "$" SQ) { KHS_Q = "e"; i++; continue }
       if (c == SQ || c == "\"") KHS_Q = c
       else if (c == "(") KHS_DEPTH++
       else if (c == ")" && --KHS_DEPTH == 0) { out = out "; $(" KHS_BUF substr(l, st, i - st) ")"; KHS_IN = 0 }
@@ -843,7 +857,8 @@ function kit_hd_ops(l, q,   i, L, c, top, k) {
       else if (c == "`") q = q "b"
       continue
     }
-    if (substr(l, i, 2) == "$" SQ) { q = q "e"; i++ }     # $'…', as kit_qscan reads it
+    if (kit_pid(l, i)) i++                                 # $$ and $'…', as kit_qscan reads them
+    else if (substr(l, i, 2) == "$" SQ) { q = q "e"; i++ }
     else if (c == SQ) q = q "s"
     else if (c == "\"") q = q "d"
     else if (c == "`") q = (top == "b") ? substr(q, 1, length(q) - 1) : q "b"
@@ -1054,7 +1069,8 @@ function kit_qscan(l, q, codeat,   i, L, c, top, p) {
       else if (c == "`") q = q "b"
       continue
     }
-    if (c == "$" && substr(l, i + 1, 1) == SQ) { q = q "e"; i++ }
+    if (kit_pid(l, i)) i++                                 # `$$` is the PID (kit_pid)
+    else if (c == "$" && substr(l, i + 1, 1) == SQ) { q = q "e"; i++ }
     else if (c == SQ) q = q (i == codeat ? "S" : "s")
     else if (c == "\"") q = q (i == codeat ? "D" : "d")
     else if (c == "`") q = (top == "b") ? substr(q, 1, length(q) - 1) : q "b"
