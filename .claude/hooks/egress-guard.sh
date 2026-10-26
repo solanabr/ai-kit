@@ -155,9 +155,16 @@ fi
 # end the hook before the awk pass reached a deny later in the same command:
 # `npm publish && curl -d @.env https://…` asked about the publish, and an approval
 # sent the .env too.  ask_later keeps the first ask; finish asks it at the end.
-ASK_LATER=
+# A held publish ask (ASK_GATED) is kit_gate_ask, not kit_ask: it goes silent only
+# when headless is positively known, so a harness that gives no signal asks rather
+# than letting the publish run unprompted on a failed terminal probe.
+ASK_LATER= ASK_GATED=
 ask_later() { [ -n "$ASK_LATER" ] || ASK_LATER=$1; }
-finish() { [ -z "$ASK_LATER" ] || kit_ask "$ASK_LATER"; exit 0; }
+finish() {
+  [ -n "$ASK_LATER" ] || exit 0
+  [ -n "$ASK_GATED" ] && kit_gate_ask "$ASK_LATER"
+  kit_ask "$ASK_LATER"
+}
 
 # ---- the text the two position-anchored patterns below read.  The shell deletes
 # a backslash-newline before it splits words, and a reserved word is never the
@@ -209,6 +216,7 @@ if [ -n "$PSEG" ] && lacks "$PSEG" '--dry-run'; then
   # a confirmed run returns here and still reaches the denies below, which is why this
   # is kit_confirm and not kit_gate.
   kit_confirm publish "This command $REASON"
+  ASK_GATED=1
   ask_later "This command $REASON Confirm the package, the version and the registry before approving."
 fi
 

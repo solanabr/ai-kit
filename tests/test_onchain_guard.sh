@@ -92,6 +92,8 @@ echo "[#307: exact devnet/testnet, unidentified clusters denied headless]"
 # hverdict <guard> <tier> <command> [env...] -> deny | ask | silent, headless
 hverdict() {
   local g=$1 t=$2 c=$3 pay out; shift 3
+  # A mutation fixture that failed to build must not read as "silent".
+  [ -f "$g" ] || { echo "missing-guard:$g"; return; }
   pay="$(python3 -c 'import json,sys;print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$c")"
   out="$(cd "$REPO_ROOT" && printf '%s' "$pay" | env CLAUDE_PROJECT_DIR="$REPO_ROOT" \
     KIT_FIREWALL_TIER="$t" KIT_FIREWALL_HEADLESS=1 "$@" sh "$g" 2>/dev/null)"
@@ -162,10 +164,127 @@ M="$(omutant glob 'case $CL in d | devnet) return 0 ;; esac' 'case $CL in d | *d
 assert_eq silent "$(hverdict "$M/onchain-guard.sh" high "solana program deploy --url https://solana-rpc.publicnode.com/?devnet p.so")" \
   "planted failure caught — the *devnet* glob back: a mainnet RPC carrying ?devnet goes quiet headless again"
 rm -rf "$M"
-M="$(omutant headless 'unidentified() {' 'unidentified() { kit_ask "$1"; }
-_was_unidentified() {')"
+M="$(omutant headless 'LEVEL=3 MSG="On-chain write to the RPC host' 'LEVEL=2 MSG="On-chain write to the RPC host')"
 assert_eq silent "$(hverdict "$M/onchain-guard.sh" high "anchor deploy --provider.cluster https://rpc.mycorp.io")" \
-  "planted failure caught — an unidentified cluster only asks: it goes quiet headless again"
+  "planted failure caught — an unidentified host only asks: it goes quiet headless again"
+rm -rf "$M"
+
+# ── every write in a command is judged by its own cluster ───────────────────
+# The first --url/-u across the whole command used to label every write in it, and a
+# write right after a single `;` or `|` was never matched at all (the match before it
+# had consumed the separator). Either way a mainnet or unknown write beside a devnet
+# one was judged as devnet: silent headless at every tier. The worst write decides.
+echo "[each write judged by its own cluster; the most dangerous one decides]"
+MULTI_MAIN=(
+  "solana program deploy -ud a.so && solana program deploy -um b.so"
+  "solana program deploy -ud a.so; solana program deploy -um b.so"
+  "solana program deploy -ud a.so | solana transfer -um X 1"
+  "solana program deploy -um a.so; solana program deploy -ud b.so"
+  "ANCHOR_PROVIDER_URL=https://api.devnet.solana.com anchor deploy; solana program deploy --url mainnet-beta p.so"
+)
+for C in "${MULTI_MAIN[@]}"; do
+  want relaxed ask  "interactive: a mainnet write beside a devnet one asks as mainnet" "$C"
+  want high    deny "High: a mainnet write beside a devnet one is denied" "$C"
+  assert_eq deny "$(hverdict "$GUARD" relaxed "$C")" "[relaxed] headless: the mainnet write is not hidden by the devnet one :: $C"
+done
+MULTI_UNKNOWN=(
+  "solana program deploy -ud a.so; solana program deploy --url https://rpc.mycorp.io b.so"
+  "solana program deploy -ud a.so && solana program deploy --url https://rpc.mycorp.io b.so"
+)
+for C in "${MULTI_UNKNOWN[@]}"; do
+  for T in relaxed high; do
+    assert_eq deny "$(hverdict "$GUARD" "$T" "$C")" "[$T] headless: the unidentified write is not hidden by the devnet one :: $C"
+  done
+done
+# A known write beside a silent local one still asks; two known ones stay quiet headless.
+want relaxed ask "a devnet write beside a Relaxed-silent local one still asks" \
+  "solana program deploy -ul a.so; solana program deploy -ud b.so"
+assert_eq silent "$(hverdict "$GUARD" relaxed "solana program deploy -ud a.so; solana program deploy -ut b.so")" \
+  "[relaxed] headless: two known non-mainnet writes stay quiet"
+# Controls.
+M="$(omutant nosplit '| awk '"'"'{ gsub(/[;&|]/, "&\n"); print }'"'"' ' '')"
+assert_eq silent "$(hverdict "$M/onchain-guard.sh" relaxed "solana program deploy -ud a.so; solana program deploy -um b.so")" \
+  "planted failure caught — statements left joined: the write after the ; is never matched"
+rm -rf "$M"
+M="$(omutant firstonly '[ -n "$s" ] || continue' '[ "$WORST" = 0 ] || break')"
+assert_eq silent "$(hverdict "$M/onchain-guard.sh" relaxed "solana program deploy -ud a.so && solana program deploy -um b.so")" \
+  "planted failure caught — only the first write judged: the mainnet one beside it goes quiet"
+rm -rf "$M"
+
+# ── the headless signal: what a hook actually gets ─────────────────────────
+# Claude Code starts each hook as its own session leader with no controlling
+# terminal, so `(exec 3</dev/tty)` fails in an INTERACTIVE session too; keyed on that
+# probe, the #307 denies replaced every interactive prompt. These run the hooks the
+# way Claude Code does — no KIT_FIREWALL_HEADLESS, a new session with no terminal, a
+# clean environment (no CI markers) — and vary only what Claude Code sets.
+echo "[headless signal: no override, no terminal, the environment Claude Code gives a hook]"
+EGRESS="$REPO_ROOT/.claude/hooks/egress-guard.sh"
+# nottyverdict <guard> <tier> <command> [VAR=value...] -> deny | ask | silent
+nottyverdict() {
+  [ -f "$1" ] || { echo "missing-guard:$1"; return; }
+  python3 - "$REPO_ROOT" "$@" <<'PY'
+import json, os, subprocess, sys
+root, guard, tier, cmd, *extra = sys.argv[1:]
+env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/"),
+       "CLAUDE_PROJECT_DIR": root, "KIT_FIREWALL_TIER": tier}
+env.update(kv.split("=", 1) for kv in extra)
+pay = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}})
+r = subprocess.run(["sh", guard], input=pay, capture_output=True, text=True, cwd=root, env=env,
+                   start_new_session=True)
+out = r.stdout
+print("deny" if '"deny"' in out or r.returncode == 2 else "ask" if '"ask"' in out else "silent")
+PY
+}
+# The premise: in that runner the terminal probe fails, as it does in a real hook.
+NOTTY="$(python3 -c '
+import subprocess
+r = subprocess.run(["sh", "-c", "(exec 3</dev/tty) 2>/dev/null && echo tty || echo notty"],
+                   capture_output=True, text=True, start_new_session=True, stdin=subprocess.DEVNULL)
+print(r.stdout.strip())')"
+assert_eq notty "$NOTTY" "the runner has no controlling terminal, like a Claude Code hook"
+ATT=(CLAUDE_CODE_SESSION_ATTENDED=1 CLAUDE_CODE_ENTRYPOINT=cli)
+UNATT=(CLAUDE_CODE_SESSION_ATTENDED=0 CLAUDE_CODE_ENTRYPOINT=sdk-cli)
+PUBC="npm publish --access public"
+UNK="solana program deploy --url https://rpc.mycorp.io p.so"
+MAIN="solana program deploy --url mainnet-beta p.so"
+DEV="solana program deploy -ud p.so"
+# Interactive Claude Code: the prompts survive the failed probe.
+assert_eq ask "$(nottyverdict "$EGRESS" relaxed "$PUBC" "${ATT[@]}")" "interactive (attended): a Relaxed publish asks, not a probe-driven deny"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$UNK" "${ATT[@]}")" "interactive (attended): an unidentified cluster asks"
+assert_eq ask "$(nottyverdict "$GUARD" high "$UNK" "${ATT[@]}")" "interactive (attended): High asks on an unidentified cluster too"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$MAIN" "${ATT[@]}")" "interactive (attended): mainnet asks below High"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$DEV" "${ATT[@]}")" "interactive (attended): a devnet write asks instead of going silent"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$UNK" CLAUDE_CODE_ENTRYPOINT=cli)" "entrypoint cli alone reads as interactive"
+# claude -p and the Agent SDK: the denies hold.
+assert_eq deny "$(nottyverdict "$EGRESS" relaxed "$PUBC" "${UNATT[@]}")" "claude -p (unattended): a Relaxed publish is denied"
+assert_eq silent "$(nottyverdict "$EGRESS" relaxed "$PUBC" "${UNATT[@]}" CONFIRM_PUBLISH=1)" "claude -p: CONFIRM_PUBLISH=1 lets it run"
+assert_eq deny "$(nottyverdict "$GUARD" relaxed "$UNK" "${UNATT[@]}")" "claude -p (unattended): an unidentified cluster is denied"
+assert_eq deny "$(nottyverdict "$GUARD" relaxed "$MAIN" "${UNATT[@]}")" "claude -p (unattended): mainnet is denied"
+assert_eq silent "$(nottyverdict "$GUARD" relaxed "$DEV" "${UNATT[@]}")" "claude -p (unattended): a devnet write goes quiet"
+assert_eq deny "$(nottyverdict "$GUARD" relaxed "$UNK" CLAUDE_CODE_ENTRYPOINT=sdk-ts)" "an sdk-* entrypoint alone reads as headless"
+assert_eq deny "$(nottyverdict "$EGRESS" relaxed "$PUBC" CI=true)" "a CI marker alone reads as headless"
+# No signal at all (another harness): never a probe-driven deny. The gated actions
+# ask, which a real headless run refuses; plain asks go silent as before.
+assert_eq ask "$(nottyverdict "$EGRESS" relaxed "$PUBC")" "no signal: a publish asks rather than being denied or running silently"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$UNK")" "no signal: an unidentified cluster asks"
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$MAIN")" "no signal: mainnet asks"
+assert_eq silent "$(nottyverdict "$GUARD" relaxed "$DEV")" "no signal: a devnet ask still goes quiet on the failed probe"
+# An unrecognised value decides nothing.
+assert_eq ask "$(nottyverdict "$GUARD" relaxed "$UNK" CLAUDE_CODE_SESSION_ATTENDED=maybe CLAUDE_CODE_ENTRYPOINT=other)" \
+  "unrecognised values: no signal, so an ask"
+# Control: key kit_confirm on the terminal probe again and the interactive prompt
+# becomes the probe-driven deny the review observed.
+M="$(mktemp -d "${TMPDIR:-/tmp}/onchain-mut-probe.XXXXXX")"
+cp -R "$REPO_ROOT/.claude/hooks/." "$M/"
+python3 - "$M/lib-headless.sh" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+find = "  kit_known_headless || return 0\n"
+assert s.count(find) == 1, "kit_confirm's headless test not found; update the mutation"
+open(p, "w", encoding="utf-8").write(s.replace(find, "  (exec 3</dev/tty) 2>/dev/null && return 0\n"))
+PY
+assert_eq deny "$(nottyverdict "$M/egress-guard.sh" relaxed "$PUBC" "${ATT[@]}")" \
+  "planted failure caught — the probe back in kit_confirm: an interactive publish is denied"
 rm -rf "$M"
 
 # A command that names no on-chain write stays silent (the guard's prefilter).
