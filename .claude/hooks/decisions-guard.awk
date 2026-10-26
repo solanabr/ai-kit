@@ -46,8 +46,9 @@ function script_at(T, n, ci, w,   i) {
   return 0
 }
 
-{ raw = raw $0 "\n" }
+{ KIT_RAW[NR] = $0 }
 END {
+  raw = kit_raw()
   nst = split(split_cmd(hd_strip(kit_shell_text(raw, 0), 0)), ST, /\001/)
   nst = kit_expand_code(ST, nst)
   for (q = 1; q <= nst; q++) {

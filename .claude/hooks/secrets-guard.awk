@@ -308,8 +308,9 @@ function shellc_shell(T, n, ci,   w, i, t, r) {
 }
 
 BEGIN { VAULTRE = ENVIRON["KIT_VAULT_RE"]; glob_witnesses() }
-{ raw = raw $0 "\n" }
+{ KIT_RAW[NR] = $0 }
 END {
+  raw = kit_raw()
   if (VAULTRE == "") exit 0
 
   # Heredoc BODIES go first: a document that merely names a credential path must

@@ -270,20 +270,21 @@ ctx_index, or run it through Bash where the OS sandbox also applies."
 # before this cap: an echo carrying 234 KB ahead of a mainnet `anchor deploy` kept
 # onchain-guard busy 18 s.  Past 32 KB, kit-code-size.awk decides: the code in it
 # may not pass 32 KB, where the slowest shape measured, 16,000 `;`-separated
-# statements, took egress-guard 2.4 s, and the command may not pass 10,000 lines.
-# A heredoc body written to a file with cat or tee is copied, not parsed, so it is
-# left out of the 32 KB, on rules strict enough that a mistake refuses more.  The
-# line limit and the 256 KB total bound what every guard pays just to read its
-# input, which grows with lines times bytes: 10,000 lines in 256 KB measured
-# under a second.  A failed measurement refuses too: unread is not safe.
+# statements, took egress-guard 2.4 s.  A heredoc body written to a file with cat or
+# tee is copied, not parsed, so it is left out of the 32 KB, on rules strict enough
+# that a mistake refuses more.  The 256 KB total bounds what every guard pays just
+# to read its input, which is linear in its bytes since the guards join their lines
+# once (kit_cat, #300): the 262,144 empty lines it can hold cost each whole hook
+# about 1.5 s of CPU, and 32 KB of code as 16,000 lines beside them about 2.5 s.
+# A failed measurement refuses too: unread is not safe.
 kit_size_cap() {
   [ ${#KIT_CMD} -gt 32768 ] || return 0
   if [ ${#KIT_CMD} -le 262144 ]; then
-    _fit=$(printf '%s' "$KIT_CMD" | KIT_CODE_LIMIT=32768 KIT_LINE_LIMIT=10000 \
+    _fit=$(printf '%s' "$KIT_CMD" | KIT_CODE_LIMIT=32768 \
       awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/kit-code-size.awk" 2>/dev/null) || _fit=
     [ "$_fit" != ok ] || return 0
   fi
-  kit_deny "This command is too large for the firewall hooks to read within their timeout: past 32 KB of shell code, 10,000 lines, or 256 KB in all (${#KIT_CMD} bytes). A hook that times out does not block the call, so it is refused rather than waved through. Write a large file with the Write tool, or with cat or tee and a quoted heredoc (cat > f <<'EOF'), whose body does not count; pass a long PR body or commit message as a file (gh pr create --body-file, git commit -F); put a long script in a file and run that; or split the command."
+  kit_deny "This command is too large for the firewall hooks to read within their timeout: past 32 KB of shell code, or 256 KB in all (${#KIT_CMD} bytes). A hook that times out does not block the call, so it is refused rather than waved through. Write a large file with the Write tool, or with cat or tee and a quoted heredoc (cat > f <<'EOF'), whose body does not count; pass a long PR body or commit message as a file (gh pr create --body-file, git commit -F); put a long script in a file and run that; or split the command."
 }
 
 # kit_parse — fills KIT_CMD, KIT_PERMISSION_MODE, KIT_CWD from $KIT_INPUT.

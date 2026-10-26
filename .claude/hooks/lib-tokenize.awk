@@ -900,6 +900,24 @@ function hd_consumer(head, tail,   ns, S, ng, G, g, n, T, Q, ci, w) {
   }
   return ""
 }
+# kit_cat — A[1..n] joined by sep, A used up.  Appending a line at a time copies
+# the whole text per line, which is quadratic in awk: under macOS awk, 262,144 empty
+# lines cost each guard's pass 5 s of CPU, and 0.8 s joined this way (#300).
+# Neighbours are joined in pairs, then the pairs in pairs, so each byte is copied
+# about log2(n) times.
+function kit_cat(A, n, sep,   i, m) {
+  if (n < 1) return ""
+  while (n > 1) {
+    m = 0
+    for (i = 1; i < n; i += 2) A[++m] = A[i] sep A[i + 1]
+    if (i == n) A[++m] = A[n]
+    n = m
+  }
+  return A[1]
+}
+# kit_raw — the input as one text, every line ending in a newline, from the
+# KIT_RAW[NR] each guard's main rule fills.
+function kit_raw() { return NR ? kit_cat(KIT_RAW, NR, "\n") "\n" : "" }
 # hd_strip — raw with every heredoc body reduced to what runs, kw as kit_shell_text
 # takes it; the head line stays and the terminator goes.  The opener is found as
 # the shell finds it (kit_hd_ops), the delimiter read whole (kit_hd_delim) and the
@@ -913,31 +931,31 @@ function hd_consumer(head, tail,   ns, S, ng, G, g, n, T, Q, ci, w) {
 # leaves its substitutions, across lines (kit_hd_subst).  Any other body is
 # dropped.  A body the input ends inside still runs, as bash warns and reads it to
 # the end, so it is reduced the same way.
-function hd_strip(raw, kw,   text, delim, dash, mode, who, body, nl, L, k, l, s, np, j, at, q) {
+function hd_strip(raw, kw,   T, tn, delim, dash, mode, who, B, bn, nl, L, k, l, s, np, j, at, q) {
   if (index(raw, "<<") == 0) return raw
-  text = ""; delim = ""; q = ""
+  tn = 0; delim = ""; q = ""
   nl = split(raw, L, "\n")
   for (k = 1; k <= nl; k++) {
     l = L[k]
     if (delim != "") {
-      if (kit_hd_end(l, delim, dash)) { text = text hd_close(mode, body, kw); delim = ""; continue }
-      if (mode == "shell") body = body l "\n"
-      else if (mode == "interp") { s = hd_interp_line(who, l); if (s != "") text = text s "\n" }
-      else if (mode == "subst") { s = kit_hd_subst(l); if (s != "") text = text s "\n" }
+      if (kit_hd_end(l, delim, dash)) { T[++tn] = hd_close(mode, kit_cat(B, bn, ""), kw); delim = ""; continue }
+      if (mode == "shell") B[++bn] = l "\n"
+      else if (mode == "interp") { s = hd_interp_line(who, l); if (s != "") T[++tn] = s "\n" }
+      else if (mode == "subst") { s = kit_hd_subst(l); if (s != "") T[++tn] = s "\n" }
       continue
     }
     np = kit_hd_ops(l, q); q = KH_QEND; at = 0
     for (j = 1; j <= np && at == 0; j++) if (kit_hd_delim(substr(l, KH_P[j]))) at = KH_P[j]
     if (at > 0) {
       who = hd_consumer(substr(l, 1, at - 1), substr(l, at + KHD_LEN))
-      delim = KHD_DELIM; dash = KHD_DASH; body = ""
+      delim = KHD_DELIM; dash = KHD_DASH; bn = 0
       if (who == "") { mode = KHD_QUOTED ? "drop" : "subst"; if (mode == "subst") kit_hd_subst_reset() }
       else mode = (hd_shell(who) || who == "eval" || who == "source" || who == ".") ? "shell" : "interp"
     }
-    text = text l "\n"
+    T[++tn] = l "\n"
   }
-  if (delim != "") text = text hd_close(mode, body, kw)
-  return text
+  if (delim != "") T[++tn] = hd_close(mode, kit_cat(B, bn, ""), kw)
+  return kit_cat(T, tn, "")
 }
 # hd_close — what a body hd_strip has read to its end leaves in the text.
 function hd_close(mode, body, kw,   s) {
@@ -1102,15 +1120,18 @@ function kit_stmt_sep(st, sep, q, codeat,   sp, sc, qq, top, code, esc) {
 # either way the command is too deeply nested to read within the hook's timeout,
 # and refusing beats reading a fraction and missing the inner command.  CD[k] is
 # the depth of payload C[k]; the first generation is depth 1.
-function kit_shell_text(raw, kw,   out, nc, C, CD, k, nc2, j, left) {
+function kit_shell_text(raw, kw,   out, O, on, nle, s, nc, C, CD, k, nc2, j, left) {
   out = kit_read_text(raw, kw)
   if (!kw) return out
   left = 8 * length(raw) + 4096
+  on = 1; O[1] = out; nle = (out ~ /\n$/)
   nc = kit_payloads(KT_CODE, C, 0)
   for (k = 1; k <= nc; k++) CD[k] = 1
   for (k = 1; k <= nc; k++) {
     if ((left -= length(C[k])) < 0) { KIT_DEEP = 1; break }
-    out = out (out ~ /\n$/ ? "" : "\n") kit_read_text(C[k], 1)
+    s = kit_read_text(C[k], 1)
+    if (!nle) { O[++on] = "\n"; nle = 1 }
+    if (s != "") { O[++on] = s; nle = (s ~ /\n$/) }
     # Refuse only on a code string actually found one deeper, not on the cheap
     # hint: `git push` at the limit names "sh" and runs no shell.  Past the limit
     # what kit_payloads appended is left beyond nc, so it is never read.
@@ -1120,7 +1141,7 @@ function kit_shell_text(raw, kw,   out, nc, C, CD, k, nc2, j, left) {
     for (j = nc + 1; j <= nc2; j++) CD[j] = CD[k] + 1
     nc = nc2
   }
-  return out
+  return kit_cat(O, on, "")
 }
 
 # kit_read_text — kit_shell_text's reading of one text, without the code strings.
@@ -1134,11 +1155,11 @@ function kit_shell_text(raw, kw,   out, nc, C, CD, k, nc2, j, left) {
 # delimiter is read by the shared kit_hd_delim and the body end by kit_hd_end, so a
 # partly quoted delimiter and an indented `<<-` terminator are read as the shell
 # reads them.
-function kit_read_text(raw, kw,   nl, L, k, l, out, first, q, qj, nd, di, D, DDASH, rest, st, sep, cmd, np, j, mark) {
+function kit_read_text(raw, kw,   nl, L, k, l, O, on, KC, kn, q, qj, nd, di, D, DDASH, rest, st, sep, cmd, np, j, mark) {
   KT_CODE = ""
   if (!kw && index(raw, "\\\n") == 0) return raw
   nl = split(raw, L, "\n")
-  out = ""; first = 1; q = ""; nd = 0; di = 0; KP = ""
+  on = 0; kn = 0; q = ""; nd = 0; di = 0; KP = ""
   for (k = 1; k <= nl; k++) {
     l = L[k]
     if (di < nd) {
@@ -1160,7 +1181,7 @@ function kit_read_text(raw, kw,   nl, L, k, l, out, first, q, qj, nd, di, D, DDA
       }
       if (!kw) q = qj
       else {
-        KT_CODE = KT_CODE l "\n"
+        KC[++kn] = l "\n"
         KQ_PREV = ""; KQ_COMMENT = 0
         rest = l; l = ""
         while (length(rest)) {
@@ -1175,7 +1196,8 @@ function kit_read_text(raw, kw,   nl, L, k, l, out, first, q, qj, nd, di, D, DDA
         }
       }
     }
-    out = first ? l : out "\n" l; first = 0
+    O[++on] = l
   }
-  return out
+  KT_CODE = kit_cat(KC, kn, "")
+  return kit_cat(O, on, "\n")
 }
