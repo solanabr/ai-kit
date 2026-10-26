@@ -79,7 +79,12 @@ fi
 # assignments and a path prefix.  Matching the verb anywhere in the string is
 # what makes a hook fire on prose about deploying.
 RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|]*)?([;&|)]|$)'
-SEG=$(printf '%s\n' "$KIT_NORM" | grep -oE "$RE") || SEG=
+# One write per line.  A match consumes the separator that ends it, so with the
+# statements left on one line a write right after a `;` or `|` had no separator
+# left to start on and was never seen: `deploy -ud a.so; deploy --url <mainnet>
+# b.so` was judged by the devnet half alone.  Breaking the line after every
+# separator first gives each statement its own start.
+SEG=$(printf '%s\n' "$KIT_NORM" | awk '{ gsub(/[;&|]/, "&\n"); print }' | grep -oE "$RE") || SEG=
 [ -n "$SEG" ] || exit 0
 
 # ---- irreversible: deny at every tier, no env escape.  The user runs these.
@@ -89,30 +94,6 @@ fi
 
 TIER=$(kit_tier)
 [ "$TIER" = "off" ] && exit 0
-
-# ---- resolve the cluster.  Precedence: command-line flag, then an
-# ANCHOR_PROVIDER_URL assignment in the command, then -C/--config, then the
-# exported ANCHOR_PROVIDER_URL, then Anchor.toml or `solana config`.
-set -f
-CL= SRC= CFG= prev=
-for w in $SEG; do
-  case $prev in
-    --url | -u | --provider.cluster) [ -z "$CL" ] && { CL=$w; SRC='command flag'; } ;;
-    -C | --config) [ -z "$CFG" ] && CFG=$w ;;
-  esac
-  case $w in
-    --url=* | --provider.cluster=*) [ -z "$CL" ] && { CL=${w#*=}; SRC='command flag'; } ;;
-    --config=*) [ -z "$CFG" ] && CFG=${w#--config=} ;;
-    ANCHOR_PROVIDER_URL=*) ANCHOR_IN_CMD=${w#ANCHOR_PROVIDER_URL=} ;;
-    # Any other long option. Must precede -u?* or --upgrade-authority reads as
-    # `-u pgrade-authority`, which is how the inline hook mislabelled it.
-    --*) ;;
-    -u?*) [ -z "$CL" ] && { CL=${w#-u}; SRC='command flag'; } ;;
-    -C?*) [ -z "$CFG" ] && CFG=${w#-C} ;;
-  esac
-  prev=$w
-done
-set +f
 
 read_cfg_url() { # read_cfg_url <config.yml> — prints json_rpc_url, or fails
   [ -n "${1-}" ] && [ -r "$1" ] || return 1
@@ -125,47 +106,80 @@ read_cfg_url() { # read_cfg_url <config.yml> — prints json_rpc_url, or fails
   printf '%s' "$_u"
 }
 
-if [ -z "$CL" ] && [ -n "${ANCHOR_IN_CMD-}" ]; then
-  CL=$ANCHOR_IN_CMD; SRC=ANCHOR_PROVIDER_URL
-fi
-if [ -z "$CL" ] && [ -n "$CFG" ]; then
-  if CL=$(read_cfg_url "$CFG"); then
-    SRC='solana config file'
-  else
-    CL=; SRC=
-  fi
-fi
-if [ -z "$CL" ]; then
-  case $SEG in
-    *anchor*)
-      if [ -n "${ANCHOR_PROVIDER_URL-}" ]; then
-        CL=$ANCHOR_PROVIDER_URL; SRC=ANCHOR_PROVIDER_URL
-      else
-        SRC=Anchor.toml
-        for d in "$PWD" "${KIT_CWD-}" "${CLAUDE_PROJECT_DIR-}"; do
-          [ -n "$d" ] && [ -r "$d/Anchor.toml" ] || continue
-          CL=$(awk -F'"' '/^[[:space:]]*cluster[[:space:]]*=/{print $2; exit}' "$d/Anchor.toml" 2>/dev/null)
-          [ -n "$CL" ] && break
-        done
-      fi
-      ;;
-    *)
-      SRC='solana config'
-      if command -v solana >/dev/null 2>&1; then
-        CL=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}')
-      fi
-      [ -n "$CL" ] || CL=$(read_cfg_url "${SOLANA_CONFIG_FILE:-$HOME/.config/solana/cli/config.yml}") || CL=
-      ;;
-  esac
-fi
-[ -n "$SRC" ] || SRC='an unknown source'
+# resolve <segment> — set CL and SRC for ONE write.  Precedence: command-line
+# flag, then an ANCHOR_PROVIDER_URL assignment in that statement, then -C/--config,
+# then the exported ANCHOR_PROVIDER_URL, then Anchor.toml or `solana config`.
+# Per write, not per command: the first --url across the whole command used to
+# label every write in it, so `deploy -ud a.so && deploy -um b.so` was devnet.
+SOLANA_CFG_DONE= SOLANA_CFG_CL=
+resolve() {
+  CL= SRC= CFG= ANCHOR_IN_CMD= prev=
+  set -f
+  for w in $1; do
+    case $prev in
+      --url | -u | --provider.cluster) [ -z "$CL" ] && { CL=$w; SRC='command flag'; } ;;
+      -C | --config) [ -z "$CFG" ] && CFG=$w ;;
+    esac
+    case $w in
+      --url=* | --provider.cluster=*) [ -z "$CL" ] && { CL=${w#*=}; SRC='command flag'; } ;;
+      --config=*) [ -z "$CFG" ] && CFG=${w#--config=} ;;
+      ANCHOR_PROVIDER_URL=*) ANCHOR_IN_CMD=${w#ANCHOR_PROVIDER_URL=} ;;
+      # Any other long option. Must precede -u?* or --upgrade-authority reads as
+      # `-u pgrade-authority`, which is how the inline hook mislabelled it.
+      --*) ;;
+      -u?*) [ -z "$CL" ] && { CL=${w#-u}; SRC='command flag'; } ;;
+      -C?*) [ -z "$CFG" ] && CFG=${w#-C} ;;
+    esac
+    prev=$w
+  done
+  set +f
 
-# Normalise for classification only.  Nothing below prints the URL: HOST keeps
-# scheme, path, query and userinfo out, so an api-key cannot reach the prompt.
-CL=$(printf '%s' "${CL#=}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9:/._?=&%~-')
-HOST=$(printf '%s' "$CL" | sed -e 's#^[a-z][a-z0-9+.-]*://##' -e 's#[/?].*$##' -e 's#^[^@]*@##')
-# HOST with the IPv6 brackets and the :port stripped, for an EXACT local-host test.
-HNP=$(printf '%s' "$HOST" | sed -e 's#^\[##' -e 's#\].*$##' -e 's#:[0-9]*$##')
+  if [ -z "$CL" ] && [ -n "$ANCHOR_IN_CMD" ]; then
+    CL=$ANCHOR_IN_CMD; SRC=ANCHOR_PROVIDER_URL
+  fi
+  if [ -z "$CL" ] && [ -n "$CFG" ]; then
+    if CL=$(read_cfg_url "$CFG"); then
+      SRC='solana config file'
+    else
+      CL=; SRC=
+    fi
+  fi
+  if [ -z "$CL" ]; then
+    case $1 in
+      *anchor*)
+        if [ -n "${ANCHOR_PROVIDER_URL-}" ]; then
+          CL=$ANCHOR_PROVIDER_URL; SRC=ANCHOR_PROVIDER_URL
+        else
+          SRC=Anchor.toml
+          for d in "$PWD" "${KIT_CWD-}" "${CLAUDE_PROJECT_DIR-}"; do
+            [ -n "$d" ] && [ -r "$d/Anchor.toml" ] || continue
+            CL=$(awk -F'"' '/^[[:space:]]*cluster[[:space:]]*=/{print $2; exit}' "$d/Anchor.toml" 2>/dev/null)
+            [ -n "$CL" ] && break
+          done
+        fi
+        ;;
+      *)
+        SRC='solana config'
+        if [ -z "$SOLANA_CFG_DONE" ]; then
+          if command -v solana >/dev/null 2>&1; then
+            SOLANA_CFG_CL=$(solana config get json_rpc_url 2>/dev/null | awk '{print $NF}')
+          fi
+          [ -n "$SOLANA_CFG_CL" ] || SOLANA_CFG_CL=$(read_cfg_url "${SOLANA_CONFIG_FILE:-$HOME/.config/solana/cli/config.yml}") || SOLANA_CFG_CL=
+          SOLANA_CFG_DONE=1
+        fi
+        CL=$SOLANA_CFG_CL
+        ;;
+    esac
+  fi
+  [ -n "$SRC" ] || SRC='an unknown source'
+
+  # Normalise for classification only.  Nothing below prints the URL: HOST keeps
+  # scheme, path, query and userinfo out, so an api-key cannot reach the prompt.
+  CL=$(printf '%s' "${CL#=}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9:/._?=&%~-')
+  HOST=$(printf '%s' "$CL" | sed -e 's#^[a-z][a-z0-9+.-]*://##' -e 's#[/?].*$##' -e 's#^[^@]*@##')
+  # HOST with the IPv6 brackets and the :port stripped, for an EXACT local-host test.
+  HNP=$(printf '%s' "$HOST" | sed -e 's#^\[##' -e 's#\].*$##' -e 's#:[0-9]*$##')
+}
 
 # is_localnet — the cluster is a loopback the agent runs itself.  EXACT hosts only:
 # the old `*localhost*` glob also matched localhost.attacker.example, an
@@ -196,44 +210,63 @@ is_testnet() {
   return 1
 }
 
-# unidentified <reason> — a write to a cluster none of the tests above could name.
-# Interactive, an ask, as before.  Headless, the ask would go silent and the write
-# would run on what may well be mainnet, so it takes mainnet's own path: denied at
-# High, and below High denied unless CONFIRM_MAINNET=1 (#307).
-unidentified() {
-  if kit_is_headless; then
-    if [ "$TIER" = "high" ]; then
-      kit_deny "$1 At the High firewall tier a write to a cluster that may be mainnet is denied with no interactive user; drop to Medium or run it yourself."
-    fi
-    kit_gate mainnet "$1"
-  fi
-  kit_ask "$1"
-}
-
+# classify — LEVEL and MSG for the write resolve() just read.  4 mainnet, 3 a
+# cluster none of the tests can name, 2 a known cluster that asks, 1 silent.
 # `*mainnet*` stays a substring test on purpose: it errs towards the strict branch,
 # so a URL that only mentions mainnet is gated as mainnet, never waved through.
-case $CL in
-  m | *mainnet*)
-    R="MAINNET (from $SRC): spends real SOL or changes a live program. Approve only if the user asked for mainnet."
+classify() {
+  case $CL in
+    m | *mainnet*)
+      LEVEL=4 MSG="MAINNET (from $SRC): spends real SOL or changes a live program. Approve only if the user asked for mainnet."
+      return ;;
+  esac
+  if is_devnet; then
+    LEVEL=2 MSG="On-chain write to devnet (from $SRC)."
+  elif is_testnet; then
+    LEVEL=2 MSG="On-chain write to testnet (from $SRC)."
+  elif is_localnet; then
+    # Localnet is silent at Relaxed — a local validator is day-to-day work and
+    # Relaxed must not get in the way.  Medium and High still ask (an interactive
+    # prompt, ignored headless).
+    LEVEL=2 MSG="On-chain write to localnet (from $SRC)."
+    [ "$TIER" = "relaxed" ] && LEVEL=1
+  elif [ -z "$CL" ]; then
+    LEVEL=3 MSG="On-chain write to an unknown cluster (no --url, -C config, ANCHOR_PROVIDER_URL, Anchor.toml or solana config found). Check the target before approving."
+  else
+    LEVEL=3 MSG="On-chain write to the RPC host ${HOST:-unknown} (from $SRC). That host is not a known Solana cluster endpoint, so it may well be mainnet — check before approving."
+  fi
+}
+
+# Judge every write, and answer for the most dangerous one: a command is approved
+# or refused whole, so a devnet deploy beside a mainnet one is a mainnet command.
+WORST=0 WMSG=
+while IFS= read -r s; do
+  [ -n "$s" ] || continue
+  resolve "$s"
+  classify
+  if [ "$LEVEL" -gt "$WORST" ]; then WORST=$LEVEL WMSG=$MSG; fi
+done <<EOF
+$SEG
+EOF
+
+case $WORST in
+  4)
     if [ "$TIER" = "high" ]; then
-      kit_deny "$R At the High firewall tier mainnet writes are denied; drop to Medium or run it yourself."
+      kit_deny "$WMSG At the High firewall tier mainnet writes are denied; drop to Medium or run it yourself."
     fi
-    kit_gate mainnet "$R"
+    kit_gate mainnet "$WMSG"
     ;;
+  3)
+    # A cluster nobody could name.  Interactive, an ask.  Known to be headless, the
+    # ask would go silent and the write would run on what may well be mainnet, so
+    # it takes mainnet's path: denied at High, below High unless CONFIRM_MAINNET=1
+    # (#307).  When headless cannot be established, kit_gate asks — which a real
+    # headless run treats as a refusal, so it never runs unprompted either.
+    if [ "$TIER" = "high" ] && kit_known_headless; then
+      kit_deny "$WMSG At the High firewall tier a write to a cluster that may be mainnet is denied with no interactive user; drop to Medium or run it yourself."
+    fi
+    kit_gate mainnet "$WMSG"
+    ;;
+  2) kit_ask "$WMSG" ;;
 esac
-if is_devnet; then
-  kit_ask "On-chain write to devnet (from $SRC)."
-elif is_testnet; then
-  kit_ask "On-chain write to testnet (from $SRC)."
-elif is_localnet; then
-  # Localnet is silent at Relaxed — a local validator is day-to-day work and
-  # Relaxed must not get in the way.  Medium and High still ask (an interactive
-  # prompt, ignored headless), so the exact-host fix is what changes here.
-  [ "$TIER" = "relaxed" ] && exit 0
-  kit_ask "On-chain write to localnet (from $SRC)."
-elif [ -z "$CL" ]; then
-  unidentified "On-chain write to an unknown cluster (no --url, -C config, ANCHOR_PROVIDER_URL, Anchor.toml or solana config found). Check the target before approving."
-else
-  unidentified "On-chain write to the RPC host ${HOST:-unknown} (from $SRC). That host is not a known Solana cluster endpoint, so it may well be mainnet — check before approving."
-fi
 exit 0
