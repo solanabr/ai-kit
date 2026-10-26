@@ -52,11 +52,12 @@ KIT_INPUT=$(cat)
 # backslash-newline as JSON spells it, since the shell deletes that pair before
 # it reads words: `np\<newline>x -y evil` names no runner here and runs one.
 # A quote or backslash inside a word does not hide it from bash (`n"p"x -y x`), so
-# the words are looked for in a copy without them as well (#297).
+# the words are looked for in a copy without them as well (#297).  A $'…' word
+# spells a name in escapes (`$'n\x70x'` is npx), so it is let through (#301).
 KIT_PRE="$KIT_INPUT
 $(kit_unquoted "$KIT_INPUT")"
 case $KIT_PRE in
-  *npx* | *dlx* | *bunx* | *uvx* | *pipx* | *npm* | *bun* | *yarn* | *pnpm* | *claude* | *'\\\n'*) ;;
+  *"\$'"* | *npx* | *dlx* | *bunx* | *uvx* | *pipx* | *npm* | *bun* | *yarn* | *pnpm* | *claude* | *'\\\n'*) ;;
   *cargo*) case $KIT_PRE in *install*) ;; *) exit 0 ;; esac ;;
   *uv*) case $KIT_PRE in *run* | *tool*) ;; *) exit 0 ;; esac ;;
   *go*) case $KIT_PRE in *install* | *run*) ;; *) exit 0 ;; esac ;;

@@ -38,10 +38,11 @@ KIT_INPUT=$(cat)
 # normaliser below, which joins it.
 # A quote or backslash inside a word does not hide it from bash either: `a"n"chor
 # deploy` is anchor deploy (#297).  So the words are looked for in a copy without
-# them as well, and the continuation in the input as it came.
+# them as well, and the continuation in the input as it came.  A $'…' word can
+# spell any of them in escapes (`$'\x61nchor'` is anchor), so it goes on (#301).
 KIT_PRE="$KIT_INPUT
 $(kit_unquoted "$KIT_INPUT")"
-case $KIT_PRE in *solana* | *anchor* | *spl-token* | *'\\\n'*) ;; *) exit 0 ;; esac
+case $KIT_PRE in *"\$'"* | *solana* | *anchor* | *spl-token* | *'\\\n'*) ;; *) exit 0 ;; esac
 kit_parse
 [ -n "$KIT_CMD" ] || exit 0
 

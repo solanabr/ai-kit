@@ -1988,6 +1988,59 @@ quiet "$M_EGRESS" 'git commit -m "fix: npm publish flow"'
 quiet "$M_EGRESS" 'echo "npm" "publish"'
 quiet "$M_EGRESS" "python3 - <<'EOF'${NL}print(['a', 'b'])${NL}EOF"
 quiet "$M_EGRESS" 'git log --format="%h %s" -3'
+
+# --- ANSI-C quoting (#301). bash decodes $'…' and drops its quotes before it runs a
+# --- word, so `$'git' push --force` and `$'\x67it' push --force` are the force push.
+# --- The readers kept the `$` and the escapes, and the prefilters looked for the name
+# --- as written, so each spelling walked past every gate. The region also ended at
+# --- the first quote, though `\'` is escaped inside it: `echo $'it\'s; npx -y x'`
+# --- split at its quoted `;`. Each spelling gets its bare form's verdict; each control
+# --- plants its mechanism back out.
+echo "[ANSI-C quoting: \$'…' read as bash decodes it]"
+MUT_ANSITOK="$(mutant ansitok lib-tokenize.awk '{ cur = cur kit_ansi(s, i + 1); i = KA_END; hadq = 1; continue }' '{ }')" || MUT_ANSITOK=
+MUT_ANSIUNQ="$(mutant ansiunq lib-tokenize.awk '{ o = o kit_ansi(w, i + 1); if (KA_OPEN) return w; i = KA_END; continue }' '{ }')" || MUT_ANSIUNQ=
+MUT_ANSIREG="$(mutant ansireg lib-tokenize.awk 'if (c2 == "$" SQ) { kit_ansi_end(s, i + 1);' 'if (0) { kit_ansi_end(s, i + 1);')" || MUT_ANSIREG=
+MUT_ANSIQ="$(mutant ansiq lib-tokenize.awk 'if (c == "$" && substr(l, i + 1, 1) == SQ) { q = q "e"; i++ }' 'if (0) { q = q "e"; i++ }')" || MUT_ANSIQ=
+MUT_ANSIPRE="$(mutant ansipre onchain-guard.sh "case \$KIT_PRE in *\"\\\$'\"* | " 'case $KIT_PRE in ' \
+  fetch-exec-guard.sh "  *\"\\\$'\"* | *npx* |" '  *npx* |' \
+  egress-guard.sh "  *\"\\\$'\"* | *publish* |" '  *publish* |' \
+  egress-guard.sh "  *\"\\\$'\"* | *rm\\ * |" '  *rm\ * |')" || MUT_ANSIPRE=
+for M in "$MUT_ANSITOK" "$MUT_ANSIUNQ" "$MUT_ANSIREG" "$MUT_ANSIQ" "$MUT_ANSIPRE"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'git' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "git \$'push' --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\x67it' push --force origin main" "$MUT_ANSIPRE"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\147it' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\u0067it' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" ask deny deny "npm publish" "npm \$'pub\\x6cish'" "$MUT_ANSIUNQ"
+same "$M_EGRESS" ask deny deny "npm publish" "sh -c \$'echo hi\\nnpm publish'" "$MUT_ANSITOK"
+same "$M_EGRESS" deny deny deny "rm -rf /" "\$'\\x72m' -rf /" "$MUT_ANSIPRE"
+same "$M_CHAIN" ask ask deny "$DA" "\$'\\x61nchor' deploy --provider.cluster mainnet" "$MUT_ANSIPRE"
+same "$M_CHAIN" ask ask deny "$DA" "anchor \$'deploy' --provider.cluster mainnet" "$MUT_ANSIUNQ"
+same "$M_SECRETS" deny deny deny "gh auth token" "gh \$'\\x61uth' token" "$MUT_ANSITOK"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "cat ~/.config/solana/\$'id\\x2ejson'" "$MUT_ANSITOK"
+same "$M_FETCH" silent silent deny "npx -y x" "\$'n\\x70x' -y x" "$MUT_ANSIPRE"
+# The near misses: a $'…' argument is prose, as a '…' one is, and its `\'` closes nothing.
+quiet "$M_EGRESS" "echo \$'git push --force origin main'"
+quiet "$M_EGRESS" "echo \$'npm publish'"
+quiet "$M_EGRESS" "echo $BS\$'$BS""x67it' push --force origin main"
+quiet "$M_SECRETS" "echo \$'cat ~/.config/solana/id.json'"
+quiet "$M_FETCH" "echo \$'it$BS's; npx -y x'" "$MUT_ANSIREG"
+quiet "$M_CHAIN" "echo \$'it$BS's; then anchor deploy --provider.cluster mainnet'" "$MUT_ANSIQ"
+# The decoder itself, one escape at a time: what tokenize hands every guard.
+printf '%s\n' '{ n = tokenize(split_cmd($0), T); o = ""; for (i = 1; i <= n; i++) o = o (i > 1 ? "|" : "") T[i]; print o }' > "$WORK/ansi.awk"
+ansi_tok() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/ansi.awk"; }
+assert_eq "npm|npm|npm|npm|npm|npm|npm" \
+  "$(ansi_tok "\$'npm' \$'\\x6epm' \$'\\156pm' \$'\\u006epm' \$'\\U0000006epm' \$'\\x6e'pm n\$'\\x70'm")" \
+  "\$'…' decodes plain, \\xHH, \\nnn, \\uHHHH and \\UHHHHHHHH spellings of a word"
+assert_eq "$(printf 'a\tb|it%ss|"q"|\\|?|\033[0m|\tz' "'")" \
+  "$(ansi_tok "\$'a\\tb' \$'it\\'s' \$'\\\"q\\\"' \$'\\\\' \$'\\?' \$'\\e[0m' \$'\\cI'z")" \
+  "\$'…' decodes \\t \\' \\\" \\\\ \\? \\e and \\cx, and \\' does not close it"
+assert_eq "abx|\\z|\\x|n" "$(ansi_tok "\$'ab\\0cd'x \$'\\z' \$'\\x' \$'\\556'")" \
+  "a NUL ends the string, an unknown escape is kept, an octal byte wraps at 256"
+assert_eq "\$\\x6epm|\$'npm'|\$npm" "$(ansi_tok "$BS\$'\\x6epm' \"\$'npm'\" '\$'npm")" \
+  "an escaped \$, a \$' inside double quotes and a \$ closing '…' open no \$'…'"
 # --- The firewall-friction PR's hook halves, checked for the property that puts them
 # --- in a hook at all: the rm/kill floor and the nested-claude deny hold at EVERY
 # --- active tier (the rm/kill pass runs BEFORE egress-guard's Off early-exit, so Off
