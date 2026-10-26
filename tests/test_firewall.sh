@@ -425,8 +425,7 @@ def matches(rule, cmd):
 
 def probes(pat):
     stars = ustars(pat)
-    # `-C <dir>` and git's `-c <name>=<value>` both require their operand.
-    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$|(?:^|\s)git -c\s*$", pat[:i])}
+    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$", pat[:i])}
     for empty in itertools.product((False, True), repeat=len(stars)):
         combo = dict(zip(stars, empty))
         if not any(empty) or any(combo[i] for i in mand):
@@ -912,13 +911,13 @@ fi
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *--dangerously-skip-permissions*)" "Bash(env *)" "Bash(git -c * clean *)" "Bash(git -C * clean *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
+for r in "Bash(claude *--dangerously-skip-permissions*)" "Bash(env *)" "Bash(git -c core.fsmonitor=false clean *)" "Bash(git -C * clean *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
          "Bash(git fetch *--upload-pack*)" "Bash(git fetch --upload-pack*)" \
          "Bash(git push *--receive-pack*)" "Bash(git push --receive-pack*)" \
          "Bash(git push *--exec*)" "Bash(git push --exec*)" \
          "Bash(gh issue delete *)" "Bash(gh repo delete *)" "Bash(gh repo delete)" \
          "Bash(git config *alias.*)" "Bash(git config alias.*)" \
-         "Bash(git -c * config *alias.*)" "Bash(git -C * fetch *--upload-pack*)" "Bash(git -C * --exec-path=*)" \
+         "Bash(git -c core.hooksPath=/dev/null config *alias.*)" "Bash(git -C * fetch *--upload-pack*)" "Bash(git -C * --exec-path=*)" \
          "Bash(git --config-env*)" "Bash(git reflog delete *)" "Bash(git reflog drop *)" \
          "Bash(git --exec-path=*)"; do
   TOTAL=$((TOTAL + 1))
@@ -984,14 +983,14 @@ print(' '.join(r for r in ('Bash(git -c *)', 'Bash(git -C * -c *)', 'Bash(git -C
              "git -c core.fsmonitor=false fetch --upload-pack=/tmp/x.sh ." \
              "git -c core.fsmonitor=false config --global alias.z !x" \
              "git -c core.fsmonitor=false --config-env=core.pager=X log" \
-             "git -c core.fsmonitor=false --exec-path=/tmp/x ls-remote origin" \
-             "git -c core.fsmonitor=false -C . clean -fdx"; do
+             "git -c core.fsmonitor=false --exec-path=/tmp/x ls-remote origin"; do
     assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
       "$t denies \`$cmd\`, as it denies the subcommand bare"
   done
   for cmd in "git -c core.fsmonitor=false status" "git -c core.fsmonitor=false log --oneline -8" \
              "git -c core.hooksPath=/dev/null diff --stat" "git -c core.fsmonitor=false show HEAD" \
-             "git -c core.hooksPath=/dev/null commit -m fix" "git -c core.fsmonitor=false blame src/lib.rs"; do
+             "git -c core.hooksPath=/dev/null commit -m fix" "git -c core.fsmonitor=false blame src/lib.rs" \
+             "git -c core.fsmonitor=false commit -m \"tidy: clean up docs\""; do
     assert_eq "none" "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" \
       "$t leaves \`$cmd\` undenied"
     assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --allow-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
@@ -1014,6 +1013,16 @@ assert_eq "yes" "$(python3 "$WORK/gap_probe.py" --match "git -c core.fsmonitor=f
 assert_eq "yes" "$(python3 "$WORK/gap_probe.py" --match "git -c *" \
   "git -c core.fsmonitor=false status" 2>&1)" \
   "planted: the old Bash(git -c *) denies auditor-skill's safe prefix"
+assert_eq "yes" "$(python3 "$WORK/gap_probe.py" --match "git -c * clean *" \
+  "git -c core.fsmonitor=false commit -m \"tidy: clean up docs\"" 2>&1)" \
+  "planted: a gapped Bash(git -c * clean *) twin would deny a commit message naming clean"
+# What the literal-prefix twins cannot see is the hook's (tests/test_git_guard.sh), at
+# every tier: both safe values together, an option between prefix and subcommand.
+for cmd in "git -c core.fsmonitor=false -C . clean -fdx" \
+           "git -c core.fsmonitor=false -c core.hooksPath=/dev/null clean -fdx"; do
+  assert_eq "none" "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.off.json" "$cmd" 2>&1)" \
+    "no rule sees \`$cmd\`, which is why the hook decides it ahead of its Off early-exit"
+done
 
 # git --config-env is git -c with the value read from an environment variable, and the
 # reflog's delete and drop take away the same record `reflog expire` does. All three are

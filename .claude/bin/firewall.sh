@@ -197,7 +197,7 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           refusing `-c core.fsmonitor=/tmp/x.sh`. egress-guard.awk's GITCFG pass holds
 #           the whole `-c` gate instead, at every tier, Off included, letting
 #           `core.fsmonitor=false` and `core.hooksPath=/dev/null` through and nothing
-#           else. DENY_GIT_DASH_LOWER_C twins every destructive git rule behind `-c *`,
+#           else. DENY_GIT_DASH_LOWER_C twins every destructive git rule behind each literal safe value,
 #           and ALLOW_GIT_SAFE_CONFIG each git allow rule behind the two safe values, so
 #           the subcommand after the prefix keeps the verdict it has bare.
 RULE_SET_VERSION = 12
@@ -901,7 +901,7 @@ DENY_WRAPPERS = [
     # tier, Off included (egress-guard.sh runs it ahead of its Off early-exit): it lets
     # `-c core.fsmonitor=false` and `-c core.hooksPath=/dev/null` through and denies any
     # other value, in any position. What follows the safe prefix keeps the verdict it
-    # has bare: DENY_GIT_DASH_LOWER_C below twins every destructive rule behind `-c *`,
+    # has bare: DENY_GIT_DASH_LOWER_C below twins every destructive rule behind each safe value,
     # the push and history gates in egress-guard.sh read past `-c <value>`, and
     # ALLOW_GIT_SAFE_CONFIG twins each git allow rule behind the two safe values only.
     #
@@ -1205,17 +1205,25 @@ DENY_GIT_DASH_C = [
     "Bash(git -C * config alias.*)",
 ]
 
-# Every tier. The `-c`-prefixed twin of each rule in DENY_GIT_DASH_C, which is what keeps
-# a subcommand's verdict once `Bash(git -c *)` is gone (rule set 12, #311; see
-# DENY_WRAPPERS). GITCFG lets `git -c core.fsmonitor=false` and `git -c
-# core.hooksPath=/dev/null` through, and without these `git -c core.fsmonitor=false clean
-# -fdx` would meet no rule: every destructive deny is anchored on `git <subcommand>`. The
-# hook's GITDESTRUCT pass mirrors them too, but not at Off, where the egress hook runs only
-# its GITCFG and rm/kill passes; the rules hold at every tier. The first `*` is the `-c`
-# operand and, as for `-C`, git requires it, which gap_probe is taught; its gap also spans
-# any further git-level options (`git -c core.fsmonitor=false -C . clean`). Derived, so
-# the two sets cannot drift.
-DENY_GIT_DASH_LOWER_C = [r.replace("Bash(git -C * ", "Bash(git -c * ", 1) for r in DENY_GIT_DASH_C]
+# Every tier. A twin of each rule in DENY_GIT_DASH_C behind each safe `-c` value, which is
+# what keeps a subcommand's verdict at the permission layer once `Bash(git -c *)` is gone
+# (rule set 12, #311; see DENY_WRAPPERS). GITCFG lets `git -c core.fsmonitor=false` and
+# `git -c core.hooksPath=/dev/null` through, and without these `git -c
+# core.fsmonitor=false clean -fdx` would meet no rule: every destructive deny is anchored
+# on `git <subcommand>`. The prefix is the literal safe value, not `git -c *`: a `*` there
+# spans the whole command line, so `git -c core.fsmonitor=false commit -m "tidy: clean up
+# docs"` met `git -c * clean *` and was refused — the auditor workflow this exists for.
+# (The `-C *` twins above keep that behaviour; a `-C` operand is an arbitrary path, so they
+# have no literal to anchor on.) What a literal prefix cannot see — both safe values
+# together, another option between the prefix and the subcommand, another case spelling —
+# egress-guard.sh decides at every tier, Off included: behind a safe `-c` it runs the
+# GITDESTRUCT, GITEXEC and --exec-path= passes ahead of its Off early-exit. Derived, so the
+# sets cannot drift.
+DENY_GIT_DASH_LOWER_C = [
+    r.replace("Bash(git -C * ", "Bash(git -c %s " % v, 1)
+    for v in GIT_SAFE_CONFIG
+    for r in DENY_GIT_DASH_C
+]
 
 # Every tier. Two halves, both flag- or subcommand-shaped, both with nothing to vary.
 #

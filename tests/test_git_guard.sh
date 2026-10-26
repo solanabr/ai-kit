@@ -511,6 +511,47 @@ expect high    DENY "force push at High, as bare"          "git -c core.fsmonito
 expect high    DENY "a + refspec at High, as bare"         "git -c core.fsmonitor=false push origin +main"
 expect high    ASK  "rebase at High, as bare"              "git -c core.hooksPath=/dev/null rebase -i HEAD~2"
 expect relaxed PASS "rebase at Relaxed, as bare"           "git -c core.hooksPath=/dev/null rebase -i HEAD~2"
+expect relaxed PASS "a commit message naming clean"        "git -c core.fsmonitor=false commit -m \"tidy: clean up docs\""
+expect relaxed PASS "an expansion after the subcommand is the subcommand's argument" \
+  "git -c core.fsmonitor=false log --format=\"%H \$X\""
+# What the literal-prefix rule twins cannot see, decided here at every tier, Off included.
+for t in off high; do
+  expect $t DENY "both safe values, then clean"       "git -c core.fsmonitor=false -c core.hooksPath=/dev/null clean -fdx"
+  expect $t DENY "-C between the prefix and clean"    "git -c core.fsmonitor=false -C . clean -fdx"
+  expect $t DENY "a case spelling of alias"           "git -c core.fsmonitor=false config Alias.z x"
+  expect $t DENY "--exec-path= behind the prefix"     "git -c core.fsmonitor=false --exec-path=/tmp/x ls-remote origin"
+  expect $t PASS "an ordinary read behind both values" "git -c core.fsmonitor=false -c core.hooksPath=/dev/null diff"
+done
+expect off PASS "Off still leaves other prefixed forms to the rules, as before" "git --no-pager clean -fdx"
+
+# ── after a safe -c, every word up to the subcommand must be one bash leaves alone ──
+# The walk reads text; git reads what bash makes of it. Each of these reaches git as a
+# second `-c` naming a program (or a --config-env), and each read as a harmless
+# subcommand or unknown option before the walk failed closed (#318 review).
+echo ""
+echo "[GITCFG: a shell-rewritten word after the safe prefix is refused, at every tier]"
+for t in off high; do
+  while IFS= read -r c; do
+    [ -n "$c" ] && expect $t DENY "after the safe prefix: $c" "$c"
+  done <<'CASES'
+git -c core.fsmonitor=false {-c,core.pager=/tmp/x.sh} log
+git -c core.fsmonitor=false $'-c' core.pager=/tmp/x log
+git -c core.fsmonitor=false -c$IFS"core.pager=/tmp/x" log
+git -c core.fsmonitor=false $(echo -c) core.pager=/tmp/x log
+git -c core.fsmonitor=false `echo -c` core.pager=/tmp/x log
+git -c core.fsmonitor=false ${X:--c} core.pager=/tmp/x log
+git -c core.fsmonitor=false $C core.pager=/tmp/x log
+git -c core.fsmonitor=false "$@" log
+git -c core.fsmonitor=false -[c] core.pager=/tmp/x log
+git -c core.fsmonitor=false -? core.pager=/tmp/x log
+git -c core.fsmonitor=false -C {.,-c} core.pager=/tmp/x log
+git -c core.fsmonitor=false -C . {-c,core.pager=/tmp/x} log
+git -c core.hooksPath=/dev/null {--config-env,core.pager=X} log
+git -c core.fsmonitor=false \-c core.pager=/tmp/x log
+git -c core.fsmonitor=false "-c" core.pager=/tmp/x log
+git -c core.fsmonitor=false
+CASES
+done
 
 echo ""
 echo "[the two options named as data: a message, a pattern, an echo]"
@@ -924,7 +965,7 @@ flips "--config-env dropped from GITCFG, so the prefixed spelling walks past" \
   "$M" "git --no-pager --config-env=core.fsmonitor=X status" DENY PASS
 flips "...while a prefixed -c still fires, so only --config-env broke" \
   "$M" "git --no-pager -c core.fsmonitor=/tmp/x.sh status" DENY DENY
-M="$(mutate 'o == "-c" && !gcfg_safe' 'o == "-c-NOT" && !gcfg_safe')"
+M="$(mutate 'if (GW_CFG == "" && o == "-c" && !safe)' 'if (GW_CFG == "" && o == "-c-NOT" && !safe)')"
 flips "-c dropped from GITCFG, so git --no-pager -c walks past again" \
   "$M" "git --no-pager -c core.fsmonitor=/tmp/x.sh status" DENY PASS
 flips "-c dropped from GITCFG, so the first-position -c the rule used to deny walks past" \
@@ -1187,5 +1228,49 @@ flips "the link checks are uncapped again" "$M" "$CAP" DENY ASK
 M="$(mutate_sh 'GITCFG\ *) kit_deny_gitcfg' 'GITCFG-NOT\ *) kit_deny_gitcfg')"
 flips_at off "GITCFG no longer run before the Off early-exit, so Off lets -c <program> through" \
   "$M" "git -c core.fsmonitor=/tmp/x.sh status" DENY PASS
+# The literal-word check after the safe prefix, switched off: the shell-rewritten forms
+# walk through again.
+M="$(mutate 'return (!Q[i] && T[i] ~' 'return 1 || (!Q[i] && T[i] ~')"
+flips_at off "the literal-word check removed, so a glob hands git a second -c" \
+  "$M" "git -c core.fsmonitor=false -[c] core.pager=/tmp/x log" DENY PASS
+flips_at high "...and so does \$'-c'" "$M" "git -c core.fsmonitor=false \$'-c' core.pager=/tmp/x log" DENY PASS
+M="$(mutate 'if (GW_SAFE && i > n) gw_opaque(T, 0)' 'if (0) gw_opaque(T, 0)')"
+# (The `$(…)` and brace forms are caught by the literal check as well; a bare prefix is
+# the one only this line decides.)
+flips_at off "a prefix with no readable subcommand allowed again" \
+  "$M" "git -c core.fsmonitor=false" DENY PASS
+M="$(mutate 'if (!GW_SAFE) continue' 'continue')"
+flips_at off "the subcommand passes no longer run ahead of Off, so the prefix hides clean there" \
+  "$M" "git -c core.fsmonitor=false -C . clean -fdx" DENY PASS
+
+# ── the pre-Off gate fails closed ──────────────────────────────────────────
+# `Bash(git -c *)` could not fail; the hook that replaced it can, so a broken or missing
+# awk pass must refuse a git command with a -c rather than let it through, and must not
+# refuse anything else.
+echo ""
+echo "[GITCFG fails closed: awk files missing, unreadable or broken]"
+closed() { # closed <fixture> <label>
+  local t
+  for t in off high; do
+    TOTAL=$((TOTAL + 1))
+    if [ "$(ask_in "$1" "$t" "git -c core.fsmonitor=false status")" = DENY ]; then
+      echo "  PASS: [$t] $2: git with a -c is refused"; PASS=$((PASS + 1))
+    else
+      echo "  FAIL: [$t] $2: git with a -c got through"; FAIL=$((FAIL + 1))
+    fi
+  done
+  TOTAL=$((TOTAL + 1))
+  if [ "$(ask_in "$1" off "git status --short")" = PASS ]; then
+    echo "  PASS: [off] $2: git with no -c is left alone"; PASS=$((PASS + 1))
+  else
+    echo "  FAIL: [off] $2: git with no -c was refused too"; FAIL=$((FAIL + 1))
+  fi
+}
+D="$(new_mut "no-awk")"; rm -f "$D/.claude/hooks/egress-guard.awk"
+closed "$D" "egress-guard.awk missing"
+D="$(new_mut "no-lib")"; rm -f "$D/.claude/hooks/lib-tokenize.awk"
+closed "$D" "lib-tokenize.awk missing"
+D="$(new_mut "broken-awk")"; printf '\nfunction {\n' >> "$D/.claude/hooks/egress-guard.awk"
+closed "$D" "egress-guard.awk does not parse"
 
 print_summary

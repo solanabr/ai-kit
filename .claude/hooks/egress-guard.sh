@@ -103,16 +103,30 @@ esac
 kit_deny_gitcfg() {
   kit_deny "$1. git -c and git --config-env are denied at every tier, because a one-shot config value can make any git command run a program. The two values that only take one away are let through: -c core.fsmonitor=false and -c core.hooksPath=/dev/null. If the user needs another value set, they run the command themselves."
 }
+# It fails closed, as the rule it replaced could not fail at all: with the awk files
+# missing or unreadable, or awk exiting non-zero, a command naming git and a `-c` is
+# refused rather than waved through.  What no hook can answer for is a session that
+# turns hooks off (`disableAllHooks`); docs/firewall.md says so.
 case "$KIT_CMD
 $(kit_unquoted "$KIT_CMD")" in
   *git*)
-    if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ]; then
+    GCF= GRC=127
+    if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ] \
+       && [ -r "$HOOK_DIR/lib-tokenize.awk" ] && [ -r "$HOOK_DIR/egress-guard.awk" ]; then
       GCF=$(printf '%s\n' "$KIT_CMD" | KIT_GITCFG=1 \
-        awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null) || GCF=
-      case $GCF in
-        GITCFG\ *) kit_deny_gitcfg "${GCF#GITCFG }" ;;
+        awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null)
+      GRC=$?
+    fi
+    if [ "$GRC" -ne 0 ]; then
+      case "$KIT_CMD" in
+        *-c*) kit_deny "This command names git and a -c option, and the guard that decides git -c could not run (its awk files are missing or unreadable, or awk failed). git -c can make any git command run a program, so it is refused until the guard runs. Reinstall the kit's hooks (bash .claude/bin/update.sh) or run the command without -c." ;;
       esac
     fi
+    case $GCF in
+      GITCFG\ *) kit_deny_gitcfg "${GCF#GITCFG }" ;;
+      GITEXEC\ * | GITEXECPATH\ * | GITDESTRUCT\ *)
+        kit_deny "${GCF#* }. Behind a git -c prefix this is denied at every tier, Off included, as it was when every git -c was: a safe value in front does not make it a different command. If the user wants it run, they run it themselves." ;;
+    esac
     ;;
 esac
 
