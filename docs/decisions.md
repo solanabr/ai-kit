@@ -113,6 +113,8 @@ Every copy opens with the same line:
 
 > The user's decisions in force, from this clone's decision record: never contradict one; report a conflict instead
 
+It does not outrank you: your newest explicit instruction beats any entry, and `CLAUDE-solana.md` tells the session to follow it and supersede the entry it overrides.
+
 **The tool-call push is what makes the list live.** A subagent gets the list when it is spawned, but a decision made while it works, in this session or in another worktree, reaches it only at its next tool call. The push is keyed on the agent's `agent_id`, or the session's id for your main session, and on the list's version, with an empty marker directory for each pair under `<record>/seen/`. The marker is claimed before anything is printed, so parallel tool calls push once between them. Injection marks the agent too, so its first tool call does not repeat the list, and markers untouched for a week are removed.
 
 What keeps them cheap and safe:
