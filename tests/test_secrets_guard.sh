@@ -210,6 +210,13 @@ done
 for C in "echo id | bash -s -- arg" "echo id | bash -s arg1 arg2" "echo id | bash -s -e"; do
   assert_eq yes "$(says relaxed "$C" "feeds a program to a shell on stdin")" "-s with no -c keeps the stdin message: $C"
 done
+# After -s, `--` ends the options: a -c behind it is $1, not an option, so this is a
+# stdin program. Still denied at every tier; only the message is at stake.
+for C in "echo id | bash -s -- -c x" "bash -s -- -c 'id'"; do
+  assert_eq yes "$(says relaxed "$C" "feeds a program to a shell on stdin")" "-c after -s -- is a positional, stdin message: $C"
+  assert_eq no  "$(says relaxed "$C" "with -c")" "-c after -s -- is not called a -c: $C"
+  for TIER in off high; do want "$TIER" deny "-s -- -c is still denied" "$C"; done
+done
 
 # A pipeline whose sink is not a shell, and a shell that runs a named script, stay silent.
 for C in "echo hi | tee log" "cat data.json | jq ." "bash setup.sh | tee build.log" \
