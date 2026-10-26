@@ -212,10 +212,11 @@ for c in "git config user.email dev@example.com" "git config --global user.name 
          "git config core.autocrlf false"; do
   assert_eq "no" "$(deny_covers "$c")" "permissions.deny leaves ordinary git config alone: $c"
 done
-# permissions.ask is not a reliable control: verified in-session, `git clean -n` matched an
-# ask rule and ran with no prompt while a deny rule blocked `sudo -n true`, with the sandbox
-# on. So every prompt is a hook returning permissionDecision "ask" (see test_hooks.sh), and
-# Relaxed emits no ask rules at all, which is what keeps it usable headless and in CI.
+# Relaxed emits no ask rules at all: an ask is a hard failure under `claude -p`, and Relaxed
+# is what runs headless and in CI, so every prompt it wants is a hook returning
+# permissionDecision "ask" (see test_hooks.sh), which goes silent with no user to ask. An
+# earlier note here called ask unreliable; FIREWALL-SPEC.md §1.1 corrects it (a
+# content-scoped ask fires). High alone emits two, which test_firewall.sh pins.
 ASK_LEN="$(json_len '["permissions"]["ask"]')"
 if [ "$ASK_LEN" = "0" ]; then
   echo "  PASS: permissions.ask is empty; prompts come from hooks (tier is CI-safe)"
@@ -318,8 +319,8 @@ solana-keygen new -o target/deploy/x-keypair.json --force
 solana-keygen recover --force
 solana-keygen recover -f
 solana-keygen recover ASK --force"
-# permissions.ask is empty at every tier (firewall.sh:1125 — the --force rules were retired
-# into LEGACY_RULE_IDS so Relaxed could stay CI-safe), so ASK_LEN is 0 unconditionally and
+# permissions.ask is empty at every tier below High, and this is Relaxed's file (the --force
+# rules were retired into LEGACY_RULE_IDS so Relaxed could stay CI-safe), so ASK_LEN is 0 and
 # the corpus above used to sit in an unreachable else. The if-branch printed
 #   "no ask rules at this tier; solana-keygen --force is gated by the secrets hook"
 # which is a claim this suite never tested AND is not true: replaying all three shipped
