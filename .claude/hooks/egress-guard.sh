@@ -202,9 +202,13 @@ if [ -n "$PSEG" ] && lacks "$PSEG" '--dry-run'; then
   fi
   # Relaxed asks.  An earlier version of this hook allowed it outright, reasoning that
   # publishing is "a deliberate release step a human triggers" — but the human is not
-  # the one running it here, the agent is, and the spec's tier matrix says ask.  kit_ask
-  # is what makes that safe to ship at the CI tier: it goes silent when there is no
-  # interactive user, so the prompt costs a headless run nothing.
+  # the one running it here, the agent is, and the spec's tier matrix says ask.
+  # Headless, the ask would go silent and the publish would run unprompted, so it takes
+  # the irreversible set's path instead: denied unless CONFIRM_PUBLISH=1 (#307).  The
+  # deny is immediate (a deny stops the whole call, so nothing later can be skipped);
+  # a confirmed run returns here and still reaches the denies below, which is why this
+  # is kit_confirm and not kit_gate.
+  kit_confirm publish "This command $REASON"
   ask_later "This command $REASON Confirm the package, the version and the registry before approving."
 fi
 
