@@ -78,13 +78,29 @@ fi
 # Position-anchored: the verb has to start a statement, optionally behind env
 # assignments and a path prefix.  Matching the verb anywhere in the string is
 # what makes a hook fire on prose about deploying.
-RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|]*)?([;&|)]|$)'
+# A backtick opens a command substitution exactly as `$(` does, so it starts a
+# statement and ends one: `` echo `solana program deploy b.so -um` `` is a deploy.
+RE='(^|[;&|(`]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()`]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|`]*)?([;&|)`]|$)'
 # One write per line.  A match consumes the separator that ends it, so with the
 # statements left on one line a write right after a `;` or `|` had no separator
 # left to start on and was never seen: `deploy -ud a.so; deploy --url <mainnet>
 # b.so` was judged by the devnet half alone.  Breaking the line after every
 # separator first gives each statement its own start.
-SEG=$(printf '%s\n' "$KIT_NORM" | awk '{ gsub(/[;&|]/, "&\n"); print }' | grep -oE "$RE") || SEG=
+#
+# Redirections go first.  Their `&` is not a separator (`2>&1`, `>&2`, `<&0`,
+# `2>&-`, `&>file`, `&>>file`, and `>|` is not a pipe), and read as one the write
+# ended at the redirection: every flag after it was never seen, so `deploy a.so
+# 2>&1 -um` resolved to the default cluster and `deploy a.so -ud 2>&1 --final`
+# passed the irreversible check.  The redirection decides nothing here, so it is
+# removed and the words either side of it stay in the one statement.  `|&` is a
+# real pipe and stays a separator.
+SEG=$(printf '%s\n' "$KIT_NORM" | awk '{
+    gsub(/[0-9]*[<>]&[0-9]*-?/, " ")
+    gsub(/&>>?/, " ")
+    gsub(/>\|/, ">")
+    gsub(/[;&|`]/, "&\n")
+    print
+  }' | grep -oE "$RE") || SEG=
 [ -n "$SEG" ] || exit 0
 
 # ---- irreversible: deny at every tier, no env escape.  The user runs these.
@@ -106,33 +122,43 @@ read_cfg_url() { # read_cfg_url <config.yml> — prints json_rpc_url, or fails
   printf '%s' "$_u"
 }
 
-# resolve <segment> — set CL and SRC for ONE write.  Precedence: command-line
-# flag, then an ANCHOR_PROVIDER_URL assignment in that statement, then -C/--config,
-# then the exported ANCHOR_PROVIDER_URL, then Anchor.toml or `solana config`.
+# resolve <segment> — set CANDS (one raw cluster per line) and SRC for ONE write.
+# Precedence: command-line flags, then an ANCHOR_PROVIDER_URL assignment in that
+# statement, then -C/--config, then the exported ANCHOR_PROVIDER_URL, then
+# Anchor.toml or `solana config`.
 # Per write, not per command: the first --url across the whole command used to
 # label every write in it, so `deploy -ud a.so && deploy -um b.so` was devnet.
+# Every cluster flag in the statement is a candidate, not just the first: which
+# repeat a CLI honours is its parser's business (clap lets the last one win), so
+# `--provider.cluster devnet --provider.cluster mainnet` is judged by the worst.
 SOLANA_CFG_DONE= SOLANA_CFG_CL=
+KIT_LF='
+'
 resolve() {
-  CL= SRC= CFG= ANCHOR_IN_CMD= prev=
+  CL= SRC= CFG= ANCHOR_IN_CMD= FLAGS= prev=
   set -f
   for w in $1; do
     case $prev in
-      --url | -u | --provider.cluster) [ -z "$CL" ] && { CL=$w; SRC='command flag'; } ;;
+      --url | -u | --provider.cluster) FLAGS="$FLAGS$KIT_LF$w" ;;
       -C | --config) [ -z "$CFG" ] && CFG=$w ;;
     esac
     case $w in
-      --url=* | --provider.cluster=*) [ -z "$CL" ] && { CL=${w#*=}; SRC='command flag'; } ;;
+      --url=* | --provider.cluster=*) FLAGS="$FLAGS$KIT_LF${w#*=}" ;;
       --config=*) [ -z "$CFG" ] && CFG=${w#--config=} ;;
       ANCHOR_PROVIDER_URL=*) ANCHOR_IN_CMD=${w#ANCHOR_PROVIDER_URL=} ;;
       # Any other long option. Must precede -u?* or --upgrade-authority reads as
       # `-u pgrade-authority`, which is how the inline hook mislabelled it.
       --*) ;;
-      -u?*) [ -z "$CL" ] && { CL=${w#-u}; SRC='command flag'; } ;;
+      -u?*) FLAGS="$FLAGS$KIT_LF${w#-u}" ;;
       -C?*) [ -z "$CFG" ] && CFG=${w#-C} ;;
     esac
     prev=$w
   done
   set +f
+  if [ -n "$FLAGS" ]; then
+    CANDS=${FLAGS#"$KIT_LF"} SRC='command flag'
+    return
+  fi
 
   if [ -z "$CL" ] && [ -n "$ANCHOR_IN_CMD" ]; then
     CL=$ANCHOR_IN_CMD; SRC=ANCHOR_PROVIDER_URL
@@ -172,10 +198,14 @@ resolve() {
     esac
   fi
   [ -n "$SRC" ] || SRC='an unknown source'
+  CANDS=$CL
+}
 
-  # Normalise for classification only.  Nothing below prints the URL: HOST keeps
-  # scheme, path, query and userinfo out, so an api-key cannot reach the prompt.
-  CL=$(printf '%s' "${CL#=}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9:/._?=&%~-')
+# normalise <raw cluster> — set CL, HOST and HNP for classification only.  Nothing
+# below prints the URL: HOST keeps scheme, path, query and userinfo out, so an
+# api-key cannot reach the prompt.
+normalise() {
+  CL=$(printf '%s' "${1#=}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9:/._?=&%~-')
   HOST=$(printf '%s' "$CL" | sed -e 's#^[a-z][a-z0-9+.-]*://##' -e 's#[/?].*$##' -e 's#^[^@]*@##')
   # HOST with the IPv6 brackets and the :port stripped, for an EXACT local-host test.
   HNP=$(printf '%s' "$HOST" | sed -e 's#^\[##' -e 's#\].*$##' -e 's#:[0-9]*$##')
@@ -243,8 +273,14 @@ WORST=0 WMSG=
 while IFS= read -r s; do
   [ -n "$s" ] || continue
   resolve "$s"
-  classify
-  if [ "$LEVEL" -gt "$WORST" ]; then WORST=$LEVEL WMSG=$MSG; fi
+  # One pass per candidate cluster; an empty CANDS is one pass with no cluster.
+  while IFS= read -r c; do
+    normalise "$c"
+    classify
+    if [ "$LEVEL" -gt "$WORST" ]; then WORST=$LEVEL WMSG=$MSG; fi
+  done <<CANDS
+$CANDS
+CANDS
 done <<EOF
 $SEG
 EOF

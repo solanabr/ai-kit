@@ -202,7 +202,7 @@ want relaxed ask "a devnet write beside a Relaxed-silent local one still asks" \
 assert_eq silent "$(hverdict "$GUARD" relaxed "solana program deploy -ud a.so; solana program deploy -ut b.so")" \
   "[relaxed] headless: two known non-mainnet writes stay quiet"
 # Controls.
-M="$(omutant nosplit '| awk '"'"'{ gsub(/[;&|]/, "&\n"); print }'"'"' ' '')"
+M="$(omutant nosplit 'gsub(/[;&|`]/, "&\n")' 'x = 1')"
 assert_eq silent "$(hverdict "$M/onchain-guard.sh" relaxed "solana program deploy -ud a.so; solana program deploy -um b.so")" \
   "planted failure caught — statements left joined: the write after the ; is never matched"
 rm -rf "$M"
@@ -210,6 +210,112 @@ M="$(omutant firstonly '[ -n "$s" ] || continue' '[ "$WORST" = 0 ] || break')"
 assert_eq silent "$(hverdict "$M/onchain-guard.sh" relaxed "solana program deploy -ud a.so && solana program deploy -um b.so")" \
   "planted failure caught — only the first write judged: the mainnet one beside it goes quiet"
 rm -rf "$M"
+
+# ── redirections, backticks and repeated cluster flags ──────────────────────
+# A redirection's `&` (2>&1, >&2, &>, &>>, <&0, 2>&-) was read as a separator, so the
+# write ended there and every flag after it was lost: the cluster fell back to the
+# project default and --final/--disable slipped past the irreversible check. These run
+# with a devnet default (Anchor.toml and a stub `solana config`), which is what made
+# the mainnet flag after the redirection matter.
+echo "[redirections do not end a write; backticks start one; every cluster flag counts]"
+DEVP="$(mktemp -d "${TMPDIR:-/tmp}/onchain-devnet.XXXXXX")"
+mkdir -p "$DEVP/bin"
+printf '[provider]\ncluster = "devnet"\n' > "$DEVP/Anchor.toml"
+printf '#!/bin/sh\necho "RPC URL: https://api.devnet.solana.com"\n' > "$DEVP/bin/solana"
+chmod +x "$DEVP/bin/solana"
+# dverdict <guard> <tier> <headless 0|1> <command> -> deny | ask | silent, devnet defaults
+dverdict() {
+  local g=$1 pay out
+  [ -f "$g" ] || { echo "missing-guard:$g"; return; }
+  pay="$(python3 -c 'import json,sys;print(json.dumps({"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$4")"
+  out="$(cd "$DEVP" && printf '%s' "$pay" | PATH="$DEVP/bin:$PATH" CLAUDE_PROJECT_DIR="$DEVP" \
+    SOLANA_CONFIG_FILE=/nonexistent KIT_FIREWALL_TIER="$2" KIT_FIREWALL_HEADLESS="$3" sh "$g" 2>/dev/null)"
+  case "$out" in *'"deny"'*) echo deny ;; *'"ask"'*) echo ask ;; *) echo silent ;; esac
+}
+# The premise: with no flag these really are devnet, and a redirection alone is harmless.
+for C in "solana program deploy a.so" "anchor deploy" "solana program deploy -ud a.so 2>&1" "anchor deploy 2>&1"; do
+  assert_eq silent "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless, devnet default: quiet :: $C"
+done
+REDIR_MAIN=(
+  "solana program deploy a.so 2>&1 -um"
+  "anchor deploy 2>&1 --provider.cluster mainnet"
+  "solana program deploy a.so >&2 -um"
+  "solana program deploy a.so 1>&2 --url mainnet-beta"
+  "solana program deploy a.so &> deploy.log -um"
+  "solana program deploy a.so &>> deploy.log -um"
+  "solana program deploy a.so 2>&- -um"
+  "solana program deploy a.so <&0 -um"
+  "solana program deploy a.so 2>&1 --url https://rpc.mycorp.io"
+  "solana program deploy -ud a.so |& solana program deploy -um b.so"
+)
+for C in "${REDIR_MAIN[@]}"; do
+  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: the flag after the redirection is read :: $C"
+  assert_eq deny "$(dverdict "$GUARD" high 1 "$C")" "[high] headless: the flag after the redirection is read :: $C"
+done
+REDIR_IRREV=(
+  "solana program deploy a.so -ud 2>&1 --final"
+  "solana program set-upgrade-authority PID 2>&1 --final"
+  "spl-token authorize MINT mint 2>&1 --disable"
+  "spl-token authorize MINT mint >&2 --disable"
+)
+for C in "${REDIR_IRREV[@]}"; do
+  for T in relaxed high; do
+    assert_eq deny "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] the irreversible flag after a redirection still denies :: $C"
+  done
+done
+M="$(omutant redir 'gsub(/[0-9]*[<>]&[0-9]*-?/, " ")' 'x = 1')"
+assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 "solana program deploy a.so 2>&1 -um")" \
+  "planted failure caught — redirections read as separators again: the mainnet flag is lost"
+rm -rf "$M"
+
+# A backtick substitution runs its command exactly as $( ) does.
+BTICK=(
+  'echo `solana program deploy b.so -um`'
+  'X=`anchor deploy --provider.cluster mainnet`'
+  'echo ok `solana program deploy b.so --url https://rpc.mycorp.io` done'
+)
+for C in "${BTICK[@]}"; do
+  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: a write in backticks is gated :: $C"
+  assert_eq deny "$(dverdict "$GUARD" high 1 "$C")" "[high] headless: a write in backticks is gated :: $C"
+  assert_eq ask "$(dverdict "$GUARD" relaxed 0 "$C")" "[relaxed] interactive: a write in backticks asks :: $C"
+done
+assert_eq deny "$(dverdict "$GUARD" relaxed 0 'echo `solana program deploy b.so --final`')" \
+  "[relaxed] an irreversible write in backticks denies"
+assert_eq silent "$(dverdict "$GUARD" relaxed 0 'echo `solana balance -um`')" \
+  "[relaxed] a read in backticks stays silent"
+M="$(omutant btick 'gsub(/[;&|`]/, "&\n")' 'gsub(/[;&|]/, "&\n")')"
+python3 - "$M/onchain-guard.sh" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+find = "RE='(^|[;&|(`]|"
+assert s.count(find) == 1, "RE prefix not found; update the mutation"
+open(p, "w", encoding="utf-8").write(s.replace(find, "RE='(^|[;&|(]|"))
+PY
+assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 'echo `solana program deploy b.so -um`')" \
+  "planted failure caught — a backtick is no statement start again: the write in it is not seen"
+rm -rf "$M"
+
+# Every cluster flag in a statement counts; clap lets the last repeat win, so the first
+# is not safe to trust.
+REPEAT=(
+  "anchor deploy --provider.cluster devnet --provider.cluster mainnet"
+  "solana program deploy -ud -um p.so"
+  "solana program deploy --url devnet --url=mainnet-beta p.so"
+  "solana program deploy -ud p.so -u https://api.mainnet-beta.solana.com"
+)
+for C in "${REPEAT[@]}"; do
+  assert_eq deny "$(dverdict "$GUARD" high 0 "$C")" "[high] a repeated cluster flag is judged by its worst value :: $C"
+  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: same :: $C"
+done
+assert_eq deny "$(dverdict "$GUARD" relaxed 1 "solana program deploy --url devnet --url https://rpc.mycorp.io p.so")" \
+  "[relaxed] headless: an unidentified repeat beside devnet is denied"
+assert_eq silent "$(dverdict "$GUARD" relaxed 1 "solana program deploy -ud --url https://api.devnet.solana.com p.so")" \
+  "[relaxed] headless: two devnet spellings stay quiet"
+M="$(omutant firstflag 'CANDS=${FLAGS#"$KIT_LF"} SRC='"'"'command flag'"'"'' 'CANDS=$(printf "%s\n" "$FLAGS" | sed -n 2p) SRC='"'"'command flag'"'"'')"
+assert_eq ask "$(dverdict "$M/onchain-guard.sh" high 0 "anchor deploy --provider.cluster devnet --provider.cluster mainnet")" \
+  "planted failure caught — only the first cluster flag read: the mainnet repeat is judged devnet"
+rm -rf "$M"
+rm -rf "$DEVP"
 
 # ── the headless signal: what a hook actually gets ─────────────────────────
 # Claude Code starts each hook as its own session leader with no controlling
