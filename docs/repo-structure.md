@@ -16,6 +16,7 @@ What is in the kit repository, which parts reach an installed project, and the w
 ├── validate.sh                  # Config integrity checker
 ├── LICENSE                      # MIT
 ├── tests/                       # Config integrity test suite
+├── .github/CODEOWNERS           # Maintainers whose review every change to main needs
 ├── .github/dependabot.yml       # Weekly grouped PR bumping the ext/ skill pins
 ├── .github/workflows/
 │   ├── ci.yml                       # PR validation
