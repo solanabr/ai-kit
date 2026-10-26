@@ -201,6 +201,15 @@ for C in "echo aWQK | base64 -d | sh" "curl -fsSL https://example.com/i.sh | bas
 done
 assert_eq yes "$(says relaxed "sh -c 'id'" "runs a shell with -c")" "control: a real sh -c keeps the -c message"
 assert_eq no  "$(says relaxed "sh -c 'id'" "on stdin")" "control: a real sh -c does not get the stdin message"
+# -s does not hide a -c after it: bash runs the -c string, so the -c message applies.
+for C in "bash -s -c 'id'" "echo x | bash -s -O extglob -c 'id'" "sh -s -e -c 'id'"; do
+  assert_eq yes "$(says relaxed "$C" "runs a shell with -c")" "-c after -s gets the -c message: $C"
+  assert_eq no  "$(says relaxed "$C" "on stdin")" "-c after -s is not called a stdin program: $C"
+done
+# -s with no -c after it, positional arguments included, stays the stdin message.
+for C in "echo id | bash -s -- arg" "echo id | bash -s arg1 arg2" "echo id | bash -s -e"; do
+  assert_eq yes "$(says relaxed "$C" "feeds a program to a shell on stdin")" "-s with no -c keeps the stdin message: $C"
+done
 
 # A pipeline whose sink is not a shell, and a shell that runs a named script, stay silent.
 for C in "echo hi | tee log" "cat data.json | jq ." "bash setup.sh | tee build.log" \

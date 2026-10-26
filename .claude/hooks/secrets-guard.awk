@@ -296,17 +296,23 @@ function shellc_hit(T, n,   ci, w, r) {
 # deny names what the command does: `… | base64 -d | sh` has no -c in it.  The option
 # walk and the -c, -s and stdin tests are lib-tokenize.awk's, so this agrees with the
 # heredoc reader.
-function shellc_shell(T, n, ci,   w, i, t, r) {
-  w = base(T[ci])
+#
+# -s does not end the walk: `bash -s -c 'id'` runs the -c string, so a -c anywhere in
+# the options wins and the stdin verdict stands only when none follows.  Where the
+# walk used to return at -s it now records it and keeps reading options; the first
+# operand after -s is a positional parameter, not a script, so it ends the walk as stdin.
+function shellc_shell(T, n, ci,   w, i, t, r, s) {
+  w = base(T[ci]); s = 0
   for (i = ci + 1; i <= n; i++) {
     t = T[i]
     if ((r = kit_redir(T, n, i)) > 0) { i += r - 1; continue }   # `bash < f`: reads stdin
     if (hd_inline_flag(w, t)) return 1                            # -c, -lc, -ic …
-    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) return 2                   # -s reads stdin
+    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) { s = 1; continue }        # -s reads stdin, unless a -c follows
     if (t ~ /^[-+]/) { if (hd_optarg(w, 1, t)) i++; continue }   # a separate-word option takes a value
+    if (s) return 2                                               # after -s an operand is an argument
     return 0                                                      # a script path: its file, not stdin
   }
-  return 2                                                        # no script arg: reads stdin
+  return 2                                                        # no script arg, or -s: reads stdin
 }
 
 BEGIN { VAULTRE = ENVIRON["KIT_VAULT_RE"]; glob_witnesses() }
