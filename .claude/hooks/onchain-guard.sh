@@ -14,8 +14,9 @@
 #      machine's default cluster instead of the one being deployed to.
 #   3. It is headless-aware.  The old hook returned `ask` for every on-chain
 #      write on every cluster, which is an unconditional failure under -p.
-#      Now: non-mainnet asks go silent with no interactive user, and mainnet
-#      denies instead of slipping through.
+#      Now: devnet, testnet and localnet asks go silent with no interactive
+#      user, and mainnet — or a cluster the hook cannot identify — denies
+#      instead of slipping through.
 #
 # RPC URLs never reach the prompt text — only a cluster name, or a bare host for
 # an endpoint that cannot be classified.  Private RPC URLs carry API keys.
@@ -177,6 +178,40 @@ is_localnet() {
   return 1
 }
 
+# is_devnet / is_testnet — EXACT monikers and hosts, for the same reason as
+# is_localnet.  The old `*devnet*` glob read any URL that merely contained the word
+# as devnet, `https://solana-rpc.publicnode.com/?devnet` (a mainnet endpoint) among
+# them, and devnet asks go silent headless (#307).  A devnet provider not listed here
+# falls to the unidentified branch below: still an ask interactively, and denied
+# headless unless CONFIRM_MAINNET=1.  The monikers are the solana CLI's (`-ud`,
+# `devnet`) and Anchor.toml's `cluster = "devnet"`.
+is_devnet() {
+  case $CL in d | devnet) return 0 ;; esac
+  case $HNP in api.devnet.solana.com | devnet.helius-rpc.com) return 0 ;; esac
+  return 1
+}
+is_testnet() {
+  case $CL in t | testnet) return 0 ;; esac
+  case $HNP in api.testnet.solana.com) return 0 ;; esac
+  return 1
+}
+
+# unidentified <reason> — a write to a cluster none of the tests above could name.
+# Interactive, an ask, as before.  Headless, the ask would go silent and the write
+# would run on what may well be mainnet, so it takes mainnet's own path: denied at
+# High, and below High denied unless CONFIRM_MAINNET=1 (#307).
+unidentified() {
+  if kit_is_headless; then
+    if [ "$TIER" = "high" ]; then
+      kit_deny "$1 At the High firewall tier a write to a cluster that may be mainnet is denied with no interactive user; drop to Medium or run it yourself."
+    fi
+    kit_gate mainnet "$1"
+  fi
+  kit_ask "$1"
+}
+
+# `*mainnet*` stays a substring test on purpose: it errs towards the strict branch,
+# so a URL that only mentions mainnet is gated as mainnet, never waved through.
 case $CL in
   m | *mainnet*)
     R="MAINNET (from $SRC): spends real SOL or changes a live program. Approve only if the user asked for mainnet."
@@ -185,20 +220,20 @@ case $CL in
     fi
     kit_gate mainnet "$R"
     ;;
-  d | *devnet*) kit_ask "On-chain write to devnet (from $SRC)." ;;
-  t | *testnet*) kit_ask "On-chain write to testnet (from $SRC)." ;;
-  *)
-    if is_localnet; then
-      # Localnet is silent at Relaxed — a local validator is day-to-day work and
-      # Relaxed must not get in the way.  Medium and High still ask (an interactive
-      # prompt, ignored headless), so the exact-host fix is what changes here.
-      [ "$TIER" = "relaxed" ] && exit 0
-      kit_ask "On-chain write to localnet (from $SRC)."
-    elif [ -z "$CL" ]; then
-      kit_ask "On-chain write to an unknown cluster (no --url, -C config, ANCHOR_PROVIDER_URL, Anchor.toml or solana config found). Check the target before approving."
-    else
-      kit_ask "On-chain write to the RPC host ${HOST:-unknown} (from $SRC). That host is not a public Solana cluster name, so it may well be mainnet — check before approving."
-    fi
-    ;;
 esac
+if is_devnet; then
+  kit_ask "On-chain write to devnet (from $SRC)."
+elif is_testnet; then
+  kit_ask "On-chain write to testnet (from $SRC)."
+elif is_localnet; then
+  # Localnet is silent at Relaxed — a local validator is day-to-day work and
+  # Relaxed must not get in the way.  Medium and High still ask (an interactive
+  # prompt, ignored headless), so the exact-host fix is what changes here.
+  [ "$TIER" = "relaxed" ] && exit 0
+  kit_ask "On-chain write to localnet (from $SRC)."
+elif [ -z "$CL" ]; then
+  unidentified "On-chain write to an unknown cluster (no --url, -C config, ANCHOR_PROVIDER_URL, Anchor.toml or solana config found). Check the target before approving."
+else
+  unidentified "On-chain write to the RPC host ${HOST:-unknown} (from $SRC). That host is not a known Solana cluster endpoint, so it may well be mainnet — check before approving."
+fi
 exit 0

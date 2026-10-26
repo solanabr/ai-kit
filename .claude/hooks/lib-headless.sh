@@ -21,8 +21,10 @@
 # Environment knobs (all optional):
 #   KIT_FIREWALL_TIER      off|relaxed|medium|high   overrides .claude/security.json
 #   KIT_FIREWALL_HEADLESS  1 force headless, 0 force interactive (tests use 0)
-#   CONFIRM_MAINNET=1      allow a mainnet write to proceed headless
-#   CONFIRM_PUBLISH=1      allow npm/cargo publish to proceed headless
+#   CONFIRM_MAINNET=1      allow a mainnet write, or one to a cluster the on-chain
+#                          guard cannot identify, to proceed headless (below High)
+#   CONFIRM_PUBLISH=1      allow npm/yarn/pnpm/bun/cargo publish to proceed headless
+#                          (Relaxed; Medium and High deny publishing outright)
 
 # ---------------------------------------------------------------- JSON in
 
@@ -467,19 +469,28 @@ kit_deny_deep() {
 # `irreversible` has no env escape by design: --final, program-v4 finalize and
 # authorize --disable are deny at every tier, and the user runs them by hand.
 kit_gate() {
+  kit_confirm "$1" "$2"
+  kit_is_headless && exit 0
+  _kit_emit ask "$2"
+  exit 0
+}
+
+# kit_confirm <mainnet|publish> <reason> — kit_gate's headless half, for a caller
+# that must keep reading after it.  Headless without the matching CONFIRM_* var:
+# deny.  Otherwise return, deciding nothing.  egress-guard.sh needs this rather than
+# kit_gate: its asks wait until every deny in the command has run (ask_later), and
+# kit_gate's confirmed exit 0 would end the hook before those denies were read.
+kit_confirm() {
   case $1 in
     mainnet) _c=${CONFIRM_MAINNET-}; _v=CONFIRM_MAINNET ;;
     publish) _c=${CONFIRM_PUBLISH-}; _v=CONFIRM_PUBLISH ;;
     *) kit_deny "$2" ;;
   esac
-  if kit_is_headless; then
-    case $_c in
-      1 | true | yes) exit 0 ;;
-      *) kit_deny "$2 No interactive user to confirm this; re-run with $_v=1 if it is intended." ;;
-    esac
-  fi
-  _kit_emit ask "$2"
-  exit 0
+  kit_is_headless || return 0
+  case $_c in
+    1 | true | yes) return 0 ;;
+  esac
+  kit_deny "$2 No interactive user to confirm this; re-run with $_v=1 if it is intended."
 }
 
 # ---------------------------------------------------------------- shared regexes
