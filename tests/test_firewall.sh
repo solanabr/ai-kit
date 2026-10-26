@@ -425,7 +425,8 @@ def matches(rule, cmd):
 
 def probes(pat):
     stars = ustars(pat)
-    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$", pat[:i])}
+    # `-C <dir>` and git's `-c <name>=<value>` both require their operand.
+    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$|(?:^|\s)git -c\s*$", pat[:i])}
     for empty in itertools.product((False, True), repeat=len(stars)):
         combo = dict(zip(stars, empty))
         if not any(empty) or any(combo[i] for i in mand):
@@ -441,9 +442,10 @@ def probes(pat):
 if sys.argv[1] == "--match":
     print("yes" if matches(sys.argv[2], sys.argv[3]) else "no")
     sys.exit(0)
-if sys.argv[1] == "--deny-matches":
-    deny = (json.load(open(sys.argv[2])).get("permissions") or {}).get("deny") or []
-    hit = [r for r in deny if r.startswith("Bash(") and r.endswith(")") and matches(r[5:-1], sys.argv[3])]
+if sys.argv[1] in ("--deny-matches", "--allow-matches"):
+    key = sys.argv[1][2:-8]
+    rules = (json.load(open(sys.argv[2])).get("permissions") or {}).get(key) or []
+    hit = [r for r in rules if r.startswith("Bash(") and r.endswith(")") and matches(r[5:-1], sys.argv[3])]
     print(" ".join(hit) or "none")
     sys.exit(0)
 if sys.argv[1] == "--documented":
@@ -910,13 +912,13 @@ fi
 DENY_LIVE="$(python3 -c "
 import json
 print('\n'.join((json.load(open('$WORK/gen.relaxed.json')).get('permissions') or {}).get('deny') or []))" 2>/dev/null)"
-for r in "Bash(claude *--dangerously-skip-permissions*)" "Bash(env *)" "Bash(git -c *)" "Bash(git -C * clean *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
+for r in "Bash(claude *--dangerously-skip-permissions*)" "Bash(env *)" "Bash(git -c * clean *)" "Bash(git -C * clean *)" "Bash(security *)" "Edit(/.safe-ai-skill/**)" \
          "Bash(git fetch *--upload-pack*)" "Bash(git fetch --upload-pack*)" \
          "Bash(git push *--receive-pack*)" "Bash(git push --receive-pack*)" \
          "Bash(git push *--exec*)" "Bash(git push --exec*)" \
          "Bash(gh issue delete *)" "Bash(gh repo delete *)" "Bash(gh repo delete)" \
          "Bash(git config *alias.*)" "Bash(git config alias.*)" \
-         "Bash(git -C * -c *)" "Bash(git -C * fetch *--upload-pack*)" "Bash(git -C * --exec-path=*)" \
+         "Bash(git -c * config *alias.*)" "Bash(git -C * fetch *--upload-pack*)" "Bash(git -C * --exec-path=*)" \
          "Bash(git --config-env*)" "Bash(git reflog delete *)" "Bash(git reflog drop *)" \
          "Bash(git --exec-path=*)"; do
   TOTAL=$((TOTAL + 1))
@@ -929,24 +931,25 @@ for r in "Bash(claude *--dangerously-skip-permissions*)" "Bash(env *)" "Bash(git
   fi
 done
 
-# git -c stays denied at EVERY tier (arbitrary code execution via core.fsmonitor). git -C
-# is no longer a blanket deny -- it only changes directory, so `git -C <dir> X` is as safe
-# as `cd <dir> && git X`, which is allowed. The blanket was there because a `-C <dir>`
-# prefix sits where every destructive-git glob expects `git` and none match; DENY_GIT_DASH_C
-# restores exactly that coverage with per-subcommand `-C` twins. Asserted per tier, in both
-# directions: the destructive `-C` forms are denied and the ordinary ones are not, so neither
-# a reader that drops the twins nor one that re-adds the blanket (which would re-deny
-# `git -C . status`) passes. The red team verified 26/26 destructive vs 0/17 ordinary.
-echo "[git -c tier-invariant; git -C narrowed to destructive twins]"
+# git -C is no longer a blanket deny -- it only changes directory, so `git -C <dir> X` is
+# as safe as `cd <dir> && git X`, which is allowed. The blanket was there because a `-C
+# <dir>` prefix sits where every destructive-git glob expects `git` and none match;
+# DENY_GIT_DASH_C restores exactly that coverage with per-subcommand `-C` twins. Asserted
+# per tier, in both directions: the destructive `-C` forms are denied and the ordinary ones
+# are not, so neither a reader that drops the twins nor one that re-adds the blanket (which
+# would re-deny `git -C . status`) passes. The red team verified 26/26 destructive vs 0/17
+# ordinary. `git -C . -c <value>` left this list with `Bash(git -c *)` in rule set 12: it
+# is egress-guard's GITCFG now (tests/test_git_guard.sh).
+echo "[git -C narrowed to destructive twins]"
 for t in $TIERS; do
   assert_eq "yes" "$(python3 -c "
 import json
 deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
-print('yes' if 'Bash(git -c *)' in deny and 'Bash(git -C *)' not in deny else 'no')" 2>/dev/null)" \
-    "$t denies git -c and carries no blanket git -C"
+print('yes' if 'Bash(git -C *)' not in deny else 'no')" 2>/dev/null)" \
+    "$t carries no blanket git -C"
   for cmd in "git -C . clean -fdx" "git -C /tmp/x reset --hard HEAD~3" "git -C . restore ." \
              "git -C . reflog expire --expire=now --all" "git -C . push --mirror" \
-             "git -C . fetch --upload-pack=/tmp/x.sh ." "git -C . -c core.fsmonitor=/tmp/x.sh status" \
+             "git -C . fetch --upload-pack=/tmp/x.sh ." \
              "git -C . config --global alias.z !x"; do
     assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
       "$t denies the destructive \`$cmd\`"
@@ -959,11 +962,64 @@ print('yes' if 'Bash(git -c *)' in deny and 'Bash(git -C *)' not in deny else 'n
   done
 done
 
+# git -c, rule set 12 (#311). `Bash(git -c *)` is gone at every tier, because a deny beats
+# every allow and hook and no glob can let auditor-skill's `git -c core.fsmonitor=false
+# <subcommand>` through while refusing `-c core.fsmonitor=/tmp/x.sh`; egress-guard's GITCFG
+# refuses every other value (tests/test_git_guard.sh). The rules' half is that the prefix
+# hides no subcommand: every destructive rule has a `git -c *` twin, and every git allow
+# rule a twin behind each of the two safe values and no other. Asserted per tier in all
+# three directions — destructive behind the prefix denied, ordinary behind it allowed, a
+# subcommand the bare form prompts for still prompting, and an unsafe value never allowed.
+echo "[git -c: the safe prefix keeps each subcommand's verdict]"
+for t in $TIERS; do
+  assert_eq "none" "$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print(' '.join(r for r in ('Bash(git -c *)', 'Bash(git -C * -c *)', 'Bash(git -C * -c)') if r in deny) or 'none')" 2>/dev/null)" \
+    "$t carries no blanket git -c deny, which no allow could carve the safe values out of"
+  for cmd in "git -c core.fsmonitor=false clean -fdx" "git -c core.fsmonitor=false clean" \
+             "git -c core.hooksPath=/dev/null reset --hard HEAD~3" "git -c core.fsmonitor=false restore ." \
+             "git -c core.fsmonitor=false checkout -- ." "git -c core.fsmonitor=false reflog expire --expire=now --all" \
+             "git -c core.fsmonitor=false push --mirror origin" "git -c core.fsmonitor=false gc --prune=now" \
+             "git -c core.fsmonitor=false fetch --upload-pack=/tmp/x.sh ." \
+             "git -c core.fsmonitor=false config --global alias.z !x" \
+             "git -c core.fsmonitor=false --config-env=core.pager=X log" \
+             "git -c core.fsmonitor=false --exec-path=/tmp/x ls-remote origin" \
+             "git -c core.fsmonitor=false -C . clean -fdx"; do
+    assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
+      "$t denies \`$cmd\`, as it denies the subcommand bare"
+  done
+  for cmd in "git -c core.fsmonitor=false status" "git -c core.fsmonitor=false log --oneline -8" \
+             "git -c core.hooksPath=/dev/null diff --stat" "git -c core.fsmonitor=false show HEAD" \
+             "git -c core.hooksPath=/dev/null commit -m fix" "git -c core.fsmonitor=false blame src/lib.rs"; do
+    assert_eq "none" "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" \
+      "$t leaves \`$cmd\` undenied"
+    assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --allow-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
+      "$t allows \`$cmd\`, as it allows the subcommand bare"
+  done
+  for cmd in "git -c core.fsmonitor=false reset --soft HEAD~1" "git -c core.fsmonitor=false rev-parse HEAD" \
+             "git -c core.fsmonitor=true status" "git -c core.fsmonitor=/tmp/x status" \
+             "git -c core.hooksPath=.git/hooks status" "git -c core.fsmonitor=false -c core.pager=x status" \
+             "git -c core.pager=x status"; do
+    assert_eq "none" "$(python3 "$WORK/gap_probe.py" --allow-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" \
+      "$t pre-approves nothing in \`$cmd\`"
+  done
+done
+# Planted: the one-rule shape an allow twin could have taken would pre-approve a
+# subcommand the bare form prompts for, and the old blanket deny would refuse the safe
+# prefix outright.
+assert_eq "yes" "$(python3 "$WORK/gap_probe.py" --match "git -c core.fsmonitor=false *" \
+  "git -c core.fsmonitor=false reset --soft HEAD~1" 2>&1)" \
+  "planted: Bash(git -c core.fsmonitor=false *) would pre-approve a reset the bare form prompts for"
+assert_eq "yes" "$(python3 "$WORK/gap_probe.py" --match "git -c *" \
+  "git -c core.fsmonitor=false status" 2>&1)" \
+  "planted: the old Bash(git -c *) denies auditor-skill's safe prefix"
+
 # git --config-env is git -c with the value read from an environment variable, and the
 # reflog's delete and drop take away the same record `reflog expire` does. All three are
 # denied at every tier, like the rules they sit beside. The shape of the --config-env rule
 # is the point worth pinning: its `*` touches the option name, so it may be empty and
-# matches `=` as readily as a space. A ` *` — the shape `git -c *` has — requires the
+# matches `=` as readily as a space. A ` *` — the shape `git -c *` had — requires the
 # space and leaves the `=` spelling open, which the planted check proves.
 echo "[git --config-env and reflog delete/drop]"
 for t in $TIERS; do
