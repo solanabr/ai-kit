@@ -327,7 +327,7 @@ function gw_opaque(T, i) {
 # or `--config-env` after another git-level option, else "") and GW_CFGHOW
 # (what stood in front of that option, "" for nothing).  GW_CFG is set even
 # when no subcommand follows.  All the git passes below run off this one walk.
-function git_walk(T, n, Q,   i, o, k, j, w, safe) {
+function git_walk(T, n, Q,   i, o, k, j, w, safe, hasc, r) {
   GW_SUB = ""; GW_I = 0; GW_PREFIXED = 0; GW_CFG = ""; GW_CFGHOW = ""; GW_EXECPATH = ""; GW_HOW = ""
   GW_SAFE = 0; GW_OPAQUE = ""; GW_OPAQUEAT = ""
   # cmdword_x's fourth argument skips a wrapper's positional operand, as cmdword
@@ -348,9 +348,24 @@ function git_walk(T, n, Q,   i, o, k, j, w, safe) {
   if (GW_HOW == "" && T[CWI] != "git") GW_HOW = "with git named by its path"
   if (GW_HOW == "" && CWI < n && Q[CWI + 1]) GW_HOW = "with its first option quoted"
   if (GW_HOW != "") GW_PREFIXED = 1
+  # hasc — a `-c` anywhere in the statement.  Then every word from git up to and
+  # including the subcommand has to be one bash passes through unchanged, BEFORE a
+  # safe `-c` as much as after it: `git -C $X -c core.fsmonitor=false zz` with
+  # X='. -c alias.zz=!cmd' word-splits into a `-c` the walk never sees, and so does
+  # `git -C {.,-c,alias.zz=!cmd} …`.  The safe value is the only `-c` this pass
+  # lets through, and it is only safe if nothing around it is rewritten.
+  # "A `-c`" is read broadly: at a word's start or after any non-word character,
+  # so `{.,-c,…}`, `$'-c'` and `-c$IFS…` count, and `--cached` does not.
+  hasc = 0
+  for (j = CWI + 1; j <= n && !hasc; j++) if (unmark(T[j]) ~ /(^|[^A-Za-z0-9_-])-c/) hasc = 1
   i = CWI + 1; k = (GW_HOW != "")
-  while (i <= n && substr(T[i], 1, 1) == "-" && T[i] != "-" && T[i] != "--") {
-    if (GW_SAFE && !gw_literal(T, Q, i)) gw_opaque(T, i)
+  while (i <= n) {
+    # A redirection is not an argument and can sit among git's options:
+    # `git 2>/dev/null -c alias.zz='!cmd' zz` runs the alias.  Skip it and its
+    # target (kit_redir counts both: `2>&1`, `&>f`, `<&3`, `> f`), as bash does.
+    if ((r = kit_redir(T, n, i)) > 0) { i += r; continue }
+    if (!(substr(T[i], 1, 1) == "-" && T[i] != "-" && T[i] != "--")) break
+    if (hasc && !gw_literal(T, Q, i)) gw_opaque(T, i)
     o = T[i]; sub(/=.*$/, "", o)
     if (T[i] ~ /^--exec-path=/ && GW_EXECPATH == "") GW_EXECPATH = T[i]
     # git prints and exits on these — help, the version, a path or command-list
@@ -371,17 +386,17 @@ function git_walk(T, n, Q,   i, o, k, j, w, safe) {
     if (k > 0 && GW_CFG == "" && o == "--config-env") { GW_CFG = o; GW_CFGHOW = GW_HOW }
     if (git_global_operand(o) && T[i] !~ /=/) {
       i++
-      # An operand after the safe prefix is read the same way: `-C {.,-c}` hands
-      # git a `-c`.  The safe value itself was compared exactly by gcfg_safe.
-      if (GW_SAFE && !safe && i <= n && !gw_literal(T, Q, i)) gw_opaque(T, i)
+      # An operand is read the same way: `-C {.,-c}` hands git a `-c`.  The safe
+      # value itself was compared exactly by gcfg_safe.
+      if (hasc && !safe && i <= n && !gw_literal(T, Q, i)) gw_opaque(T, i)
     }
     if (safe) GW_SAFE = 1
     i++; k++
     GW_PREFIXED = 1
     if (GW_HOW == "") GW_HOW = "behind a git-level option"
   }
-  if (GW_SAFE && i > n) gw_opaque(T, 0)
-  if (GW_SAFE && i <= n && !gw_literal(T, Q, i)) gw_opaque(T, i)
+  if (hasc && i > n) gw_opaque(T, 0)
+  if (hasc && i <= n && !gw_literal(T, Q, i)) gw_opaque(T, i)
   if (i > n) return 0
   GW_SUB = T[i]
   GW_I = i + 1
@@ -659,10 +674,35 @@ function gcfg_scan(stage,   n, T, Q, how) {
   return "sets git config for this one command with " GW_CFG (how == "" ? "" : " " how) ", where a key such as core.fsmonitor, core.pager or alias.* names a program git runs"
 }
 
+# gcfg_rawscan — the part of the `-c` gate that cannot be read per stage.
+# split_cmd ends a stage at `$(`, `(`, `{` and `}`, so in `git -C $(echo .) -c
+# core.fsmonitor=false zz` and `git -C {.,-c,alias.zz=!cmd} zz` the git stage the
+# walk sees is `git -C` alone, while bash splices the substitution's output or the
+# brace's words into git's own arguments — a `-c` the walk never meets.  So on the
+# raw text, split only at `;`, `&`, `|` and newlines: a piece naming git and a
+# `-c` (quotes and backslashes removed, so `"-"c` and `-\c` count) that also holds
+# a command or process substitution, a backtick or a brace expansion is refused.
+# Coarse on purpose — `git -c core.fsmonitor=false commit -m "$(cat msg)"` is
+# refused too — because what such a piece hands git is decided after this hook
+# has run.
+function gcfg_rawscan(s,   np, P, p, u) {
+  np = split(s, P, /;|&|\||\n/)
+  for (p = 1; p <= np; p++) {
+    u = P[p]; gsub(/["'\\]/, "", u)
+    if (u !~ /(^|[^A-Za-z0-9_.-])git([ \t]|$)/) continue
+    if (u !~ /(^|[^A-Za-z0-9_-])-c/) continue
+    if (P[p] ~ /\$\(|`|<\(|>\(|\{[^ \t{}]*(,|\.\.)[^ \t{}]*\}/)
+      return "names git and a -c, and also holds a command substitution, a backtick, a process substitution or a brace expansion, whose words bash splices into git's arguments after this hook has read them"
+  }
+  return ""
+}
+
 # gitcfg_main — GITCFG alone, for egress-guard.sh's run ahead of the Off
 # early-exit.  The text is read as pass 0 reads it: heredoc bodies reduced to
 # what runs, a code string's statements added, wrappers unwrapped.
 function gitcfg_main(   ctext, cn, CS, cn0, q, cstmt, cg0, cg, CG, g, why) {
+  why = gcfg_rawscan(hd_strip(kit_shell_text(raw, 0), 0))
+  if (why != "") { print "GITCFG " why; exit }
   ctext = split_cmd(hd_strip(kit_shell_text(raw, 0), 0))
   cn = split(ctext, CS, /\001/)
   cn0 = cn

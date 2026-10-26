@@ -553,6 +553,44 @@ git -c core.fsmonitor=false
 CASES
 done
 
+# Second re-review of #318, each confirmed against git 2.50 with an injected alias:
+# a redirection among git's options ended the walk before the `-c`, and words BEFORE
+# the safe `-c` were never held to being literal, so a word split, a brace or a
+# substitution there spliced in a `-c` the walk never met.
+echo ""
+echo "[GITCFG: redirections among git's options, and rewritten words before the safe -c]"
+for t in off high; do
+  while IFS= read -r c; do
+    [ -n "$c" ] && expect $t DENY "must deny: $c" "$c"
+  done <<'CASES'
+git 2>/dev/null -c alias.zz='!cmd' zz
+git >/dev/null -c alias.zz='!cmd' zz
+git </dev/null -c alias.zz='!cmd' zz
+git -C . 2>&1 -c alias.zz='!cmd' zz
+git 2>&1 -c core.fsmonitor=/tmp/x.sh status
+git &>/dev/null -c alias.zz='!cmd' zz
+git <&0 -c alias.zz='!cmd' zz
+git 2> /dev/null -c alias.zz='!cmd' zz
+git -C $X -c core.fsmonitor=false zz
+git -C {.,-c,alias.zz=!cmd} -c core.fsmonitor=false zz
+git -C {.,-c,alias.zz=!cmd} zz
+git -C $(echo .) -c core.fsmonitor=false zz
+git -C `echo .` -c core.fsmonitor=false zz
+git "$D" -c core.fsmonitor=false log
+git "-"c alias.zz='!cmd' zz
+git -\c alias.zz='!cmd' zz
+CASES
+  expect $t PASS "a redirection before a safe -c"     "git 2>/dev/null -c core.fsmonitor=false status"
+  expect $t PASS "-C <dir> and a redirection before a safe -c" \
+    "git -C /tmp/repo 2>/dev/null -c core.fsmonitor=false log --oneline"
+  expect $t PASS "git log -c, the combined-diff flag" "git log -c"
+  expect $t PASS "--cached is not a -c"               "git diff --cached"
+  expect $t PASS "a quoted -C with no -c anywhere"    "git -C \"\$d\" status"
+  expect $t PASS "a substitution and grep -c in other statements" \
+    "x=\$(git rev-parse HEAD); grep -c foo bar"
+  expect $t PASS "grep -c across a pipe"              "git log | grep -c foo"
+done
+
 echo ""
 echo "[the two options named as data: a message, a pattern, an echo]"
 expect relaxed PASS "in a commit message"          "git commit -m \"block git --config-env and git -c\""
@@ -1049,7 +1087,12 @@ flips "...while the bare form still fires, so only the reserved-word skip broke"
 M="$(mutate_lib 'if (c == "\n") continue' 'if (0) continue')"
 mutate_file "$M/.claude/hooks/lib-tokenize.awk" 'if (c == "\"") out = out "\005"; else if (c != "\n") out = out c' 'if (c == "\"") out = out "\005"; else out = out c'
 mutate_file "$M/.claude/hooks/lib-tokenize.awk" 'if (!kw && index(raw, "\\\n") == 0) return raw' 'return raw'
-for c in "git -P $BS${NL}-c core.fsmonitor=/tmp/x.sh status" "git --no-pager $BS${NL}clean -fdx" \
+# (`git -P \<newline>-c core.fsmonitor=/tmp/x.sh status` left this list in #318: with
+# the lines unjoined, the walk's literal-word rule refuses the `\<newline>-c` word on
+# its own, so it no longer isolates the continuation readers.)
+flips "...the -c continuation is refused a third way, as a non-literal word" \
+  "$M" "git -P $BS${NL}-c core.fsmonitor=/tmp/x.sh status" DENY DENY
+for c in "git --no-pager $BS${NL}clean -fdx" \
          "git config $BS${NL}core.hooksPath .evil" "git config core.hooks$BS${NL}Path .evil" \
          "git config \"core.hooks$BS${NL}Path\" .evil" "nice $BS${NL}-n 5 git --no-pager clean -fdx" \
          "bash $BS${NL}<<EOF${NL}git -P clean -fdx${NL}EOF"; do
@@ -1234,11 +1277,25 @@ M="$(mutate 'return (!Q[i] && T[i] ~' 'return 1 || (!Q[i] && T[i] ~')"
 flips_at off "the literal-word check removed, so a glob hands git a second -c" \
   "$M" "git -c core.fsmonitor=false -[c] core.pager=/tmp/x log" DENY PASS
 flips_at high "...and so does \$'-c'" "$M" "git -c core.fsmonitor=false \$'-c' core.pager=/tmp/x log" DENY PASS
-M="$(mutate 'if (GW_SAFE && i > n) gw_opaque(T, 0)' 'if (0) gw_opaque(T, 0)')"
+M="$(mutate 'if (hasc && i > n) gw_opaque(T, 0)' 'if (0) gw_opaque(T, 0)')"
 # (The `$(…)` and brace forms are caught by the literal check as well; a bare prefix is
 # the one only this line decides.)
 flips_at off "a prefix with no readable subcommand allowed again" \
   "$M" "git -c core.fsmonitor=false" DENY PASS
+M="$(mutate 'if ((r = kit_redir(T, n, i)) > 0) { i += r; continue }' 'if (0) { i += r; continue }')"
+# With the skip gone a redirection before `-c` ends the walk, and the literal-word rule
+# refuses it in its place (`>` is not a plain word), so the unsafe form stays denied
+# either way; what flips is the safe form, which the skip is what lets through.
+flips_at off "redirections no longer skipped, so a redirection before a safe -c is refused" \
+  "$M" "git 2>/dev/null -c core.fsmonitor=false status" PASS DENY
+flips_at off "...while the unsafe form stays denied, by the literal-word rule" \
+  "$M" "git 2>/dev/null -c alias.zz='!cmd' zz" DENY DENY
+M="$(mutate 'if (hasc && !gw_literal(T, Q, i)) gw_opaque(T, i)' 'if (GW_SAFE && !gw_literal(T, Q, i)) gw_opaque(T, i)')"
+flips_at high "options before the safe -c no longer held to being literal" \
+  "$M" "git -[P] -c core.fsmonitor=false zz" DENY PASS
+M="$(mutate 'why = gcfg_rawscan(hd_strip(kit_shell_text(raw, 0), 0))' 'why = ""')"
+flips_at off "the raw-text scan removed, so a brace splices a -c in ahead of the stage split" \
+  "$M" "git -C {.,-c,alias.zz=!cmd} zz" DENY PASS
 M="$(mutate 'if (!GW_SAFE) continue' 'continue')"
 flips_at off "the subcommand passes no longer run ahead of Off, so the prefix hides clean there" \
   "$M" "git -c core.fsmonitor=false -C . clean -fdx" DENY PASS
@@ -1250,14 +1307,18 @@ flips_at off "the subcommand passes no longer run ahead of Off, so the prefix hi
 echo ""
 echo "[GITCFG fails closed: awk files missing, unreadable or broken]"
 closed() { # closed <fixture> <label>
-  local t
+  local t c
   for t in off high; do
-    TOTAL=$((TOTAL + 1))
-    if [ "$(ask_in "$1" "$t" "git -c core.fsmonitor=false status")" = DENY ]; then
-      echo "  PASS: [$t] $2: git with a -c is refused"; PASS=$((PASS + 1))
-    else
-      echo "  FAIL: [$t] $2: git with a -c got through"; FAIL=$((FAIL + 1))
-    fi
+    # The -c read with quotes and backslashes removed as well.
+    for c in "git -c core.fsmonitor=false status" "git \"-\"c alias.zz='!cmd' zz" \
+             "git -\\c alias.zz='!cmd' zz"; do
+      TOTAL=$((TOTAL + 1))
+      if [ "$(ask_in "$1" "$t" "$c")" = DENY ]; then
+        echo "  PASS: [$t] $2: refused \`$c\`"; PASS=$((PASS + 1))
+      else
+        echo "  FAIL: [$t] $2: \`$c\` got through"; FAIL=$((FAIL + 1))
+      fi
+    done
   done
   TOTAL=$((TOTAL + 1))
   if [ "$(ask_in "$1" off "git status --short")" = PASS ]; then

@@ -118,7 +118,9 @@ $(kit_unquoted "$KIT_CMD")" in
       GRC=$?
     fi
     if [ "$GRC" -ne 0 ]; then
-      case "$KIT_CMD" in
+      # Quotes and backslashes removed as well: `git "-"c …` and `git -\c …` are -c.
+      case "$KIT_CMD
+$(kit_unquoted "$KIT_CMD")" in
         *-c*) kit_deny "This command names git and a -c option, and the guard that decides git -c could not run (its awk files are missing or unreadable, or awk failed). git -c can make any git command run a program, so it is refused until the guard runs. Reinstall the kit's hooks (bash .claude/bin/update.sh) or run the command without -c." ;;
       esac
     fi
