@@ -291,20 +291,22 @@ function shellc_hit(T, n,   ci, w, r) {
   }
   return 0
 }
-# shellc_shell — the shell at T[ci] runs an un-inspectable program: 1 for an inline -c
-# or a program read from stdin, 0 for a script path.  The option walk and the -c, -s and
-# stdin tests are lib-tokenize.awk's, so this agrees with the heredoc reader.
+# shellc_shell — the shell at T[ci] runs an un-inspectable program: 1 for an inline -c,
+# 2 for a program read from stdin, 0 for a script path.  The two are told apart so the
+# deny names what the command does: `… | base64 -d | sh` has no -c in it.  The option
+# walk and the -c, -s and stdin tests are lib-tokenize.awk's, so this agrees with the
+# heredoc reader.
 function shellc_shell(T, n, ci,   w, i, t, r) {
   w = base(T[ci])
   for (i = ci + 1; i <= n; i++) {
     t = T[i]
     if ((r = kit_redir(T, n, i)) > 0) { i += r - 1; continue }   # `bash < f`: reads stdin
     if (hd_inline_flag(w, t)) return 1                            # -c, -lc, -ic …
-    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) return 1                   # -s reads stdin
+    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) return 2                   # -s reads stdin
     if (t ~ /^[-+]/) { if (hd_optarg(w, 1, t)) i++; continue }   # a separate-word option takes a value
     return 0                                                      # a script path: its file, not stdin
   }
-  return 1                                                        # no script arg: reads stdin
+  return 2                                                        # no script arg: reads stdin
 }
 
 BEGIN { VAULTRE = ENVIRON["KIT_VAULT_RE"]; glob_witnesses() }
@@ -336,7 +338,9 @@ END {
     shc = split(ST[q], SHG, /\002/)
     for (g = 1; g <= shc; g++) {
       sn = tokenize(SHG[g], ST_T); if (sn == 0) continue
-      if (shellc_hit(ST_T, sn)) { print "SHELLC a shell -c invocation runs a program the firewall cannot inspect"; exit }
+      shk = shellc_hit(ST_T, sn)
+      if (shk == 1) { print "SHELLC a shell -c invocation runs a program the firewall cannot inspect"; exit }
+      if (shk == 2) { print "SHELLIN a shell reads its program from stdin, which the firewall cannot inspect"; exit }
     }
   }
 
