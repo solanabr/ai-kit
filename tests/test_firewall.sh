@@ -425,7 +425,7 @@ def matches(rule, cmd):
 
 def probes(pat):
     stars = ustars(pat)
-    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$", pat[:i])}
+    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$|(?:^|\s)-$", pat[:i])}
     for empty in itertools.product((False, True), repeat=len(stars)):
         combo = dict(zip(stars, empty))
         if not any(empty) or any(combo[i] for i in mand):
@@ -982,6 +982,50 @@ done
 assert_eq "no" "$(python3 "$WORK/gap_probe.py" --match "git --config-env *" \
   "git --config-env=core.fsmonitor=X status" 2>&1)" \
   "planted: the spaced shape Bash(git --config-env *) would leave the = spelling open"
+# The on-chain denies hold behind the CLI's global options (#306). solana and spl-token
+# take -u/--url, -k/--keypair, -C/--config and --commitment before the subcommand, and
+# every rule in DENY_IRREVERSIBLE_ONCHAIN is anchored on the literal subcommand, so
+# `solana -um transfer` ran at every tier while `solana transfer` was denied. Each solana
+# and spl-token rule now has a `<bin> -* <rest>` twin. Judged against the whole generated
+# deny set, in both directions: a read behind the same options stays open.
+echo "[on-chain denies behind global options]"
+for t in $TIERS; do
+  assert_eq "none" "$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print(' '.join(r for r in ('Bash(solana close *)', 'Bash(solana authorize *)') if r in deny) or 'none')" 2>/dev/null)" \
+    "$t no longer carries the dead solana close/authorize rules (no such subcommand)"
+  for cmd in "solana transfer TO 0.5" "solana -um transfer TO 0.5" "solana -u m transfer TO 0.5" \
+             "solana --url https://api.mainnet-beta.solana.com transfer TO 0.5" \
+             "solana --url=mainnet-beta transfer TO 0.5" "solana -k kp.json transfer TO 0.5" \
+             "solana --keypair kp.json --commitment finalized transfer TO 0.5" \
+             "solana -C /tmp/c.yml transfer TO 0.5" "solana -um transfer" \
+             "solana close-vote-account VOTE DEST" "solana -ud close-vote-account VOTE DEST" \
+             "solana authorize-nonce-account NONCE NEW" "solana -um authorize-nonce-account NONCE NEW" \
+             "solana -um withdraw-from-nonce-account NONCE DEST 1" \
+             "spl-token -um burn ACCT 1" "spl-token --url mainnet-beta close --address ACCT" \
+             "solana -um program deploy --final p.so" "solana -um program close PID --bypass-warning" \
+             "solana -um program-v4 finalize PID" "spl-token -um authorize MINT mint --disable" \
+             "solana -um config set -k other.json"; do
+    assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
+      "$t denies \`$cmd\`"
+  done
+  for cmd in "solana -um balance" "solana --url mainnet-beta account ADDR" "solana -um program show PID" \
+             "solana -k kp.json address" "solana -ud stake-account STAKE" "solana -um vote-account VOTE" \
+             "solana --url mainnet-beta transaction-history ADDR" "spl-token -um accounts" \
+             "spl-token --url mainnet-beta balance MINT" "solana -um config get" "solana close --help"; do
+    assert_eq "none" "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" \
+      "$t leaves the read \`$cmd\` to run"
+  done
+done
+# Planted: without the twins the option-first spelling is open, which is the hole.
+assert_eq "no" "$(python3 "$WORK/gap_probe.py" --match "solana transfer *" "solana -um transfer TO 0.5" 2>&1)" \
+  "planted: Bash(solana transfer *) alone leaves \`solana -um transfer\` open"
+# The `-*` gap is never empty in a command (a lone `-` is not an option), and gap_probe
+# is taught that rather than the rule set carrying a `solana - transfer` twin. Without the
+# bare twin, though, the trailing ` *` is mandatory and `solana -um transfer` is open.
+plant "an option-first rule without its bare twin" "misses 'solana -ZZZ transfer'" \
+  - "Bash(solana -* transfer)"
 # git --exec-path=<dir> makes git run the helpers and subcommands it finds in dir.
 # Denied at every tier with the `=` in the rule: the bare option only prints the path,
 # and git reads the spaced form the same way, so both stay open.
@@ -1534,6 +1578,33 @@ rm -f "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
 # unchanged. Pin that, so a stricter fallback later is a decision, not an accident.
 assert_eq "relaxed 1" "$(KIT_FIREWALL_TIER=maintainer bash -c '. "$1"; t=$(kit_tier); printf "%s %s" "$t" "$(kit_tier_num "$t")"' _ "$REPO_ROOT/.claude/hooks/lib-headless.sh" 2>/dev/null)" \
   "the hooks act at Relaxed under the maintainer tier"
+
+# #308: kit_tier reads the top-level "tier" whatever the formatting. security.json also
+# holds enforced.tier, and a greedy line-oriented sed read that one on a file rewritten
+# onto one line (json.dump, jq -c): a declared Off still read as the enforced Relaxed.
+echo "[kit_tier: the top-level tier, not enforced.tier, on any formatting]"
+TIERDIR="$WORK/tierfmt"; mkdir -p "$TIERDIR/.claude"
+# kt <security.json text> -> the tier the hooks resolve from it, with no env override.
+kt() {
+  printf '%s\n' "$1" > "$TIERDIR/.claude/security.json"
+  (cd "$TIERDIR" && env -u KIT_FIREWALL_TIER CLAUDE_PROJECT_DIR="$TIERDIR" \
+    bash -c '. "$1"; kit_tier' _ "$REPO_ROOT/.claude/hooks/lib-headless.sh" 2>/dev/null)
+}
+ONELINE='{"_README": "x", "tier": "off", "enforced": {"tier": "relaxed", "ruleSetVersion": 10}}'
+# Planted control: the old parse on this exact file reads the nested record, so the
+# fixture reproduces the bug and the assertion below can fail.
+printf '%s\n' "$ONELINE" > "$TIERDIR/.claude/security.json"
+assert_eq "relaxed" "$(sed -n 's/.*"tier"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' "$TIERDIR/.claude/security.json" | head -n 1)" \
+  "control: the old greedy sed reads enforced.tier off a one-line file"
+assert_eq "off" "$(kt "$ONELINE")" "one line, enforced.tier relaxed after a top-level off: off"
+assert_eq "medium" "$(kt '{"enforced":{"tier":"high"},"tier":"medium"}')" \
+  "one line, the record before the top-level key: the top-level tier"
+assert_eq "off" "$(kt '{"_README":"set \"tier\": \"high\" to harden","tier":"off"}')" \
+  "a \"tier\" quoted inside a string value is not the key"
+assert_eq "high" "$(kt "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["tier"]="high"; d.setdefault("enforced",{})["tier"]="off"; print(json.dumps(d, indent=2))' "$REPO_ROOT/.claude/security.json")")" \
+  "the shipped file pretty-printed, enforced.tier off: the top-level high"
+assert_eq "relaxed" "$(kt '{"enforced":{"tier":"high"}}')" \
+  "no top-level tier: the default relaxed, not the record"
 
 # ── rule set 10: Relaxed stops getting in the way, with no routed-around loss ──
 # dm <tier> <cmd> -> "yes" if some Bash deny stops it, else "no".

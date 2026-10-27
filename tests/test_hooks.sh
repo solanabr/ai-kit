@@ -989,10 +989,20 @@ for C in "npm publish" "cargo publish" "yarn publish" "pnpm publish" "bun publis
 done
 run_bash "$M_EGRESS" relaxed "npm publish --dry-run"
 assert_eq "silent" "$DECISION" "a dry-run publish is not gated"
-# The reason Relaxed can afford to ask at all: with no interactive user the ask goes
-# silent, so the kit's own Action is unaffected. Medium's deny does NOT go quiet.
+# Headless, Relaxed's ask would go silent and the publish would run unprompted, so it
+# takes the irreversible set's path: denied unless CONFIRM_PUBLISH=1 (#307). Medium's
+# deny does NOT go quiet either, and the escape does not reach it.
 run_bash "$M_EGRESS" relaxed "npm publish" 1
-assert_eq "silent" "$DECISION" "relaxed's publish ask is silent headless (CI-safe)"
+assert_eq "deny" "$DECISION" "relaxed's publish is denied headless without CONFIRM_PUBLISH"
+assert_contains "$OUT" "CONFIRM_PUBLISH=1" "the headless publish deny names the escape"
+for C in "npm publish" "cargo publish" "yarn publish" "pnpm publish" "bun publish"; do
+  CONFIRM_PUBLISH=1 run_bash "$M_EGRESS" relaxed "$C" 1
+  assert_eq "silent" "$DECISION" "CONFIRM_PUBLISH=1 lets a headless relaxed publish run: $C"
+  CONFIRM_PUBLISH=1 run_bash "$M_EGRESS" medium "$C" 1
+  assert_eq "deny" "$DECISION" "CONFIRM_PUBLISH=1 does not lift medium's deny: $C"
+done
+run_bash "$M_EGRESS" relaxed "npm publish --dry-run" 1
+assert_eq "silent" "$DECISION" "a headless dry-run publish is still not gated"
 run_bash "$M_EGRESS" medium "npm publish" 1
 assert_eq "deny" "$DECISION" "medium's publish deny holds headless"
 
@@ -1199,7 +1209,7 @@ same "$M_SECRETS" deny deny deny "aws configure get aws_secret_access_key" \
 same "$M_SECRETS" deny deny deny "bash <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" \
   "bash $BS${NL}<<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" "$MUT_CONT"
 # The heredoc reader's wrapper-option walk (hd_cmd) is isolated here through an
-# interpreter body: a shell-fed heredoc is now a stdin-fed shell and SHELLC-denied
+# interpreter body: a shell-fed heredoc is now a stdin-fed shell and SHELLIN-denied
 # whatever the reader does, so it could not flip the mutant, but an interpreter is not a
 # shell and the body reader still owns it.
 same "$M_SECRETS" deny deny deny "python3 - <<'EOF'${NL}print(open('/home/u/.ssh/id_rsa').read())${NL}EOF" \

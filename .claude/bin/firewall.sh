@@ -191,7 +191,13 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           retried outside the sandbox (`Bash(dangerouslyDisableSandbox:true)`): the
 #           first permissions.ask entries any tier emits, and High's alone (ASK_HIGH).
 #           Off, Relaxed and Medium generate the same bytes they did at 10.
-RULE_SET_VERSION = 11
+#   11 -> 12: the on-chain denies at every tier (#306). `solana close *` and `solana
+#           authorize *`, which matched no solana-cli subcommand, become
+#           `solana close-vote-account *` and `solana authorize-nonce-account *`, and
+#           each solana and spl-token rule in DENY_IRREVERSIBLE_ONCHAIN gains its
+#           global-option twin (`solana -* transfer *`), so `solana -um transfer` is
+#           denied like `solana transfer`.
+RULE_SET_VERSION = 12
 # enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
 # without it predate #165, when a first apply recorded the user's own rules as well.
 RULEIDS_SCOPE = "generated"
@@ -1217,8 +1223,12 @@ DENY_IRREVERSIBLE_ONCHAIN = [
     "Bash(spl-token authorize *--disable*)",
     "Bash(spl-token authorize --disable*)",
     "Bash(solana transfer *)",
-    "Bash(solana close *)",
-    "Bash(solana authorize *)",
+    # Rule set 12 (#306): these two replace `solana close *` and `solana authorize *`,
+    # which named no solana-cli subcommand (3.x and 4.x alike) and so blocked only
+    # `solana close --help`. Closing a vote account withdraws everything in it, and the
+    # nonce authority is what withdraw-from-nonce-account, below, spends with.
+    "Bash(solana close-vote-account *)",
+    "Bash(solana authorize-nonce-account *)",
     "Bash(solana withdraw-from-nonce-account *)",
     "Bash(spl-token burn *)",
     "Bash(spl-token close *)",
@@ -1226,6 +1236,30 @@ DENY_IRREVERSIBLE_ONCHAIN = [
     "Bash(solana config set *-k*)",
     "Bash(solana config set -k*)",
 ]
+
+
+def option_first(rules):
+    """The global-option twin of each solana and spl-token rule (#306). Both CLIs take
+    -u/--url, -k/--keypair, -C/--config, --commitment and the rest BEFORE the
+    subcommand, so `solana -um transfer X 1` and `solana --url <rpc> transfer X 1` ran
+    past `Bash(solana transfer *)`: the glob is anchored on the literal subcommand.
+    `<bin> -* <rest>` puts any run of options in that gap. The `-*` gap is never empty
+    in a real command (a lone `-` is not an option), which gap_probe is taught, and a
+    trailing ` *` gains its bare twin, because the added wildcard makes it mandatory.
+    anchor's own rules already put a `*` straight after `anchor`."""
+    out = []
+    for rule in rules:
+        body = rule[len("Bash("):-1]
+        binary, _, rest = body.partition(" ")
+        if binary not in ("solana", "spl-token"):
+            continue
+        out.append("Bash(%s -* %s)" % (binary, rest))
+        if rest.endswith(" *"):
+            out.append("Bash(%s -* %s)" % (binary, rest[:-2]))
+    return out
+
+
+DENY_IRREVERSIBLE_ONCHAIN += option_first(DENY_IRREVERSIBLE_ONCHAIN)
 
 DENY_SUPPLY_CHAIN = [
     # Publishing is NOT here. It is irreversible (npm unpublish closes after 72h,
@@ -2084,6 +2118,10 @@ LEGACY_RULE_IDS = [
     "Bash(git branch *--delete*)",
     "Bash(git branch -f*)",
     "Bash(git branch * -f*)",
+    # Dropped by rule set 12 (#306): neither is a solana-cli subcommand. Every release
+    # since the four-tier firewall emitted both.
+    "Bash(solana close *)",
+    "Bash(solana authorize *)",
 ]
 
 

@@ -156,9 +156,16 @@ fi
 # end the hook before the awk pass reached a deny later in the same command:
 # `npm publish && curl -d @.env https://…` asked about the publish, and an approval
 # sent the .env too.  ask_later keeps the first ask; finish asks it at the end.
-ASK_LATER=
+# A held publish ask (ASK_GATED) is kit_gate_ask, not kit_ask: it goes silent only
+# when headless is positively known, so a harness that gives no signal asks rather
+# than letting the publish run unprompted on a failed terminal probe.
+ASK_LATER= ASK_GATED=
 ask_later() { [ -n "$ASK_LATER" ] || ASK_LATER=$1; }
-finish() { [ -z "$ASK_LATER" ] || kit_ask "$ASK_LATER"; exit 0; }
+finish() {
+  [ -n "$ASK_LATER" ] || exit 0
+  [ -n "$ASK_GATED" ] && kit_gate_ask "$ASK_LATER"
+  kit_ask "$ASK_LATER"
+}
 
 # ---- the text the two position-anchored patterns below read.  The shell deletes
 # a backslash-newline before it splits words, and a reserved word is never the
@@ -204,9 +211,14 @@ if [ -n "$PSEG" ] && lacks "$PSEG" '--dry-run'; then
   fi
   # Relaxed asks.  An earlier version of this hook allowed it outright, reasoning that
   # publishing is "a deliberate release step a human triggers" — but the human is not
-  # the one running it here, the agent is, and the spec's tier matrix says ask.  kit_ask
-  # is what makes that safe to ship at the CI tier: it goes silent when there is no
-  # interactive user, so the prompt costs a headless run nothing.
+  # the one running it here, the agent is, and the spec's tier matrix says ask.
+  # Headless, the ask would go silent and the publish would run unprompted, so it takes
+  # the irreversible set's path instead: denied unless CONFIRM_PUBLISH=1 (#307).  The
+  # deny is immediate (a deny stops the whole call, so nothing later can be skipped);
+  # a confirmed run returns here and still reaches the denies below, which is why this
+  # is kit_confirm and not kit_gate.
+  kit_confirm publish "This command $REASON"
+  ASK_GATED=1
   ask_later "This command $REASON Confirm the package, the version and the registry before approving."
 fi
 
@@ -401,7 +413,8 @@ case $CLASS in
     kit_ask "This command $WHY. It starts a run or a deploy, or changes the rules that gate one — confirm the repository, the workflow or environment and the ref before approving."
     ;;
   DENY)
-    kit_deny "$WHY. Sending credentials or key material off the machine is not allowed at any tier. If the user needs this uploaded, they do it themselves."
+    # Not "at any tier": Off returns before the classifier runs (TIER check above).
+    kit_deny "$WHY. Sending credentials or key material off the machine is denied at every tier except Off, which turns this guard off. If the user needs this uploaded, they do it themselves."
     ;;
   ASK1)
     kit_ask "This command $WHY. Confirm the destination and the contents before approving."

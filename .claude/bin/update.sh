@@ -884,8 +884,36 @@ PY
   SEC_JSON="$TARGET_DIR/$CONFIG_NAME/security.json"
   if [ -f "$FW_SH" ] && [ -f "$SEC_JSON" ]; then
     WANT_RS="$(awk -F= '/^RULE_SET_VERSION[[:space:]]*=/{gsub(/[^0-9]/,"",$2); print $2; exit}' "$FW_SH" 2>/dev/null)"
-    HAVE_RS="$(awk '/"ruleSetVersion"[[:space:]]*:/{gsub(/[^0-9]/,""); print; exit}' "$SEC_JSON" 2>/dev/null)"
-    DECL_TIER="$(awk '/"tier"[[:space:]]*:/{t=$0; sub(/.*"tier"[^"]*"/,"",t); sub(/".*/,"",t); print t; exit}' "$SEC_JSON" 2>/dev/null)"
+    # Parsed as JSON, not by line: on a security.json rewritten onto one line (json.dump,
+    # jq -c) a line match took enforced.tier for the declared one and glued every digit
+    # on the line into the rule set (#308). The declared tier is the top-level key, with
+    # firewall.sh's declared.tier alias; the rule set is enforced.ruleSetVersion. The
+    # line match stays only for a machine without python3, where the apply cannot run.
+    if command -v python3 >/dev/null 2>&1; then
+      HAVE_RS="" DECL_TIER=""
+      _fw_read="$(python3 - "$SEC_JSON" <<'PY' 2>/dev/null
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+if not isinstance(d, dict):
+    d = {}
+t = d.get("tier")
+if not t and isinstance(d.get("declared"), dict):
+    t = d["declared"].get("tier")
+e = d.get("enforced") if isinstance(d.get("enforced"), dict) else {}
+rs = e.get("ruleSetVersion")
+print("%s %s" % (t if isinstance(t, str) and t.isalpha() else "",
+                 rs if isinstance(rs, int) and not isinstance(rs, bool) else ""))
+PY
+)" || _fw_read=""
+      DECL_TIER="${_fw_read%% *}"
+      HAVE_RS="${_fw_read#* }"
+    else
+      HAVE_RS="$(awk '/"ruleSetVersion"[[:space:]]*:/{gsub(/[^0-9]/,""); print; exit}' "$SEC_JSON" 2>/dev/null)"
+      DECL_TIER="$(awk '/"tier"[[:space:]]*:/{t=$0; sub(/.*"tier"[^"]*"/,"",t); sub(/".*/,"",t); print t; exit}' "$SEC_JSON" 2>/dev/null)"
+    fi
     if [ "$DECL_TIER" = maintainer ]; then
       # The maintainer tier is for the kit's own repository, which never runs /update.
       # firewall.sh refuses it outside a kit checkout anyway; saying so here names the
