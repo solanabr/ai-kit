@@ -236,6 +236,35 @@ assert_eq "no" "$(printf '%s' "$FW_OUT" | grep -q 'firewall rule set v' && echo 
 assert_eq "maintainer" "$(fw_tier)" "/update leaves the declared tier for the user to change"
 assert_eq "no" "$(grep -q '"git submodule \*"' "$FW_SETTINGS" && echo yes || echo no)" \
   "/update writes no maintainer rule into settings.json"
+
+# #308: the same file on one line (json.dump's default). A line match read the last
+# "tier" on it, enforced.tier, and glued every digit on the line into the rule set, so
+# a declared maintainer was missed and the catch-up compared against a garbage number.
+echo "[one-line security.json: the declared tier and the recorded rule set]"
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+d["tier"] = "maintainer"
+d.setdefault("enforced", {})["tier"] = "relaxed"
+d["enforced"]["ruleSetVersion"] = 1
+json.dump(d, open(sys.argv[1], "w"))' "$FW_SECURITY"
+assert_eq "1" "$(awk 'END { print NR }' "$FW_SECURITY")" "control: the fixture security.json is one line"
+assert_eq "relaxed" "$(awk '/"tier"[[:space:]]*:/{t=$0; sub(/.*"tier"[^"]*"/,"",t); sub(/".*/,"",t); print t; exit}' "$FW_SECURITY")" \
+  "control: the old line match reads enforced.tier off it"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" "declares the maintainer tier" "one line: a declared maintainer tier is still reported"
+assert_eq "no" "$(printf '%s' "$FW_OUT" | grep -q 'firewall.sh apply failed' && echo yes || echo no)" \
+  "one line: no failed apply is reported for a declared maintainer tier"
+assert_eq "maintainer" "$(fw_tier)" "one line: the declared maintainer tier is left alone"
+python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+d["tier"] = "high"
+d["enforced"]["tier"] = "relaxed"
+d["enforced"]["ruleSetVersion"] = 1
+json.dump(d, open(sys.argv[1], "w"))' "$FW_SECURITY"
+FW_OUT="$(fw_update)"
+assert_contains "$FW_OUT" "firewall rule set v1 -> v" "one line: the catch-up reads enforced.ruleSetVersion 1"
+assert_contains "$FW_OUT" "(high re-applied)" "one line: the catch-up re-applies the top-level tier, not the record"
+assert_eq "high" "$(fw_tier)" "one line: the declared high tier survives the catch-up"
 rm -f "$FW_SETTINGS" "$FW_SECURITY"
 fi  # FW_TAG_OK
 

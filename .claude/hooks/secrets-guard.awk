@@ -291,20 +291,31 @@ function shellc_hit(T, n,   ci, w, r) {
   }
   return 0
 }
-# shellc_shell — the shell at T[ci] runs an un-inspectable program: 1 for an inline -c
-# or a program read from stdin, 0 for a script path.  The option walk and the -c, -s and
-# stdin tests are lib-tokenize.awk's, so this agrees with the heredoc reader.
-function shellc_shell(T, n, ci,   w, i, t, r) {
-  w = base(T[ci])
+# shellc_shell — the shell at T[ci] runs an un-inspectable program: 1 for an inline -c,
+# 2 for a program read from stdin, 0 for a script path.  The two are told apart so the
+# deny names what the command does: `… | base64 -d | sh` has no -c in it.  The -c and
+# option-value tests are lib-tokenize.awk's (hd_inline_flag, hd_optarg).
+#
+# -s does not end the walk here: `bash -s -c 'id'` runs the -c string, so a -c anywhere
+# in the options wins and the stdin verdict stands only when none follows.  After -s,
+# `--` or the first operand ends the options: what follows is positional parameters
+# (`bash -s -- -c x` is a stdin program with $1=-c), so the walk ends as stdin.  This
+# differs from the heredoc reader, whose walk in lib-tokenize.awk still stops at -s;
+# both deny, since a shell -c and a stdin program are refused at every tier, so only
+# the message the agent sees depends on which shape is named.
+function shellc_shell(T, n, ci,   w, i, t, r, s) {
+  w = base(T[ci]); s = 0
   for (i = ci + 1; i <= n; i++) {
     t = T[i]
     if ((r = kit_redir(T, n, i)) > 0) { i += r - 1; continue }   # `bash < f`: reads stdin
+    if (s && t == "--") return 2                                  # after -s, `--` ends options
     if (hd_inline_flag(w, t)) return 1                            # -c, -lc, -ic …
-    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) return 1                   # -s reads stdin
+    if (t ~ /^-[A-Za-z]*s[A-Za-z]*$/) { s = 1; continue }        # -s reads stdin, unless a -c follows
     if (t ~ /^[-+]/) { if (hd_optarg(w, 1, t)) i++; continue }   # a separate-word option takes a value
+    if (s) return 2                                               # after -s an operand is an argument
     return 0                                                      # a script path: its file, not stdin
   }
-  return 1                                                        # no script arg: reads stdin
+  return 2                                                        # no script arg, or -s: reads stdin
 }
 
 BEGIN { VAULTRE = ENVIRON["KIT_VAULT_RE"]; glob_witnesses() }
@@ -336,7 +347,9 @@ END {
     shc = split(ST[q], SHG, /\002/)
     for (g = 1; g <= shc; g++) {
       sn = tokenize(SHG[g], ST_T); if (sn == 0) continue
-      if (shellc_hit(ST_T, sn)) { print "SHELLC a shell -c invocation runs a program the firewall cannot inspect"; exit }
+      shk = shellc_hit(ST_T, sn)
+      if (shk == 1) { print "SHELLC a shell -c invocation runs a program the firewall cannot inspect"; exit }
+      if (shk == 2) { print "SHELLIN a shell reads its program from stdin, which the firewall cannot inspect"; exit }
     }
   }
 

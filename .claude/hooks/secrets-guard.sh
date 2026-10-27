@@ -245,7 +245,9 @@ fi
 #
 # Every `bash|sh|zsh|dash|ksh -c` an agent runs on the Bash tool or through context-mode
 # is denied below (SHELLC), at every tier, Off included: a -c string is a program no
-# permission rule can read.  In a full install the permission layer also denies
+# permission rule can read.  A shell fed its program on stdin (`… | sh`, `sh < f`, -s)
+# is the same block under its own verdict (SHELLIN), so its message does not claim -c.
+# In a full install the permission layer also denies
 # `sh -c *`, `bash -lc *` and `zsh -c *` at every tier, and `bash -c *` at Medium and
 # High only (DENY_WRAPPERS and DENY_BASH_C in firewall.sh).  So for an agent's `bash -c`
 # at Off and Relaxed, and for every shell -c in a plugin install, which carries no
@@ -285,6 +287,11 @@ case $VERDICT in
     ;;
   SHELLC*)
     kit_deny "runs a shell with -c (bash, sh, zsh, dash or ksh), which executes an arbitrary program the firewall cannot inspect. It is denied at every tier. Run the command directly instead of wrapping it in a shell -c."
+    ;;
+  SHELLIN*)
+    # The same block, reached by a shell that reads its program from stdin (a pipe into
+    # it, a `<` redirect, -s, or no script argument), so the message cannot say -c.
+    kit_deny "feeds a program to a shell on stdin (a pipe or redirect into bash, sh, zsh, dash or ksh, or -s), which executes code the firewall cannot inspect. It is denied at every tier. Run the commands directly instead of piping them into a shell."
     ;;
   WIPE*)
     # Destroying key material, not reading it, so the "use solana address instead"
