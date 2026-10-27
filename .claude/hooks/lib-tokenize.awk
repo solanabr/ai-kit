@@ -208,6 +208,10 @@ function split_cmd(s,   i, c, c2, st, sp, out, j, cm) {
     if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n;&|()]/)) cm = 1
     if (c == "\n") cm = 0
     if (cm && c2 == "$" SQ) { out = out "$\"\""; continue }
+    # $"…" is "…" where no translation applies, as here: the `$` goes, so
+    # `$"git" push --force` is the push.  Done here rather than in tokenize, where
+    # `$""` is the empty-"" mark above and must keep its `$`.
+    if (c2 == "$\"") continue
     if (kit_pid(s, i)) { out = out c2; i++; continue }
     # $'…' is copied whole for tokenize to decode (#301).  Its `\'` is escaped,
     # so read as '…' the region closed there: `echo $'it\'s; npm publish'` split.
@@ -333,6 +337,7 @@ function kit_unq(w, arg,   o, i, c, q, L) {
     }
     if (c == "\\" && i < L) { o = o substr(w, ++i, 1); continue }
     if (kit_pid(w, i)) { o = o "$$"; i++; continue }
+    if (c == "$" && substr(w, i + 1, 1) == "\"") continue      # $"…" is "…"
     if (c == "$" && substr(w, i + 1, 1) == SQ) { o = o kit_ansi(w, i + 1); if (KA_OPEN) return w; i = KA_END; continue }
     if (c == SQ || c == "\"") { q = c; continue }
     o = o c

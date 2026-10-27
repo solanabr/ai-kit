@@ -2111,6 +2111,25 @@ for P in 'echo $(true)#; @' '[[ x =~ (#) ]] || @' '[[ x =~ ( ]] |#) ]] || @'; do
 done
 same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"
 same "$M_FETCH" silent silent deny "npx -y x" "cat <<X${NL}\$(echo \$'$BS')' ; npx -y x)${NL}X" "$MUT_ANSIHS"
+# $"…" is "…" where no translation applies (the PR #320 review): the `$` goes, so
+# `$"git" push --force` is the push. Silent on main.
+MUT_LOCALE="$(mutant locale lib-tokenize.awk 'if (c2 == "$\"") continue' 'if (0) continue' \
+  lib-tokenize.awk 'if (c == "$" && substr(w, i + 1, 1) == "\"") continue' 'if (0) continue')" || MUT_LOCALE=
+assert_eq "yes" "$([ -n "$MUT_LOCALE" ] && [ -d "$MUT_LOCALE/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: mut-locale"
+same "$M_EGRESS" silent ask deny "git push --force origin main" '$"git" push --force origin main' "$MUT_LOCALE"
+same "$M_EGRESS" silent ask deny "git push --force origin main" 'git push $"--force" origin main' "$MUT_LOCALE"
+same "$M_EGRESS" ask deny deny "npm publish" '$"npm" publish' "$MUT_LOCALE"
+same "$M_CHAIN" ask ask deny "$DA" '$"anchor" deploy --provider.cluster mainnet' "$MUT_LOCALE"
+same "$M_SECRETS" deny deny deny "gh auth token" '$"gh" auth token' "$MUT_LOCALE"
+same "$M_FETCH" silent silent deny "npx -y x" '$"npx" -y x' "$MUT_LOCALE"
+quiet "$M_EGRESS" 'echo $"npm publish"'
+# An unterminated $'…' fails closed: bash runs nothing, and kit_unq leaves the word as written.
+quiet "$M_FETCH" "echo \$'abc ; npx -y x"
+quiet "$M_FETCH" "\$'np${BS}x78 -y x"
+printf '%s\n' '{ m = split($0, W, " "); o = ""; for (i = 1; i <= m; i++) o = o (i > 1 ? "|" : "") kit_unq(W[i], i > 1); print o }' > "$WORK/unq.awk"
+unq() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/unq.awk"; }
+assert_eq "\$'abc|\$'abc$BS|npm|git" "$(unq "\$'abc \$'abc$BS \$\"npm\" \$'${BS}x67it'")" \
+  "kit_unq leaves an unterminated \$'…' as written, a trailing lone backslash included, and reads \$\"…\" as \"…\""
 # The decoder itself, one escape at a time: what tokenize hands every guard.
 printf '%s\n' '{ n = tokenize(split_cmd($0), T); o = ""; for (i = 1; i <= n; i++) o = o (i > 1 ? "|" : "") T[i]; print o }' > "$WORK/ansi.awk"
 ansi_tok() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/ansi.awk"; }
@@ -2124,6 +2143,8 @@ assert_eq "abx|\\z|\\x|n" "$(ansi_tok "\$'ab\\0cd'x \$'\\z' \$'\\x' \$'\\556'")"
   "a NUL ends the string, an unknown escape is kept, an octal byte wraps at 256"
 assert_eq "\$\\x6epm|\$'npm'|\$npm" "$(ansi_tok "$BS\$'\\x6epm' \"\$'npm'\" '\$'npm")" \
   "an escaped \$, a \$' inside double quotes and a \$ closing '…' open no \$'…'"
+assert_eq "echo|abc|echo|abc$BS" "$(ansi_tok "echo \$'abc")|$(ansi_tok "echo \$'abc$BS")" \
+  "an unterminated \$'…' takes the rest of the text as one word, a trailing lone backslash kept"
 assert_eq "\$\$a$BS|b|\$\$n|\$a" "$(ansi_tok "\$\$'a$BS' b \$\$\$'${BS}x6e' $BS\$\$'a'")" \
   "\$\$ is the PID: \$\$'…' is a plain '…', \$\$\$'…' a PID and a \$'…', and \\\$\$'…' a \$ and a \$'…'"
 # --- The firewall-friction PR's hook halves, checked for the property that puts them
