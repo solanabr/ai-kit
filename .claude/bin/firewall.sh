@@ -197,7 +197,16 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           each solana and spl-token rule in DENY_IRREVERSIBLE_ONCHAIN gains its
 #           global-option twin (`solana -* transfer *`), so `solana -um transfer` is
 #           denied like `solana transfer`.
-RULE_SET_VERSION = 12
+#   12 -> 13: `Bash(git -c *)` and its `git -C * -c` twins leave the deny set at every
+#           tier (#311): a deny beats every allow and hook, and no glob can let
+#           auditor-skill's `git -c core.fsmonitor=false <subcommand>` through while
+#           refusing `-c core.fsmonitor=/tmp/x.sh`. egress-guard.awk's GITCFG pass holds
+#           the whole `-c` gate instead, at every tier, Off included, letting
+#           `core.fsmonitor=false` and `core.hooksPath=/dev/null` through and nothing
+#           else. DENY_GIT_DASH_LOWER_C twins every destructive git rule behind each literal safe value,
+#           and ALLOW_GIT_SAFE_CONFIG each git allow rule behind the two safe values, so
+#           the subcommand after the prefix keeps the verdict it has bare.
+RULE_SET_VERSION = 13
 # enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
 # without it predate #165, when a first apply recorded the user's own rules as well.
 RULEIDS_SCOPE = "generated"
@@ -425,6 +434,30 @@ ALLOW = [
         "WebSearch(*)",
     ],
 ]
+
+# The two `git -c` values that take a program away instead of naming one:
+# `core.fsmonitor=false` turns the fsmonitor hook off, and `core.hooksPath=/dev/null`
+# points every hook at a path that cannot hold one. auditor-skill prescribes the first on
+# an audited checkout so the repository cannot run code during the audit (#311).
+# egress-guard.awk's gcfg_safe is the same pair, and the deny side of it: every other
+# `-c` value is GITCFG's to refuse.
+GIT_SAFE_CONFIG = ("core.fsmonitor=false", "core.hooksPath=/dev/null")
+# Each git allow rule's twin behind each safe value, so `git -c core.fsmonitor=false log`
+# runs without a prompt exactly where `git log` does, and a subcommand the bare form would
+# prompt for still prompts. Only the exact spelling: both values together, another case
+# spelling of the key or `-c` behind `-C <dir>` still prompts, and GITCFG still clears
+# them. Nothing here outranks a deny: DENY_GIT_DASH_LOWER_C keeps every destructive
+# subcommand denied behind the prefix, and the push and history gates in egress-guard.sh
+# read past it. Placed right after the group it twins, and derived from it, so the two
+# cannot drift.
+_GIT_ALLOW = next(g for g in ALLOW if "Bash(git status *)" in g)
+ALLOW_GIT_SAFE_CONFIG = [
+    "Bash(git -c %s %s" % (v, r[len("Bash(git "):])
+    for v in GIT_SAFE_CONFIG
+    for r in _GIT_ALLOW
+    if r.startswith("Bash(git ")
+]
+ALLOW.insert(ALLOW.index(_GIT_ALLOW) + 1, ALLOW_GIT_SAFE_CONFIG)
 
 # ===========================================================================
 # permissions.deny — the never-allowed set
@@ -852,8 +885,6 @@ DENY_WRAPPERS = [
     # Rules cannot see past these, so the form itself is denied — a wrapper standing in
     # front of the real command, or an alias definition that makes the real command word
     # stop appearing on any later command line.
-    # `git -c core.fsmonitor=/tmp/x.sh status` is arbitrary code execution that evades
-    # every `git <subcommand>` rule.
     # NOT evasions, deliberately absent: leading VAR=value assignments, subshells,
     # command substitutions, control-flow bodies, and the timeout/time/nice/nohup/
     # stdbuf/command/builtin/noglob wrappers plus bare xargs — the matcher handles all
@@ -866,9 +897,19 @@ DENY_WRAPPERS = [
     # (`command -v`, `xargs grep|rg|wc|ls`) rather than as blanket globs, because
     # `Bash(xargs *)` pre-approved `xargs -I{} solana program deploy …` outright.
     #
-    # `git -c` stays here: it is arbitrary code execution (`git -c
-    # core.fsmonitor=/tmp/x.sh status`) whatever subcommand follows, so the whole form is
-    # denied at every tier.
+    # `git -c` is NOT here any more (rule set 13, #311). `git -c core.fsmonitor=/tmp/x.sh
+    # status` is arbitrary code execution whatever subcommand follows, and through rule
+    # set 11 `Bash(git -c *)` denied the whole form at every tier. But a deny beats every
+    # allow and every hook, and no glob can tell that from `git -c core.fsmonitor=false
+    # status`, which takes a program away: auditor-skill prescribes it so a hostile
+    # checkout's fsmonitor hook cannot run during an audit, and the rule forced it back
+    # to plain `git`. egress-guard.awk's GITCFG pass now holds the whole gate, at every
+    # tier, Off included (egress-guard.sh runs it ahead of its Off early-exit): it lets
+    # `-c core.fsmonitor=false` and `-c core.hooksPath=/dev/null` through and denies any
+    # other value, in any position. What follows the safe prefix keeps the verdict it
+    # has bare: DENY_GIT_DASH_LOWER_C below twins every destructive rule behind each safe value,
+    # the push and history gates in egress-guard.sh read past `-c <value>`, and
+    # ALLOW_GIT_SAFE_CONFIG twins each git allow rule behind the two safe values only.
     #
     # `git -C` is NOT here any more. The blanket `Bash(git -C *)` was the single largest
     # source of false denials -- every `git -C <dir> status/log/diff` on a scratch or
@@ -892,13 +933,15 @@ DENY_WRAPPERS = [
     # covers the `--config-env=<k>=<v>` spelling and the space-separated one alike,
     # because its `*` touches the option name: a `*` touching a non-space may be empty
     # and matches `=` as readily as a space. `Bash(git --config-env *)`, the shape the -c
-    # rule beside it has, would have required the space and let the `=` form straight
+    # rule had through rule set 12, would have required the space and let the `=` form straight
     # through; gap_probe's port of the matcher and tests/test_firewall.sh pin both facts.
     # No twin: the lone wildcard holds with its gap empty, so bare `git --config-env` is
     # covered too. A leading VAR=value is no way round it either, since a deny rule
     # matches past any leading assignment. Behind another git-level option
-    # (`git --no-pager --config-env=…`, and `git -P -c …` the same way) neither rule
-    # matches, which is what egress-guard.awk's GITCFG pass is for.
+    # (`git --no-pager --config-env=…`) the rule does not match, which is what
+    # egress-guard.awk's GITCFG pass is for. `--config-env` keeps its rule: the value
+    # it sets is read from the environment, so nothing on the command line says it is
+    # one of the two safe ones.
     #
     # `git config alias.*` is the third git evasion, and the worst of the three, because
     # it is the only one that survives the command it was typed in. `git config
@@ -948,7 +991,6 @@ DENY_WRAPPERS = [
     "Bash(sh -c *)",
     "Bash(bash -lc *)",
     "Bash(zsh -c *)",
-    "Bash(git -c *)",
     "Bash(git --config-env*)",
     # `git --exec-path=<dir>` puts dir first on the path git searches for its helpers
     # and its own subcommands, so the directory decides what runs: `git
@@ -1160,13 +1202,33 @@ DENY_GIT_DASH_C = [
     "Bash(git -C * clone --upload-pack*)",
     "Bash(git -C * ls-remote *--upload-pack*)",
     "Bash(git -C * ls-remote --upload-pack*)",
-    # config-execution twins (mirror DENY_WRAPPERS' git -c / --config-env / alias)
-    "Bash(git -C * -c *)",
-    "Bash(git -C * -c)",
+    # config-execution twins (mirror DENY_WRAPPERS' --config-env / --exec-path= / alias).
+    # `git -C * -c *` and its bare twin left with `git -c *` in rule set 13: a `-c`
+    # behind `-C <dir>` is GITCFG's, like a `-c` anywhere else.
     "Bash(git -C * --config-env*)",
     "Bash(git -C * --exec-path=*)",
     "Bash(git -C * config *alias.*)",
     "Bash(git -C * config alias.*)",
+]
+
+# Every tier. A twin of each rule in DENY_GIT_DASH_C behind each safe `-c` value, which is
+# what keeps a subcommand's verdict at the permission layer once `Bash(git -c *)` is gone
+# (rule set 13, #311; see DENY_WRAPPERS). GITCFG lets `git -c core.fsmonitor=false` and
+# `git -c core.hooksPath=/dev/null` through, and without these `git -c
+# core.fsmonitor=false clean -fdx` would meet no rule: every destructive deny is anchored
+# on `git <subcommand>`. The prefix is the literal safe value, not `git -c *`: a `*` there
+# spans the whole command line, so `git -c core.fsmonitor=false commit -m "tidy: clean up
+# docs"` met `git -c * clean *` and was refused — the auditor workflow this exists for.
+# (The `-C *` twins above keep that behaviour; a `-C` operand is an arbitrary path, so they
+# have no literal to anchor on.) What a literal prefix cannot see — both safe values
+# together, another option between the prefix and the subcommand, another case spelling —
+# egress-guard.sh decides at every tier, Off included: behind a safe `-c` it runs the
+# GITDESTRUCT, GITEXEC and --exec-path= passes ahead of its Off early-exit. Derived, so the
+# sets cannot drift.
+DENY_GIT_DASH_LOWER_C = [
+    r.replace("Bash(git -C * ", "Bash(git -c %s " % v, 1)
+    for v in GIT_SAFE_CONFIG
+    for r in DENY_GIT_DASH_C
 ]
 
 # Every tier. Two halves, both flag- or subcommand-shaped, both with nothing to vary.
@@ -1422,6 +1484,7 @@ DENY = [
     DENY_DESTRUCTIVE_SYSTEM,
     DENY_UNRECOVERABLE_GIT,
     DENY_GIT_DASH_C,
+    DENY_GIT_DASH_LOWER_C,
     DENY_UNRECOVERABLE_REMOTE,
     DENY_IRREVERSIBLE_ONCHAIN,
     DENY_SUPPLY_CHAIN,
@@ -2122,6 +2185,10 @@ LEGACY_RULE_IDS = [
     # since the four-tier firewall emitted both.
     "Bash(solana close *)",
     "Bash(solana authorize *)",
+    # Dropped by rule set 13 (#311), and emitted by every release before #165. Its `-C`
+    # twins arrived in rule set 10, after #165, so a record lists them and they need no
+    # entry here.
+    "Bash(git -c *)",
 ]
 
 

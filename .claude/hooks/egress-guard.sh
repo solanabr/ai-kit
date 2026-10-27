@@ -47,9 +47,10 @@
 # where every deny rule is anchored on the bare subcommand and therefore cannot
 # see them.  That pass (GITDESTRUCT) mirrors the rules and changes no tier's
 # policy: it fires only on the prefixed spelling, bare form included.  GITCFG
-# does the same for `-c` and `--config-env` behind another git-level option,
-# where the `git -c` and `git --config-env` rules cannot see them.  Same file,
-# same headers.
+# does the same for `--config-env` behind another git-level option, and is the
+# whole gate for `git -c` in any position, at every tier, Off included: it lets
+# `core.fsmonitor=false` and `core.hooksPath=/dev/null` through and denies every
+# other value.  Same file, same headers.
 #
 # And `gh api` writes (PUT/POST/PATCH, explicit or implied by -f/-F/--input) to
 # the endpoints the `gh secret set` / `gh variable set` denies cover — denied at
@@ -87,6 +88,47 @@ case $KIT_CMD in
         KILL\ *) kit_deny "This command ${RMK#KILL } — denied at every tier. Signal a specific PID, or a worker by name that is not a peer agent (node, vitest). If you must, the user runs it." ;;
       esac
     fi
+    ;;
+esac
+
+# ---- `git -c`: GITCFG, also run before the Off early-exit.
+#
+# Through rule set 12 a `Bash(git -c *)` deny held this at every tier, Off included.
+# Rule set 13 dropped it (#311): a deny rule beats every allow and every hook, and no
+# glob can tell `-c core.fsmonitor=false`, which an auditor adds so a hostile checkout's
+# fsmonitor hook cannot run, from `-c core.fsmonitor=/tmp/x.sh`, which runs a program.
+# This pass took the rule's place, so it runs where the rule did.  It lets
+# `core.fsmonitor=false` and `core.hooksPath=/dev/null` through and denies every other
+# value, in any position; the subcommand after them is judged as it would be bare.
+kit_deny_gitcfg() {
+  kit_deny "$1. git -c and git --config-env are denied at every tier, because a one-shot config value can make any git command run a program. The two values that only take one away are let through: -c core.fsmonitor=false and -c core.hooksPath=/dev/null. If the user needs another value set, they run the command themselves."
+}
+# It fails closed, as the rule it replaced could not fail at all: with the awk files
+# missing or unreadable, or awk exiting non-zero, a command naming git and a `-c` is
+# refused rather than waved through.  What no hook can answer for is a session that
+# turns hooks off (`disableAllHooks`); docs/firewall.md says so.
+case "$KIT_CMD
+$(kit_unquoted "$KIT_CMD")" in
+  *git*)
+    GCF= GRC=127
+    if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ] \
+       && [ -r "$HOOK_DIR/lib-tokenize.awk" ] && [ -r "$HOOK_DIR/egress-guard.awk" ]; then
+      GCF=$(printf '%s\n' "$KIT_CMD" | KIT_GITCFG=1 \
+        awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null)
+      GRC=$?
+    fi
+    if [ "$GRC" -ne 0 ]; then
+      # Quotes and backslashes removed as well: `git "-"c …` and `git -\c …` are -c.
+      case "$KIT_CMD
+$(kit_unquoted "$KIT_CMD")" in
+        *-c*) kit_deny "This command names git and a -c option, and the guard that decides git -c could not run (its awk files are missing or unreadable, or awk failed). git -c can make any git command run a program, so it is refused until the guard runs. Reinstall the kit's hooks (bash .claude/bin/update.sh) or run the command without -c." ;;
+      esac
+    fi
+    case $GCF in
+      GITCFG\ *) kit_deny_gitcfg "${GCF#GITCFG }" ;;
+      GITEXEC\ * | GITEXECPATH\ * | GITDESTRUCT\ *)
+        kit_deny "${GCF#* }. Behind a git -c prefix this is denied at every tier, Off included, as it was when every git -c was: a safe value in front does not make it a different command. If the user wants it run, they run it themselves." ;;
+    esac
     ;;
 esac
 
@@ -357,7 +399,7 @@ case $CLASS in
     ;;
   GITEXEC)
     # Deny at every active tier, matching the two glob rules this backs up and the
-    # blanket `git -c` deny next to them.  It does not ladder like the push and
+    # `git -c` gate (GITCFG) beside it.  It does not ladder like the push and
     # history gates above, because the thing being stopped is not a destructive act
     # whose blast radius a tier can scale — it is a key that makes git execute an
     # attacker-chosen command at some later, unrelated moment, in a session that may
@@ -374,10 +416,10 @@ case $CLASS in
     kit_deny "$WHY. That command is denied at every tier by a permission rule anchored on the bare subcommand, and a git-level option in front of it is not a different command — this hook is what makes the rule mean what it says. If the user wants it run, they run it themselves."
     ;;
   GITCFG)
-    # The same mirror for `git -c` and `git --config-env`, which every tier denies as
-    # wrappers no subcommand rule can see past; another option in front of either one
-    # is not a different command.  See gcfg_scan's header.
-    kit_deny "$WHY. git -c and git --config-env are denied at every tier, because a one-shot config value can make any git command run a program, and an option in front of either is not a different command — this hook is what makes those rules mean what they say. If the user needs the value set, they run the command themselves."
+    # Normally decided ahead of the Off early-exit, above; this is the same verdict
+    # from pass 0, kept so the class has one meaning wherever it is printed.  See
+    # gcfg_scan's header.
+    kit_deny_gitcfg "$WHY"
     ;;
   GITEXECPATH)
     # The same every-tier deny as git -c: the directory git searches for its own

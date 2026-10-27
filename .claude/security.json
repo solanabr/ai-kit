@@ -14,9 +14,9 @@
 
   "enforced": {
     "tier": "relaxed",
-    "ruleSetVersion": 12,
+    "ruleSetVersion": 13,
     "target": ".claude/settings.json",
-    "sha256": "75a35d1cc6614f9f3665f727ce4350cdc38d643c3f2f44fa340c5db18b5a832e",
+    "sha256": "a9e3a71021f78ac1eb8161074bccb1474c2b52a2a51180b743636aaf7e0feb6c",
     "ruleIds": [
       "Bash(anchor *)",
       "Bash(cargo build*)",
@@ -333,7 +333,6 @@
       "Bash(sh -c *)",
       "Bash(bash -lc *)",
       "Bash(zsh -c *)",
-      "Bash(git -c *)",
       "Bash(git --config-env*)",
       "Bash(git --exec-path=*)",
       "Bash(git config *alias.*)",
@@ -415,8 +414,6 @@
       "Bash(git -C * clone --upload-pack*)",
       "Bash(git -C * ls-remote *--upload-pack*)",
       "Bash(git -C * ls-remote --upload-pack*)",
-      "Bash(git -C * -c *)",
-      "Bash(git -C * -c)",
       "Bash(git -C * --config-env*)",
       "Bash(git -C * --exec-path=*)",
       "Bash(git -C * config *alias.*)",
