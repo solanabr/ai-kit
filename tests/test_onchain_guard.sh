@@ -318,9 +318,67 @@ assert_eq deny "$(dverdict "$GUARD" relaxed 1 'echo "x `solana program deploy b.
   "[relaxed] headless: a write in backticks inside double quotes is gated"
 assert_eq silent "$(dverdict "$GUARD" relaxed 1 "echo 'x \`solana program deploy b.so -um\` y'")" \
   "[relaxed] headless: backticks inside single quotes are literal text, not a write"
-assert_eq silent "$(dverdict "$GUARD" relaxed 1 'solana program deploy -ud p.so --program-id `solana address -k k.json`')" \
-  "[relaxed] headless: a devnet write around a read substitution stays quiet"
+# A write with a substitution among its words is at least unidentified: what the
+# substitution prints becomes arguments, a cluster flag included.
+assert_eq deny "$(dverdict "$GUARD" relaxed 1 'solana program deploy -ud p.so --program-id `solana address -k k.json`')" \
+  "[relaxed] headless: a write carrying a substitution is unidentified, so denied"
+assert_eq ask "$(dverdict "$GUARD" relaxed 0 'solana program deploy -ud p.so --program-id `solana address -k k.json`')" \
+  "[relaxed] interactive: the same write asks"
+
+# A substitution that PRINTS the dangerous word. Its output becomes words of the outer
+# command, so main — which read the backtick as an ordinary character — saw them, and
+# the cut-out text alone does not. Both readings are judged now.
+for T in relaxed medium high; do
+  for C in 'solana program deploy `echo --final` p.so' \
+           'spl-token authorize mint `echo mint` `echo --disable`' \
+           'solana program deploy -ud p.so `echo --final`'; do
+    assert_eq deny "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] an irreversible flag printed by a substitution denies :: $C"
+  done
+done
+for C in 'solana program deploy `echo -um` p.so' \
+         'solana program deploy -ud p.so `echo --url mainnet-beta`' \
+         'anchor deploy `echo --provider.cluster mainnet`'; do
+  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: a cluster flag printed by a substitution is not lost :: $C"
+  assert_eq deny "$(dverdict "$GUARD" high 0 "$C")" "[high] interactive: read as mainnet, denied :: $C"
+done
+M="$(omutant rawirr 'if printf '"'"'%s\n%s\n'"'"' "$SEG" "$SEG_RAW" | grep -qE -e' 'if printf '"'"'%s\n'"'"' "$SEG" | grep -qE -e')"
+assert_eq ask "$(dverdict "$M/onchain-guard.sh" relaxed 0 'solana program deploy `echo --final` p.so')" \
+  "planted failure caught — irreversible check on the cut text only: a printed --final asks instead of denying"
+rm -rf "$M"
+M="$(omutant rawseg 'SEG_RAW=$(printf '"'"'%s\n'"'"' "$KIT_NORM" | grep -oE "$RE") || SEG_RAW=' 'SEG_RAW='"$(printf '\n')"'')"
+assert_eq ask "$(dverdict "$M/onchain-guard.sh" high 0 'solana program deploy `echo -um` p.so')" \
+  "planted failure caught — cluster judged on the cut text only: a printed -um is judged unidentified, not mainnet"
+rm -rf "$M"
+
+# A backtick inside a single-quoted string that spans lines is text, on every line of
+# it: the quote state carries across lines. Reset per line, it read the backtick as a
+# substitution and the prose inside it as a write.
+ML=(
+  $'git commit -m \'fix: gate authority changes\n\nsee `spl-token authorize MINT mint --disable` in docs\''
+  $'gh pr create --title t --body \'Summary\nrun `solana program deploy p.so -um` after merge\''
+  $'node -e \'const a = 1;\nconst s = `solana transfer X 1 -um`;\''
+)
+for C in "${ML[@]}"; do
+  for T in relaxed high; do
+    assert_eq silent "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] a backtick in a multi-line single-quoted string is text :: ${C//$'\n'/\\n}"
+  done
+done
+M="$(omutant sqreset 's = cut($0)' 'sq = 0; dq = 0; s = cut($0)')"
+assert_eq deny "$(dverdict "$M/onchain-guard.sh" relaxed 0 "${ML[0]}")" \
+  "planted failure caught — quote state reset per line: the commit message's backticked prose is denied"
+rm -rf "$M"
 M="$(omutant btickouter 'out = out " kit_subst "' 'out = out " kit_subst "; break')"
+# The uncut reading and the at-least-unidentified rule below would also catch this;
+# switch both off so the control measures the cut-out layer on its own.
+python3 - "$M/onchain-guard.sh" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+for find, repl in [('SEG_RAW=$(printf \'%s\\n\' "$KIT_NORM" | grep -oE "$RE") || SEG_RAW=', 'SEG_RAW='),
+                   ('    *kit_subst*)\n', '    *kit_never*)\n')]:
+    assert s.count(find) == 1, "mutation target %r not found" % find
+    s = s.replace(find, repl)
+open(p, "w", encoding="utf-8").write(s)
+PY
 assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 'solana program deploy p.so --program-id `solana address -k k.json` -um')" \
   "planted failure caught — the outer write cut at the substitution: the -um after it is lost"
 rm -rf "$M"
