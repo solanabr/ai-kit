@@ -1,12 +1,15 @@
 # kit-code-size.awk — whether a Bash command is small enough for the guards to read
 # in time, for lib-headless.sh's kit_size_cap: prints "ok" when the code in it, its
 # length less the heredoc bodies every guard copies rather than parses, is within
-# KIT_CODE_LIMIT bytes, and "over" otherwise.  Run with lib-tokenize.awk, which
-# calls back into the two functions below.  There is no line limit: the guards
-# join their input once (kit_cat), so the 262,144 empty lines 256 KB can hold cost
-# each whole hook about 1.5 s of CPU, where appending a line at a time had cost 10 s
-# (#300).  This file reads line by line, and stops counting once the code limit is
-# passed.
+# KIT_CODE_LIMIT bytes and it has at most KIT_LINE_LIMIT lines, and "over"
+# otherwise.  Run with lib-tokenize.awk, which calls back into the two functions
+# below.  The line limit is there because every pass a guard makes costs per line,
+# and egress-guard makes up to four: the guards join their input once (kit_cat,
+# #300), so the cost is linear, but at 262,144 lines egress-guard's whole hook still
+# took 4-5.5 s of CPU and passed its 10 s timeout under load.  At 20,000 lines, nearly
+# all of them empty code lines, it takes 1.25 s of CPU, and under 5 s of wall
+# time beside 16 busy loops on 8 cores.  This
+# file reads line by line, and stops counting once the code limit is passed.
 #
 # It leaves a body out only when all of these hold, so a mistake here can only
 # refuse more:
@@ -54,11 +57,13 @@ function code_line(l,   np, hs, HS, hn, HT, HQ, hw, x, wascont, fw) {
 BEGIN {
   LIMIT = ENVIRON["KIT_CODE_LIMIT"] + 0
   if (LIMIT < 1) LIMIT = 32768
+  LINES = ENVIRON["KIT_LINE_LIMIT"] + 0
+  if (LINES < 1) LINES = 20000
   SIZE = 0; q = ""; delim = ""; cont = 0
 }
 SIZE <= LIMIT { code_line($0) }
 END {
   # An unterminated body counts: nothing proves it is only data.
   if (delim != "" && exempt) SIZE += pend
-  print (SIZE <= LIMIT) ? "ok" : "over"
+  print (SIZE <= LIMIT && NR <= LINES) ? "ok" : "over"
 }
