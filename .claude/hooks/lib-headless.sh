@@ -21,8 +21,10 @@
 # Environment knobs (all optional):
 #   KIT_FIREWALL_TIER      off|relaxed|medium|high   overrides .claude/security.json
 #   KIT_FIREWALL_HEADLESS  1 force headless, 0 force interactive (tests use 0)
-#   CONFIRM_MAINNET=1      allow a mainnet write to proceed headless
-#   CONFIRM_PUBLISH=1      allow npm/cargo publish to proceed headless
+#   CONFIRM_MAINNET=1      allow a mainnet write, or one to a cluster the on-chain
+#                          guard cannot identify, to proceed headless (below High)
+#   CONFIRM_PUBLISH=1      allow npm/yarn/pnpm/bun/cargo publish to proceed headless
+#                          (Relaxed; Medium and High deny publishing outright)
 
 # ---------------------------------------------------------------- JSON in
 
@@ -378,18 +380,43 @@ kit_tier_num() {
 
 # ---------------------------------------------------------------- headless
 
-# kit_is_headless — true when there is no interactive user to answer a prompt.
-# Order: explicit override, CI markers, then whether a controlling terminal can
-# actually be opened.  A hook's own stdio is always a pipe, so [ -t 1 ] tells
-# us nothing; /dev/tty does.  permission_mode is only a tiebreaker: its absence
-# means an older or third-party harness, which we would read as non-interactive
-# only when the terminal probe also failed — the same answer, so the probe
-# decides on its own and KIT_PERMISSION_MODE stays informational.
-kit_is_headless() {
-  case ${KIT_FIREWALL_HEADLESS-} in 1 | true | yes) return 0 ;; 0 | false | no) return 1 ;; esac
+# _kit_headless_signal — prints 1 (headless), 0 (interactive) or nothing (no
+# signal), from the sources that say so positively.  Order: explicit override,
+# CI markers, then what Claude Code puts in every hook's environment.
+#
+# Claude Code (measured on 2.1.286, macOS): an interactive session gives its hooks
+# CLAUDE_CODE_SESSION_ATTENDED=1 and CLAUDE_CODE_ENTRYPOINT=cli; `claude -p` gives
+# them CLAUDE_CODE_SESSION_ATTENDED=0 and CLAUDE_CODE_ENTRYPOINT=sdk-cli, and the
+# Agent SDK an `sdk-*` entrypoint.  Neither variable is in the hooks documentation,
+# so a value we do not recognise decides nothing.  The /dev/tty probe this replaced
+# as the first-choice signal misfires there: Claude Code starts each hook as its
+# own session leader with no controlling terminal, so the probe read every
+# interactive session as headless (#307).  Spoofing either variable fails closed:
+# claiming "attended" in a headless run turns a silent ask into an ask, which -p
+# refuses, and claiming "unattended" interactively turns asks into denies.
+_kit_headless_signal() {
+  case ${KIT_FIREWALL_HEADLESS-} in 1 | true | yes) echo 1; return ;; 0 | false | no) echo 0; return ;; esac
   if [ -n "${CI-}${GITHUB_ACTIONS-}${GITLAB_CI-}${BUILDKITE-}${JENKINS_URL-}${TEAMCITY_VERSION-}${CIRCLECI-}${BITBUCKET_BUILD_NUMBER-}${DRONE-}${CODEBUILD_BUILD_ID-}" ]; then
-    return 0
+    echo 1; return
   fi
+  case ${CLAUDE_CODE_SESSION_ATTENDED-} in 0) echo 1; return ;; 1) echo 0; return ;; esac
+  case ${CLAUDE_CODE_ENTRYPOINT-} in sdk-*) echo 1; return ;; cli) echo 0; return ;; esac
+}
+
+# kit_known_headless — true only when a positive signal says nobody is there.  The
+# denies that stand in for a prompt (kit_confirm) key on this, not on
+# kit_is_headless: with no signal they ask instead, and an ask is refused by a
+# real headless run anyway, so an unknown harness never gets a free pass, while an
+# interactive user whose harness sets nothing still gets a prompt, not a deny.
+kit_known_headless() { [ "$(_kit_headless_signal)" = 1 ]; }
+
+# kit_is_headless — true when there is probably no interactive user, which is what
+# kit_ask needs to decide whether to go silent.  A positive signal decides; with
+# none (another harness, an older Claude Code), whether a controlling terminal can
+# be opened.  A hook's own stdio is always a pipe, so [ -t 1 ] tells us nothing.
+# That fallback errs towards headless, which for kit_ask only means silence.
+kit_is_headless() {
+  case $(_kit_headless_signal) in 1) return 0 ;; 0) return 1 ;; esac
   if (exec 3</dev/tty) 2>/dev/null; then
     return 1
   fi
@@ -473,19 +500,39 @@ kit_deny_deep() {
 # `irreversible` has no env escape by design: --final, program-v4 finalize and
 # authorize --disable are deny at every tier, and the user runs them by hand.
 kit_gate() {
+  kit_confirm "$1" "$2"
+  kit_gate_ask "$2"
+}
+
+# kit_gate_ask <reason> — the prompt half of kit_gate.  Unlike kit_ask it goes
+# silent only when headless is positively known (kit_known_headless), which after
+# kit_confirm means the CONFIRM_* var was set.  With no signal either way it asks:
+# an interactive user gets the prompt, and a headless run refuses an ask.
+kit_gate_ask() {
+  kit_known_headless && exit 0
+  _kit_emit ask "$1"
+  exit 0
+}
+
+# kit_confirm <mainnet|publish> <reason> — kit_gate's headless half, for a caller
+# that must keep reading after it.  Known headless without the matching CONFIRM_*
+# var: deny.  Otherwise return, deciding nothing.  egress-guard.sh needs this rather
+# than kit_gate: its asks wait until every deny in the command has run (ask_later),
+# and kit_gate's confirmed exit 0 would end the hook before those denies were read.
+# Keyed on kit_known_headless, not kit_is_headless: the terminal probe fails in
+# every interactive Claude Code hook, and a deny there would replace the user's
+# prompt (#307).
+kit_confirm() {
   case $1 in
     mainnet) _c=${CONFIRM_MAINNET-}; _v=CONFIRM_MAINNET ;;
     publish) _c=${CONFIRM_PUBLISH-}; _v=CONFIRM_PUBLISH ;;
     *) kit_deny "$2" ;;
   esac
-  if kit_is_headless; then
-    case $_c in
-      1 | true | yes) exit 0 ;;
-      *) kit_deny "$2 No interactive user to confirm this; re-run with $_v=1 if it is intended." ;;
-    esac
-  fi
-  _kit_emit ask "$2"
-  exit 0
+  kit_known_headless || return 0
+  case $_c in
+    1 | true | yes) return 0 ;;
+  esac
+  kit_deny "$2 No interactive user to confirm this; re-run with $_v=1 if it is intended."
 }
 
 # ---------------------------------------------------------------- shared regexes

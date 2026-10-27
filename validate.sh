@@ -578,9 +578,10 @@ def probes(pat):
     """Every spelling of pat that leaves at least one wildcard's gap empty. Only an
     unescaped `*` is a gap, and the `-C <dir>` operand is never empty (git requires the
     path), so it is forced filled — `git -C * clean*` denies `git -C . clean`, not a
-    path-less `git -C clean`."""
+    path-less `git -C clean`. So is the rest of an option after a lone `-`
+    (`solana -* transfer *`, #306): a bare `-` is not an option."""
     stars = ustars(pat)
-    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$", pat[:i])}
+    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$|(?:^|\s)-$", pat[:i])}
     for empty in itertools.product((False, True), repeat=len(stars)):
         combo = dict(zip(stars, empty))
         if not any(empty) or any(combo[i] for i in mand):

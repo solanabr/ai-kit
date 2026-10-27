@@ -425,7 +425,7 @@ def matches(rule, cmd):
 
 def probes(pat):
     stars = ustars(pat)
-    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$", pat[:i])}
+    mand = {i for i in stars if re.search(r"(?:^|\s)-C\s*$|(?:^|\s)-$", pat[:i])}
     for empty in itertools.product((False, True), repeat=len(stars)):
         combo = dict(zip(stars, empty))
         if not any(empty) or any(combo[i] for i in mand):
@@ -982,6 +982,50 @@ done
 assert_eq "no" "$(python3 "$WORK/gap_probe.py" --match "git --config-env *" \
   "git --config-env=core.fsmonitor=X status" 2>&1)" \
   "planted: the spaced shape Bash(git --config-env *) would leave the = spelling open"
+# The on-chain denies hold behind the CLI's global options (#306). solana and spl-token
+# take -u/--url, -k/--keypair, -C/--config and --commitment before the subcommand, and
+# every rule in DENY_IRREVERSIBLE_ONCHAIN is anchored on the literal subcommand, so
+# `solana -um transfer` ran at every tier while `solana transfer` was denied. Each solana
+# and spl-token rule now has a `<bin> -* <rest>` twin. Judged against the whole generated
+# deny set, in both directions: a read behind the same options stays open.
+echo "[on-chain denies behind global options]"
+for t in $TIERS; do
+  assert_eq "none" "$(python3 -c "
+import json
+deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
+print(' '.join(r for r in ('Bash(solana close *)', 'Bash(solana authorize *)') if r in deny) or 'none')" 2>/dev/null)" \
+    "$t no longer carries the dead solana close/authorize rules (no such subcommand)"
+  for cmd in "solana transfer TO 0.5" "solana -um transfer TO 0.5" "solana -u m transfer TO 0.5" \
+             "solana --url https://api.mainnet-beta.solana.com transfer TO 0.5" \
+             "solana --url=mainnet-beta transfer TO 0.5" "solana -k kp.json transfer TO 0.5" \
+             "solana --keypair kp.json --commitment finalized transfer TO 0.5" \
+             "solana -C /tmp/c.yml transfer TO 0.5" "solana -um transfer" \
+             "solana close-vote-account VOTE DEST" "solana -ud close-vote-account VOTE DEST" \
+             "solana authorize-nonce-account NONCE NEW" "solana -um authorize-nonce-account NONCE NEW" \
+             "solana -um withdraw-from-nonce-account NONCE DEST 1" \
+             "spl-token -um burn ACCT 1" "spl-token --url mainnet-beta close --address ACCT" \
+             "solana -um program deploy --final p.so" "solana -um program close PID --bypass-warning" \
+             "solana -um program-v4 finalize PID" "spl-token -um authorize MINT mint --disable" \
+             "solana -um config set -k other.json"; do
+    assert_eq "yes" "$([ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" != none ] && echo yes || echo no)" \
+      "$t denies \`$cmd\`"
+  done
+  for cmd in "solana -um balance" "solana --url mainnet-beta account ADDR" "solana -um program show PID" \
+             "solana -k kp.json address" "solana -ud stake-account STAKE" "solana -um vote-account VOTE" \
+             "solana --url mainnet-beta transaction-history ADDR" "spl-token -um accounts" \
+             "spl-token --url mainnet-beta balance MINT" "solana -um config get" "solana close --help"; do
+    assert_eq "none" "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$t.json" "$cmd" 2>&1)" \
+      "$t leaves the read \`$cmd\` to run"
+  done
+done
+# Planted: without the twins the option-first spelling is open, which is the hole.
+assert_eq "no" "$(python3 "$WORK/gap_probe.py" --match "solana transfer *" "solana -um transfer TO 0.5" 2>&1)" \
+  "planted: Bash(solana transfer *) alone leaves \`solana -um transfer\` open"
+# The `-*` gap is never empty in a command (a lone `-` is not an option), and gap_probe
+# is taught that rather than the rule set carrying a `solana - transfer` twin. Without the
+# bare twin, though, the trailing ` *` is mandatory and `solana -um transfer` is open.
+plant "an option-first rule without its bare twin" "misses 'solana -ZZZ transfer'" \
+  - "Bash(solana -* transfer)"
 # git --exec-path=<dir> makes git run the helpers and subcommands it finds in dir.
 # Denied at every tier with the `=` in the rule: the bare option only prints the path,
 # and git reads the spaced form the same way, so both stay open.

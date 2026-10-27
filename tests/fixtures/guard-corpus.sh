@@ -85,6 +85,35 @@ cases_onchain=(
   "fish -c '$DEPLOY'"
   "flock /tmp/l $DEPLOY"
   "ash -c '$DEPLOY'"
+  # #306: the subcommand behind the CLI's global options, anchor idl authority and
+  # the stake/vote/nonce authority verbs, with the reads and help beside them.
+  "solana -um transfer RECIP 1"
+  "solana --url mainnet-beta transfer RECIP 1"
+  "solana -k kp.json transfer RECIP 1 -um"
+  "solana -C @@CFG@@ transfer RECIP 1"
+  "solana -ud transfer RECIP 1 --help"
+  "solana -um balance"
+  "anchor idl erase-authority -p PID"
+  "anchor --provider.cluster devnet idl erase-authority -p PID"
+  "anchor idl set-authority -p PID -n NEW"
+  "anchor idl fetch PID"
+  "solana stake-authorize STAKE --new-stake-authority X -um"
+  "solana vote-authorize-withdrawer VOTE AUTH NEW -um"
+  "solana vote-authorize-voter VOTE AUTH NEW -um"
+  "solana authorize-nonce-account NONCE NEW -um"
+  "solana close-vote-account VOTE DEST -um"
+  "spl-token approve ACCT 100 DELEGATE -um"
+  "spl-token -um approve ACCT 100 DELEGATE"
+  "spl-token approve --help"
+  # #306 review: help words that are not argv words, and spaced option values.
+  "solana program deploy p.so --final # --help"
+  "anchor idl erase-authority -p PID # -h"
+  "solana -um program deploy p.so # -h"
+  "solana -um transfer RECIP 1 2> -h"
+  "solana -um transfer RECIP 1 \$(: --help)"
+  "spl-token -um transfer MINT 1 RECIP --with-memo 'a -h b'"
+  "solana -k 'my kp.json' -um stake-authorize STAKE --new-stake-authority X"
+  "solana -k my\\ kp.json -um stake-authorize STAKE --new-stake-authority X"
 )
 
 # Secrets: credential reads however wrapped, the credential-printing commands, the
