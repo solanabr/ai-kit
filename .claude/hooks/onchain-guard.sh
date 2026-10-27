@@ -93,61 +93,21 @@ RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+
 # removed and the words either side of it stay in the one statement.  `|&` is a
 # real pipe and stays a separator.
 #
-# Backtick substitutions go before that.  Each one runs its command exactly as
-# `$( )` does, so `` echo `solana program deploy b.so -um` `` is a deploy; but it
-# is a word of the statement around it, not the end of that statement.  cut()
-# lifts each one out onto a line of its own, to be judged as a statement, and
-# leaves a placeholder word in its place, so the outer write keeps every word
-# before and after it: `--program-id `solana address -k k.json` -um` still reads
-# -um, and `` `echo` --final `` still reads --final.  A placeholder standing where
-# a cluster flag's value was resolves as an unidentified cluster, the strict
-# reading.  A backtick inside single quotes is literal and stays where it is; one
-# inside double quotes still substitutes.  The quote state carries from one line
-# to the next (sq and dq are globals), so a backtick inside a multi-line
-# single-quoted string (a commit message, a PR body, `node -e '…'`) stays text.
-# An unterminated backtick is left as text.
-#
-# The cut-out text is not the only text read: SEG_RAW below is main's reading of
-# the same command, uncut, and both the irreversible check and the cluster
-# judgement take whichever is worse.  A substitution's output becomes words of
-# the outer command, so `` deploy `echo --final` p.so `` is --final and
-# `` deploy `echo -um` p.so `` is mainnet — words only the uncut text still shows.
-SEG=$(printf '%s\n' "$KIT_NORM" | awk '
-  function cut(s,    out, subs, n, i, j, c) {
-    out = ""; subs = ""; n = length(s)
-    for (i = 1; i <= n; i++) {
-      c = substr(s, i, 1)
-      if (c == "\\" && !sq) { out = out substr(s, i, 2); i++; continue }
-      if (c == "\047" && !dq) sq = !sq
-      else if (c == "\"" && !sq) dq = !dq
-      else if (c == "`" && !sq) {
-        for (j = i + 1; j <= n && substr(s, j, 1) != "`"; j++)
-          if (substr(s, j, 1) == "\\") j++
-        if (j <= n) {
-          subs = subs "\n" substr(s, i + 1, j - i - 1)
-          out = out " kit_subst "
-          i = j
-          continue
-        }
-      }
-      out = out c
-    }
-    return out subs
-  }
-  BEGIN { sq = 0; dq = 0 }
-  {
-    s = cut($0)
-    gsub(/[0-9]*[<>]&[0-9]*-?/, " ", s)
-    gsub(/&>>?/, " ", s)
-    gsub(/>\|/, ">", s)
-    gsub(/[;&|]/, "&\n", s)
-    print s
+# Backticks are read exactly as before this change: an ordinary character, so a
+# backtick substitution is part of the words around it.  `` echo `solana program
+# deploy b.so -um` `` therefore starts no statement and meets no gate; that gap
+# predates this file's per-statement split and is tracked as a follow-up.
+SEG=$(printf '%s\n' "$KIT_NORM" | awk '{
+    gsub(/[0-9]*[<>]&[0-9]*-?/, " ")
+    gsub(/&>>?/, " ")
+    gsub(/>\|/, ">")
+    gsub(/[;&|]/, "&\n")
+    print
   }' | grep -oE "$RE") || SEG=
-SEG_RAW=$(printf '%s\n' "$KIT_NORM" | grep -oE "$RE") || SEG_RAW=
-[ -n "$SEG$SEG_RAW" ] || exit 0
+[ -n "$SEG" ] || exit 0
 
 # ---- irreversible: deny at every tier, no env escape.  The user runs these.
-if printf '%s\n%s\n' "$SEG" "$SEG_RAW" | grep -qE -e '--final|--bypass-warning|program-v4 finalize|spl-token authorize[^;&|]*--disable'; then
+if printf '%s\n' "$SEG" | grep -qE -e '--final|--bypass-warning|program-v4 finalize|spl-token authorize[^;&|]*--disable'; then
   kit_deny "irreversible on-chain action (--final, program close --bypass-warning, program-v4 finalize or authorize --disable). If the user wants it, they run it themselves outside Claude."
 fi
 
@@ -312,7 +272,6 @@ classify() {
 
 # Judge every write, and answer for the most dangerous one: a command is approved
 # or refused whole, so a devnet deploy beside a mainnet one is a mainnet command.
-# Both readings are judged: the cut-out statements and main's uncut ones (SEG_RAW).
 WORST=0 WMSG=
 while IFS= read -r s; do
   [ -n "$s" ] || continue
@@ -325,19 +284,8 @@ while IFS= read -r s; do
   done <<CANDS
 $CANDS
 CANDS
-  # A write with a substitution among its words: whatever the substitution prints
-  # becomes arguments, a cluster flag included, so no flag read from the text
-  # settles the cluster.  At least unidentified.
-  case $s in
-    *kit_subst*)
-      if [ "$WORST" -lt 3 ]; then
-        WORST=3 WMSG="On-chain write whose arguments include a command substitution, so its cluster cannot be read from the command (it may well be mainnet) — check the target before approving."
-      fi
-      ;;
-  esac
 done <<EOF
 $SEG
-$SEG_RAW
 EOF
 
 case $WORST in
