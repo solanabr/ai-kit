@@ -78,9 +78,7 @@ fi
 # Position-anchored: the verb has to start a statement, optionally behind env
 # assignments and a path prefix.  Matching the verb anywhere in the string is
 # what makes a hook fire on prose about deploying.
-# A backtick opens a command substitution exactly as `$(` does, so it starts a
-# statement and ends one: `` echo `solana program deploy b.so -um` `` is a deploy.
-RE='(^|[;&|(`]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()`]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|`]*)?([;&|)`]|$)'
+RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|]*)?([;&|)]|$)'
 # One write per line.  A match consumes the separator that ends it, so with the
 # statements left on one line a write right after a `;` or `|` had no separator
 # left to start on and was never seen: `deploy -ud a.so; deploy --url <mainnet>
@@ -94,12 +92,45 @@ RE='(^|[;&|(`]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]
 # passed the irreversible check.  The redirection decides nothing here, so it is
 # removed and the words either side of it stay in the one statement.  `|&` is a
 # real pipe and stays a separator.
-SEG=$(printf '%s\n' "$KIT_NORM" | awk '{
-    gsub(/[0-9]*[<>]&[0-9]*-?/, " ")
-    gsub(/&>>?/, " ")
-    gsub(/>\|/, ">")
-    gsub(/[;&|`]/, "&\n")
-    print
+#
+# Backtick substitutions go before that.  Each one runs its command exactly as
+# `$( )` does, so `` echo `solana program deploy b.so -um` `` is a deploy; but it
+# is a word of the statement around it, not the end of that statement.  cut()
+# lifts each one out onto a line of its own, to be judged as a statement, and
+# leaves a placeholder word in its place, so the outer write keeps every word
+# before and after it: `--program-id `solana address -k k.json` -um` still reads
+# -um, and `` `echo` --final `` still reads --final.  A placeholder standing where
+# a cluster flag's value was resolves as an unidentified cluster, the strict
+# reading.  A backtick inside single quotes is literal and stays where it is; one
+# inside double quotes still substitutes.  An unterminated backtick is left as text.
+SEG=$(printf '%s\n' "$KIT_NORM" | awk '
+  function cut(s,    out, subs, n, i, j, c, sq, dq) {
+    out = ""; subs = ""; sq = 0; dq = 0; n = length(s)
+    for (i = 1; i <= n; i++) {
+      c = substr(s, i, 1)
+      if (c == "\\" && !sq) { out = out substr(s, i, 2); i++; continue }
+      if (c == "\047" && !dq) sq = !sq
+      else if (c == "\"" && !sq) dq = !dq
+      else if (c == "`" && !sq) {
+        for (j = i + 1; j <= n && substr(s, j, 1) != "`"; j++)
+          if (substr(s, j, 1) == "\\") j++
+        if (j > n) { out = out substr(s, i); break }
+        subs = subs "\n" substr(s, i + 1, j - i - 1)
+        out = out " kit_subst "
+        i = j
+        continue
+      }
+      out = out c
+    }
+    return out subs
+  }
+  {
+    s = cut($0)
+    gsub(/[0-9]*[<>]&[0-9]*-?/, " ", s)
+    gsub(/&>>?/, " ", s)
+    gsub(/>\|/, ">", s)
+    gsub(/[;&|]/, "&\n", s)
+    print s
   }' | grep -oE "$RE") || SEG=
 [ -n "$SEG" ] || exit 0
 
