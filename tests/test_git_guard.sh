@@ -1314,7 +1314,9 @@ flips_at off "GITCFG no longer run before the Off early-exit, so Off lets -c <pr
 M="$(mutate 'return (!Q[i] && T[i] ~' 'return 1 || (!Q[i] && T[i] ~')"
 flips_at off "the literal-word check removed, so a glob hands git a second -c" \
   "$M" "git -c core.fsmonitor=false -[c] core.pager=/tmp/x log" DENY PASS
-flips_at high "...and so does \$'-c'" "$M" "git -c core.fsmonitor=false \$'-c' core.pager=/tmp/x log" DENY PASS
+# `$'-c'` is no probe for it: since #301 the tokenizer decodes `$'…'` as bash does, so
+# GITCFG reads that word as a second `-c` and denies its value whatever this check says.
+# The plain case in the -c section still holds the shipped verdict.
 M="$(mutate 'if (hasc && i > n) gw_opaque(T, 0)' 'if (0) gw_opaque(T, 0)')"
 # (The `$(…)` and brace forms are caught by the literal check as well; a bare prefix is
 # the one only this line decides.)
