@@ -133,8 +133,8 @@ function brace_expand(s,   iter) {
   for (iter = 0; iter < 24; iter++) { if (!brace_once(s)) break; s = BE_OUT }
   return s
 }
-function brace_once(s,   L, i, c, q, depth, j, comma, pre, post, nseg, SEG, k, ws, we, out, bt, dbr) {
-  L = length(s); q = ""; bt = 0; dbr = 0
+function brace_once(s,   L, i, c, q, depth, j, comma, pre, post, nseg, SEG, k, ws, we, out, bt, cm) {
+  L = length(s); q = ""; bt = 0; cm = 0
   for (i = 1; i <= L; i++) {
     c = substr(s, i, 1)
     # q is "ansi" inside $'…', where a backslash escapes the next character, `\'`
@@ -143,14 +143,14 @@ function brace_once(s,   L, i, c, q, depth, j, comma, pre, post, nseg, SEG, k, w
     if (q == "ansi") { if (c == "\\") i++; else if (c == SQ) q = ""; continue }
     if (q != "") { if (c == q) q = ""; else if (c == "\\" && q == "\"") i++; continue }
     # Inside `…` no quote opens, as bash finds its end (kit_bt_end); braces still
-    # expand there.  A comment runs to the newline with nothing in it quoting.
+    # expand there.  After a `#` that may start a comment, up to the newline, a
+    # $'…' is a `$` and a plain '…', as split_cmd reads it there.
     if (c == "\\") { i++; continue }
     if (c == "`") { bt = !bt; continue }
     if (bt && (c == SQ || c == "\"" || c == "$")) continue
-    # Never after a `)` (pk "": this pass does not know what it closed) nor inside
-    # `[[ … ]]`, as split_cmd reads it.
-    if (!bt && (c == "[" || c == "]")) dbr = kit_dbr(s, i, dbr)
-    if (!bt && !dbr && c == "#" && kit_comment_at(s, i, "")) { j = index(substr(s, i), "\n"); if (j == 0) break; i += j - 1; continue }
+    if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n;&|()]/)) cm = 1
+    if (c == "\n") cm = 0
+    if (cm && c == "$" && substr(s, i + 1, 1) == SQ) continue
     if (kit_pid(s, i)) { i++; continue }
     if (c == "$" && substr(s, i + 1, 1) == SQ) { q = "ansi"; i++; continue }
     if (c == SQ || c == "\"") { q = c; continue }

@@ -2061,54 +2061,54 @@ same "$M_EGRESS" ask deny deny "npm publish" "${P//@/npm publish}" "$MUT_PID"
 same "$M_EGRESS" silent ask deny "git push --force origin main" "${P//@/git push --force origin main}" "$MUT_PID"
 same "$M_CHAIN" ask ask deny "$DA" "${P//@/$DA}" "$MUT_PID"
 # Where bash decodes no $'…' and opens no quote at all: inside `…`, which ends at
-# the first unescaped backtick; in a comment, which runs to the newline; and past
-# a heredoc body, which ends at its delimiter with a quote in a `$( … )` still
-# open. Read as $'…' there, the `\'` ran the quote on over the gated command. The
-# plain-quote spellings (a `'` in backticks, `# don't`, `$(echo ')`) were silent
-# on main for the same reason and are closed with them.
+# the first unescaped backtick, and past a heredoc body, which ends at its
+# delimiter with a quote in a `$( … )` still open. Read as $'…' there, the `\'`
+# ran the quote on over the gated command. The plain-quote spellings (a `'` in
+# backticks, `$(echo ')` in a body) were silent on main for the same reason and
+# are closed with them. After a `#` that may start a comment no $'…' is decoded,
+# which is how main read it; nothing is dropped as a comment, so `# don't` keeps
+# main's verdict.
 BQ='`'
 MUT_BT="$(mutant bt lib-tokenize.awk 'return (substr(s, e, 1) == "`") ? e : length(s) + 1' 'return length(s) + 1')" || MUT_BT=
-MUT_HASH="$(mutant hash lib-tokenize.awk 'if (c == "#" && !dbr && kit_comment_at(s, i,' 'if (0 && !dbr && kit_comment_at(s, i,')" || MUT_HASH=
+MUT_HASH="$(mutant hash lib-tokenize.awk 'if (cm && c2 == "$" SQ) { out = out "$\"\""; continue }' 'if (0) { out = out "$\"\""; continue }')" || MUT_HASH=
 MUT_HDQEND="$(mutant hdqend lib-tokenize.awk 'KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"' 'KHS_BUF ")"')" || MUT_HDQEND=
-MUT_HASHESC="$(mutant hashesc lib-tokenize.awk 'return (i - 2 - k) % 2 == 0' 'return 1')" || MUT_HASHESC=
 MUT_BTBODY="$(mutant btbody lib-tokenize.awk '((c == "`" || c == "\\" || c == "$") ? c : "\\" c)' '("\\" c)')" || MUT_BTBODY=
-for M in "$MUT_BT" "$MUT_HASH" "$MUT_HDQEND" "$MUT_HASHESC" "$MUT_BTBODY"; do
+for M in "$MUT_BT" "$MUT_HASH" "$MUT_HDQEND" "$MUT_BTBODY"; do
   assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
 done
-for Q in "\$'$BS'" "'"; do
-  for P in "echo ${BQ}echo $Q${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo $Q${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
-           "echo hi # $Q${NL}@${NL}echo '|$MUT_HASH" "cat <<X${NL}\$(echo $Q)${NL}X${NL}@${NL}# '|$MUT_HDQEND"; do
-    M="${P##*|}"; P="${P%|*}"
-    same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$M"
-    same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$M"
-    same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$M"
-  done
-done
-# A comment hides what follows it on its line, and only a word-starting `#` is one.
-quiet "$M_FETCH" "ls # ; npx -y x" "$MUT_HASH"
-quiet "$M_SECRETS" "ls # ; cat ~/.npmrc" "$MUT_HASH"
-# After a `)` a `#` starts a comment only when the `)` closed a plain subshell or
-# group: the `)` of `$( )`, `$(( ))` and `<( )` ends no word, so the `#` is text
-# and the `;` after it separates. Inside `[[ … ]]` the `(` and `|` are a regex's,
-# and a `#` after them is text too.
-MUT_PK="$(mutant pk lib-tokenize.awk 'if (p == ")" && pk != "p") return 0' 'if (0) return 0')" || MUT_PK=
-MUT_PKALL="$(mutant pkall lib-tokenize.awk 'if (p == ")" && pk != "p") return 0' 'if (p == ")") return 0')" || MUT_PKALL=
-MUT_DBR="$(mutant dbr lib-tokenize.awk 'a ~ /[ \t\n]/) return 1' 'a ~ /[ \t\n]/) return 0')" || MUT_DBR=
-for M in "$MUT_PK" "$MUT_PKALL" "$MUT_DBR"; do
-  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
-done
-for P in 'echo $(true)#; @|pk' 'x=$(true)#; @|pk' 'echo $((1))#; @|pk' 'cat <(true)#; @|pk' \
-         '[[ x =~ (#) ]] || @|dbr' '[[ x =~ x|#y ]] || @|dbr'; do
-  case ${P##*|} in pk) M="$MUT_PK" ;; dbr) M="$MUT_DBR" ;; esac; P="${P%|*}"
+for P in "echo ${BQ}echo \$'$BS'${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo \$'$BS'${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
+         "echo ${BQ}echo '${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo '${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
+         "echo hi # \$'$BS'${NL}@${NL}echo '|$MUT_HASH" \
+         "cat <<X${NL}\$(echo \$'$BS')${NL}X${NL}@${NL}# '|$MUT_HDQEND" "cat <<X${NL}\$(echo ')${NL}X${NL}@${NL}# '|$MUT_HDQEND"; do
+  M="${P##*|}"; P="${P%|*}"
   same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$M"
-  same "$M_SECRETS" deny deny deny "cat ~/.npmrc" "${P//@/cat ~/.npmrc}" "$M"
+  same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$M"
+  same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$M"
 done
-same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" 'echo $(true)#; cat ~/.{npmrc,netrc}' "$MUT_PK"
-same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" '[[ x =~ (#) ]] || cat ~/.{npmrc,netrc}' "$MUT_DBR"
-quiet "$M_FETCH" "(true)# ; npx -y x" "$MUT_PKALL"
-quiet "$M_SECRETS" "(true)# ; cat ~/.npmrc" "$MUT_PKALL"
-same "$M_FETCH" silent silent deny "npx -y x" "echo a${BS} #; npx -y x" "$MUT_HASHESC"
 same "$M_FETCH" silent silent deny "npx -y x" "echo ${BQ}echo ${BS}${BQ}npx -y x${BS}${BQ}${BQ}" "$MUT_BTBODY"
+# No text is dropped as a comment (#301's review): each of these runs the gated
+# command in bash, or is read as main read it, and gets its bare form's verdict.
+# A comment rule got every one of them wrong at some point: a `#` after the `)`
+# of `$( )`, `$(( ))` or `<( )`, inside `[[ … =~ … ]]`, in a nested `${ … }`, or
+# after a case pattern's `)`. There is no mechanism to plant out, so no control.
+bare_as() { # bare_as <hook> <bare> <variant>
+  local t b
+  for t in relaxed medium high; do
+    run_bash "$1" "$t" "$2"; b="$DECISION"
+    run_bash "$1" "$t" "$3"
+    assert_eq "$b" "$DECISION" "[$t] $b, as its bare form: ${3//$NL/\\n}"
+  done
+}
+for P in 'echo $(true)#; @' 'x=$(true)#; @' 'echo $((1))#; @' 'cat <(true)#; @' '[[ x =~ (#) ]] || @' '[[ x =~ x|#y ]] || @' \
+         '[[ $(echo ]]) =~ (#) ]] || @' '[[ x =~ ( ]] |#) ]] || @' 'echo ${x:-${y} #}; @' 'echo ${x:+${y} #}; @' \
+         'echo ${a[${i}] #}; @' '( echo $(case x in x) true;; esac)#; @ )' 'ls # ; @' '(true)# ; @' 'echo a\ #; @'; do
+  bare_as "$M_FETCH" "npx -y x" "${P//@/npx -y x}"
+  bare_as "$M_SECRETS" "cat ~/.npmrc" "${P//@/cat ~/.npmrc}"
+done
+BRACE='cat ~/.{npmrc,netrc}'
+for P in 'echo $(true)#; @' '[[ x =~ (#) ]] || @' '[[ x =~ ( ]] |#) ]] || @'; do
+  bare_as "$M_SECRETS" "$BRACE" "${P//@/$BRACE}"
+done
 same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"
 same "$M_FETCH" silent silent deny "npx -y x" "cat <<X${NL}\$(echo \$'$BS')' ; npx -y x)${NL}X" "$MUT_ANSIHS"
 # The decoder itself, one escape at a time: what tokenize hands every guard.
