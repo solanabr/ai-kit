@@ -1579,6 +1579,33 @@ rm -f "$WORK/proj/CLAUDE-solana.md" "$WORK/proj/install.sh"
 assert_eq "relaxed 1" "$(KIT_FIREWALL_TIER=maintainer bash -c '. "$1"; t=$(kit_tier); printf "%s %s" "$t" "$(kit_tier_num "$t")"' _ "$REPO_ROOT/.claude/hooks/lib-headless.sh" 2>/dev/null)" \
   "the hooks act at Relaxed under the maintainer tier"
 
+# #308: kit_tier reads the top-level "tier" whatever the formatting. security.json also
+# holds enforced.tier, and a greedy line-oriented sed read that one on a file rewritten
+# onto one line (json.dump, jq -c): a declared Off still read as the enforced Relaxed.
+echo "[kit_tier: the top-level tier, not enforced.tier, on any formatting]"
+TIERDIR="$WORK/tierfmt"; mkdir -p "$TIERDIR/.claude"
+# kt <security.json text> -> the tier the hooks resolve from it, with no env override.
+kt() {
+  printf '%s\n' "$1" > "$TIERDIR/.claude/security.json"
+  (cd "$TIERDIR" && env -u KIT_FIREWALL_TIER CLAUDE_PROJECT_DIR="$TIERDIR" \
+    bash -c '. "$1"; kit_tier' _ "$REPO_ROOT/.claude/hooks/lib-headless.sh" 2>/dev/null)
+}
+ONELINE='{"_README": "x", "tier": "off", "enforced": {"tier": "relaxed", "ruleSetVersion": 10}}'
+# Planted control: the old parse on this exact file reads the nested record, so the
+# fixture reproduces the bug and the assertion below can fail.
+printf '%s\n' "$ONELINE" > "$TIERDIR/.claude/security.json"
+assert_eq "relaxed" "$(sed -n 's/.*"tier"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' "$TIERDIR/.claude/security.json" | head -n 1)" \
+  "control: the old greedy sed reads enforced.tier off a one-line file"
+assert_eq "off" "$(kt "$ONELINE")" "one line, enforced.tier relaxed after a top-level off: off"
+assert_eq "medium" "$(kt '{"enforced":{"tier":"high"},"tier":"medium"}')" \
+  "one line, the record before the top-level key: the top-level tier"
+assert_eq "off" "$(kt '{"_README":"set \"tier\": \"high\" to harden","tier":"off"}')" \
+  "a \"tier\" quoted inside a string value is not the key"
+assert_eq "high" "$(kt "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["tier"]="high"; d.setdefault("enforced",{})["tier"]="off"; print(json.dumps(d, indent=2))' "$REPO_ROOT/.claude/security.json")")" \
+  "the shipped file pretty-printed, enforced.tier off: the top-level high"
+assert_eq "relaxed" "$(kt '{"enforced":{"tier":"high"}}')" \
+  "no top-level tier: the default relaxed, not the record"
+
 # ── rule set 10: Relaxed stops getting in the way, with no routed-around loss ──
 # dm <tier> <cmd> -> "yes" if some Bash deny stops it, else "no".
 dm() { [ "$(python3 "$WORK/gap_probe.py" --deny-matches "$WORK/gen.$1.json" "$2" 2>&1)" != none ] && echo yes || echo no; }

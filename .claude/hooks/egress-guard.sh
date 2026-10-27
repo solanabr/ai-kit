@@ -411,7 +411,8 @@ case $CLASS in
     kit_ask "This command $WHY. It starts a run or a deploy, or changes the rules that gate one — confirm the repository, the workflow or environment and the ref before approving."
     ;;
   DENY)
-    kit_deny "$WHY. Sending credentials or key material off the machine is not allowed at any tier. If the user needs this uploaded, they do it themselves."
+    # Not "at any tier": Off returns before the classifier runs (TIER check above).
+    kit_deny "$WHY. Sending credentials or key material off the machine is denied at every tier except Off, which turns this guard off. If the user needs this uploaded, they do it themselves."
     ;;
   ASK1)
     kit_ask "This command $WHY. Confirm the destination and the contents before approving."

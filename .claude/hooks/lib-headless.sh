@@ -350,13 +350,19 @@ kit_parse() {
 # ---------------------------------------------------------------- tier
 
 # kit_tier — off|relaxed|medium|high.  Default relaxed, matching the spec.
+#
+# Only the top-level "tier" counts.  security.json also carries enforced.tier, the
+# machine record of the last apply, and a line-oriented sed read whichever "tier"
+# its greedy match landed on: on a file rewritten onto one line (json.dump, jq -c)
+# that was the nested one, so a declared Off still read as the enforced Relaxed.
+# kit_field_top tracks depth and string state, so formatting cannot move it, and it
+# is awk, so the answer is the same with or without jq installed.
 kit_tier() {
   _t=${KIT_FIREWALL_TIER-}
   if [ -z "$_t" ]; then
     for _d in "${CLAUDE_PROJECT_DIR-}" "${KIT_CWD-}" "$PWD"; do
       [ -n "$_d" ] && [ -r "$_d/.claude/security.json" ] || continue
-      _t=$(sed -n 's/.*"tier"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' \
-        "$_d/.claude/security.json" 2>/dev/null | head -n 1)
+      _t=$(KIT_INPUT=$(cat "$_d/.claude/security.json" 2>/dev/null) && kit_field_top tier) || _t=
       [ -n "$_t" ] && break
     done
   fi

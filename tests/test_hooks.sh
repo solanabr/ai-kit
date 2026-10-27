@@ -1209,7 +1209,7 @@ same "$M_SECRETS" deny deny deny "aws configure get aws_secret_access_key" \
 same "$M_SECRETS" deny deny deny "bash <<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" \
   "bash $BS${NL}<<'EOF'${NL}cat ~/.ssh/id_rsa${NL}EOF" "$MUT_CONT"
 # The heredoc reader's wrapper-option walk (hd_cmd) is isolated here through an
-# interpreter body: a shell-fed heredoc is now a stdin-fed shell and SHELLC-denied
+# interpreter body: a shell-fed heredoc is now a stdin-fed shell and SHELLIN-denied
 # whatever the reader does, so it could not flip the mutant, but an interpreter is not a
 # shell and the body reader still owns it.
 same "$M_SECRETS" deny deny deny "python3 - <<'EOF'${NL}print(open('/home/u/.ssh/id_rsa').read())${NL}EOF" \
