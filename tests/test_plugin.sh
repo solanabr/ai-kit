@@ -52,6 +52,18 @@ ok = (s.get('source') == 'git-subdir' and 'solanabr/safe-ai-skill' in s.get('url
 print('ok' if ok else 'bad')
 " 2>/dev/null)"
 assert_eq "$SAFE_ENTRY" "ok" "marketplace lists safe-ai-skill (git-subdir from solanabr/safe-ai-skill, SHA-pinned)"
+
+# The docs name the pinned commit, because what safe-ai-skill enforces depends on the
+# version: README's safe-ai-skill section and docs/firewall.md's enforcement table each
+# quote the short SHA, and a re-pin that leaves either behind fails here.
+SAFE_SHA="$(python3 -c "
+import json
+m = json.load(open('$MARKETPLACE'))
+print(next(p for p in m['plugins'] if p['name'] == 'safe-ai-skill')['source']['sha'][:8])
+" 2>/dev/null)"
+for doc in README.md docs/firewall.md; do
+  assert_contains "$(cat "$REPO_ROOT/$doc")" "\`$SAFE_SHA\`" "$doc names the pinned safe-ai-skill commit ($SAFE_SHA)"
+done
 PLUGIN_DEPS="$(python3 -c "import json; print(json.dumps(json.load(open('$PLUGIN_MANIFEST')).get('dependencies', [])))" 2>/dev/null)"
 assert_contains "$PLUGIN_DEPS" '"safe-ai-skill"' "plugin.json declares safe-ai-skill as a dependency"
 

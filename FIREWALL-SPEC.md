@@ -131,11 +131,11 @@ The last of that family is a string another program runs as shell code, which th
 | Project `.env` | — | read+write | read; **write deny** (see §3.1) | read deny, which the Edit and Write tools obey too; a shell append still writes |
 | Project keypairs | — | allow | allow (see §3.2) | allow |
 | Solana config dir | — | allow | deny `*.json` only (see §3.3) | deny `*.json` only |
-| Host creds | — | **allow** (maintainer's call) | deny | deny |
-| Writes outside repo | — | allow | hook-ask | deny |
+| Host creds | — | deny, by the `Read()` rule, which reaches the sandbox; `gh`'s host file allowed (rule set 10) | deny | deny |
+| Writes outside repo | — | shell writes refused by the sandbox (`allowWrite` fence) | as Relaxed | as Relaxed |
 | Force push | — | allow | hook-ask | deny |
 | Recoverable git | — | allow | allow | hook-ask |
-| Unrecoverable git | — | **deny** (see §3.4) | deny | deny |
+| Unrecoverable git | deny | **deny** (see §3.4) | deny | deny |
 | Repo `.git/config`, `.git/hooks/` | — | shell: refused by Claude Code's sandbox; file tools: protected-path prompt | as Relaxed | shell as Relaxed; file tools **deny** (see §2) |
 | Mainnet writes | — | hook-ask, loud | hook-ask, loud | deny |
 | `npm`/`cargo publish` | — | hook-ask | deny | deny |
@@ -191,6 +191,10 @@ Long-option abbreviation works in **git** but not in the **solana** CLI (clap v2
 - **Medium's "project `.env` allow + external `.env` deny" is unexpressible.** `Read(**/.env)` ≡ `Read(.env)` and cannot reach a sibling project; `Read(//**/.env)` kills the project's own and allow cannot carve out; `Read(~/**/.env)` kills it too whenever the repo is under `$HOME`. Move it to `blockReadsOutsideWorkingDirectories` + sandbox `denyRead`/`allowRead`.
 - **Mainnet denies must anchor to the verb, never the cluster string** — otherwise `anchor verify --provider.cluster mainnet` and `solana program dump --url mainnet-beta`, both read-only, get blocked.
 - **Two deny rules silently kill two ask rules today**: `git clean -fd *` and `git push --force *` appear in both lists; deny wins. Add a test forbidding a pattern in both.
+
+### 3.7 Rules only safe-ai-skill enforces
+
+The §3 table covers the kit's three layers. The safe-ai-skill plugin adds a fourth, active only while it is installed and enabled, and some rules have no other layer: reads of the project's `.env` by the file tools and `cat`-style commands below High, the Read tool on project keypairs (so §3.2's "allow" is the kit's verdict, not the session's), on-chain gating at Off, spend caps, value-moving calls on MCP servers other than `context-mode`, the session-start supply-chain check and the pasted-key prompt guard. The per-rule matrix, and what a user loses by disabling the plugin, is in [`docs/firewall.md`](docs/firewall.md#who-enforces-what). How the two should divide the work is open in [#264](https://github.com/solanabr/ai-kit/issues/264).
 
 ---
 
