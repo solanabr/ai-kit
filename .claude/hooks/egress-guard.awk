@@ -1104,8 +1104,9 @@ function rmkill_main(   rtx, rnst, RST, q, ng, G, g, n, T, c0, why) {
   }
 }
 
-{ raw = raw $0 "\n" }
+{ KIT_RAW[NR] = $0 }
 END {
+  raw = kit_raw()
   # ---- destructive-system pass (rm / kill), run before the Off early-exit.
   if (ENVIRON["KIT_RMKILL"] != "") { rmkill_main(); exit }
   # ---- GITCFG alone, also run before the Off early-exit (see gcfg_scan).

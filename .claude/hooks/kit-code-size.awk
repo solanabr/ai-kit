@@ -3,9 +3,12 @@
 # length less the heredoc bodies every guard copies rather than parses, is within
 # KIT_CODE_LIMIT bytes and it has at most KIT_LINE_LIMIT lines, and "over"
 # otherwise.  Run with lib-tokenize.awk, which calls back into the two functions
-# below.  The line limit is there because every guard builds its input into one
-# string a line at a time, which is quadratic in awk: 262,144 empty lines kept each
-# guard busy 10 s, whatever the bytes.  This file reads line by line instead, and
+# below.  The line limit is there because every pass a guard makes costs per line,
+# and egress-guard makes up to four.  The guards join their input once (kit_cat,
+# #300), so the cost is linear now, but at 10,000 lines of code (a gh write, then
+# `gh` on each line, then a 220 KB heredoc) egress-guard's whole hook still takes
+# 2.2 s of CPU, and 6 s of wall time beside 16 busy loops.  Raising the limit
+# needs egress-guard's passes merged first.  This file reads line by line, and
 # stops counting once the code limit is passed.
 #
 # It leaves a body out only when all of these hold, so a mistake here can only

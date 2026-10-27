@@ -276,8 +276,11 @@ ctx_index, or run it through Bash where the OS sandbox also applies."
 # A heredoc body written to a file with cat or tee is copied, not parsed, so it is
 # left out of the 32 KB, on rules strict enough that a mistake refuses more.  The
 # line limit and the 256 KB total bound what every guard pays just to read its
-# input, which grows with lines times bytes: 10,000 lines in 256 KB measured
-# under a second.  A failed measurement refuses too: unread is not safe.
+# input.  The guards join it once (kit_cat, #300), so the cost is linear in its
+# lines, but every pass pays it and egress-guard makes up to four: 10,000 lines of
+# code ahead of a 220 KB heredoc cost its whole hook 2.2 s of CPU, secrets-guard
+# 1.1 s, the others under 0.7 s.  Raising the limit needs egress-guard's passes
+# merged first.  A failed measurement refuses too: unread is not safe.
 kit_size_cap() {
   [ ${#KIT_CMD} -gt 32768 ] || return 0
   if [ ${#KIT_CMD} -le 262144 ]; then

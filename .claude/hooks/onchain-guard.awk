@@ -135,8 +135,9 @@ function norm(text,   nl, LN, k, line, out, st, sep, cmd, qs) {
   }
 }
 
-{ raw = raw $0 "\n" }
+{ KIT_RAW[NR] = $0 }
 END {
+  raw = kit_raw()
   # Continuations are joined first, so a heredoc head split over two lines is
   # still one head to hd_strip.  Every code string another program runs follows
   # as text of its own, read the same way and under the same bound as

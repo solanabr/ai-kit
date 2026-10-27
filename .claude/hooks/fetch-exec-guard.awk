@@ -374,8 +374,9 @@ BEGIN {
   PROJ = ENVIRON["KIT_PROJECT_DIR"]
   if (PROJ == "") PROJ = "."
 }
-{ raw = raw $0 "\n" }
+{ KIT_RAW[NR] = $0 }
 END {
+  raw = kit_raw()
   # A heredoc body is a document unless something runs it (hd_strip).
   text = split_cmd(hd_strip(kit_shell_text(raw, 0), 0))
   # Regex separators: macOS's awk also splits a one-character string separator

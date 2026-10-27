@@ -1289,7 +1289,9 @@ fi
 # kept onchain-guard busy 18 s. lib-headless.sh's kit_size_cap holds a command past
 # 32 KB to 32 KB of code, 10,000 lines and 256 KB in all; kit-code-size.awk leaves
 # out a heredoc body written to a file with cat or tee, and only on rules strict
-# enough that each case below is refused when one of them is broken.
+# enough that each case below is refused when one of them is broken. The guards
+# join their input once (#300), but every pass still costs per line, so past
+# 10,000 lines egress-guard's passes can still run past the timeout under load.
 echo "[size cap]"
 SZ="$WORK/size"; mkdir -p "$SZ"
 python3 - "$SZ" <<'PY'
@@ -1310,6 +1312,10 @@ cases = {
     "cat200k": "cat > f.txt <<'EOF'\n" + LINE * 5500 + "EOF",
     "cat433k": "cat > f.txt <<'EOF'\n" + LINE * 12000 + "EOF",
     "lines": "cat > f.txt <<'EOF'\n" + "yyy\n" * 10100 + "EOF",
+    # #321 review: a gh secrets write ahead of 30,000 empty lines and a heredoc padded
+    # to 256 KB ran egress-guard past its timeout under load with no line limit.
+    "ghpad": "gh api -X PUT repos/o/r/actions/secrets/FOO -f encrypted_value=x\n" + "\n" * 30000
+             + "cat > f.txt <<'EOF'\n" + "\n" * (262144 - 30120 - 90) + "EOF",
     "unqplain": "cat > f.txt <<EOF\n" + LINE * 1100 + "EOF",
     "bash40k": "bash <<'EOF'\n" + CODE + "\n" + DA + "\nEOF",
     # The shell reads none of these bodies as a file's text, so each has to count.
@@ -1357,7 +1363,7 @@ for g in "$M_CHAIN" "$M_SECRETS" "$M_EGRESS"; do
   # onchain-guard reads nothing that names no on-chain verb (its prefilter exits
   # first), so it meets the cap only on the cases that carry the deploy.
   cs="bash40k fakemark pipebash unqsubst contbash shellcat"
-  [ "$g" = "$M_CHAIN" ] || cs="$cs cat433k lines unterm"
+  [ "$g" = "$M_CHAIN" ] || cs="$cs cat433k lines ghpad unterm"
   for c in $cs; do
     run_payload "$g" relaxed "$SZ/$c.json"
     assert_contains "$OUT" "too large for the firewall hooks to read" "refused by the size cap: $c"
@@ -1397,6 +1403,48 @@ else
   echo "  FAIL: plugin/hooks/kit-code-size.awk is missing, so a plugin install refuses every large command"
   FAIL=$((FAIL + 1))
 fi
+
+# --- The guards build their text in linear time (#300). Appending a line at a time
+# --- copies the whole text per line, which is quadratic in awk; kit_cat joins the
+# --- lines once, in pairs and then pairs of pairs.
+echo "[the guards build their input in linear time]"
+cat > "$WORK/kitcat.awk" <<'AWK'
+END {
+  bad = 0
+  for (n = 0; n <= 70; n++) {
+    w1 = ""; w2 = ""
+    for (i = 1; i <= n; i++) { w1 = w1 (i > 1 ? "," : "") "w" i; w2 = w2 "w" i }
+    for (i = 1; i <= n; i++) A[i] = "w" i
+    if (kit_cat(A, n, ",") != w1) bad++
+    for (i = 1; i <= n; i++) A[i] = "w" i
+    if (kit_cat(A, n, "") != w2) bad++
+  }
+  print bad
+}
+AWK
+assert_eq 0 "$(awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/kitcat.awk" </dev/null)" \
+  "kit_cat joins 0 to 70 pieces as a plain join does, with a separator and without"
+# No guard appends its input a line at a time, and neither do the library's three
+# per-line text builders.
+linear_lint() {
+  grep -nE 'raw = raw ' "$1/egress-guard.awk" "$1/onchain-guard.awk" "$1/secrets-guard.awk" \
+    "$1/fetch-exec-guard.awk" "$1/decisions-guard.awk"
+  awk '/^function (hd_strip|kit_shell_text|kit_read_text)\(/ { f = 1 } /^}/ { f = 0 }
+       f && /(text = text |out = out |body = body |KT_CODE = KT_CODE )/ { print FILENAME ":" FNR ": " $0 }' "$1/lib-tokenize.awk"
+}
+assert_eq "" "$(linear_lint "$REPO_ROOT/.claude/hooks")" "no guard builds its input, and no text builder its output, a line at a time"
+MUT_QUAD="$(mutant quad egress-guard.awk '{ KIT_RAW[NR] = $0 }' '{ raw = raw $0 "\n" }')" || MUT_QUAD=
+MUT_QUADHD="$(mutant quadhd lib-tokenize.awk 'T[++tn] = l "\n"' 'text = text l "\n"')" || MUT_QUADHD=
+for mdir in "$MUT_QUAD" "$MUT_QUADHD"; do
+  TOTAL=$((TOTAL + 1))
+  if [ -n "$mdir" ] && [ -n "$(linear_lint "$mdir/.claude/hooks")" ]; then
+    echo "  PASS: planted failure caught (${mdir##*/mut-}): a line-at-a-time build is flagged"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: planted failure NOT caught (${mdir##*/mut-}): a line-at-a-time build passed the check"
+    FAIL=$((FAIL + 1))
+  fi
+done
 
 # --- A `<<` the shell reads as text opens no heredoc. Read as an opener, `echo '<<X'`
 # turned every line after it into a body nothing normalised, and the spellings above
