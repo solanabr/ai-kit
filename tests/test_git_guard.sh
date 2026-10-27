@@ -591,6 +591,44 @@ CASES
   expect $t PASS "grep -c across a pipe"              "git log | grep -c foo"
 done
 
+# Fourth review of #318: zsh and bash syntax that puts a `(`, `{` or backtick between
+# git and its `-c`, where the stage split cuts the `-c` away from git (each printed
+# PWNED against real git), and config writes behind the safe prefix that the old
+# `Bash(git -c *)` refused and the exec-key list did not name.
+echo ""
+echo "[GITCFG: named fds, zsh glob qualifiers, extglob; config writes behind the safe -c]"
+for t in off high; do
+  while IFS= read -r c; do
+    [ -n "$c" ] && expect $t DENY "must deny: $c" "$c"
+  done <<'CASES'
+git {fd}>/dev/null -c 'alias.zz=!echo PWNED' zz
+git -C .(/) -c 'alias.zz=!echo PWNED' zz
+shopt -s extglob; git -C @(pr) -c 'alias.zz=!echo PWNED' zz
+git {fd}>&2 -c 'alias.zz=!echo PWNED' zz
+git -C *(/[1]) -c 'alias.zz=!echo PWNED' zz
+git -C =(echo .) -c core.fsmonitor=false log
+git {fd}>/dev/null -c core.fsmonitor=false zz
+git -c core.fsmonitor=false config core.fsmonitor /tmp/x.sh
+git -c core.fsmonitor=false config --global core.fsmonitor /tmp/x.sh
+git -c core.fsmonitor=false config include.path /tmp/evil
+git -c core.fsmonitor=false config includeIf.gitdir:/x/.path /tmp/evil
+git -c core.fsmonitor=false config core.sshCommand evil
+git -c core.fsmonitor=false config diff.x.textconv evil
+git -c core.fsmonitor=false config filter.x.clean evil
+git -c core.fsmonitor=false config filter.x.smudge evil
+git -c core.fsmonitor=false config filter.x.process evil
+git -c core.fsmonitor=false config core.gitProxy evil
+git -c core.fsmonitor=false config uploadpack.packObjectsHook evil
+git -c core.hooksPath=/dev/null config set core.sshCommand evil
+git -c core.fsmonitor=false config --rename-section foo core
+CASES
+  expect $t PASS "a config read behind the safe prefix"  "git -c core.fsmonitor=false config --get core.fsmonitor"
+  expect $t PASS "parentheses inside single quotes"      "git -c core.fsmonitor=false log --format='(%h) %s'"
+  expect $t PASS "a \${…} expansion after the subcommand" "git -c core.fsmonitor=false log \${REF}"
+  expect $t PASS "a 2>&1 among git's options"            "git -c core.fsmonitor=false 2>&1 status"
+done
+expect relaxed PASS "an ordinary key, bare, stays ungated" "git config core.sshCommand \"ssh -i k\""
+
 echo ""
 echo "[the two options named as data: a message, a pattern, an echo]"
 expect relaxed PASS "in a commit message"          "git commit -m \"block git --config-env and git -c\""
@@ -1296,6 +1334,15 @@ flips_at high "options before the safe -c no longer held to being literal" \
 M="$(mutate 'why = gcfg_rawscan(hd_strip(kit_shell_text(raw, 0), 0))' 'why = ""')"
 flips_at off "the raw-text scan removed, so a brace splices a -c in ahead of the stage split" \
   "$M" "git -C {.,-c,alias.zz=!cmd} zz" DENY PASS
+M="$(mutate 'gsub(/[<>]&|&>|>\|/, "R", s)' 'gsub(/NEVER/, "R", s)')"
+flips_at off "redirection ampersands split the raw text again, so a named fd parts git from its -c" \
+  "$M" "git {fd}>&2 -c 'alias.zz=!echo PWNED' zz" DENY PASS
+M="$(mutate 'if (c ~ /[{(`]/)' 'if (c ~ /\$\(/)')"
+flips_at off "the raw-text scan narrowed back to substitutions, so a zsh glob qualifier walks through" \
+  "$M" "git -C .(/) -c 'alias.zz=!echo PWNED' zz" DENY PASS
+M="$(mutate 'if (GW_SAFE && !gc_exec_key(key))' 'if (0 && !gc_exec_key(key))')"
+flips_at off "config writes behind the safe -c limited to the exec-key list again" \
+  "$M" "git -c core.fsmonitor=false config core.sshCommand evil" DENY PASS
 M="$(mutate 'if (!GW_SAFE) continue' 'continue')"
 flips_at off "the subcommand passes no longer run ahead of Off, so the prefix hides clean there" \
   "$M" "git -c core.fsmonitor=false -C . clean -fdx" DENY PASS

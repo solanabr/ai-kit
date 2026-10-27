@@ -463,7 +463,7 @@ function gc_scan(stage,   n, T, Q, i, j, tok, o, mode, nop, OP, key) {
 
   if (mode == "edit") return "runs git config --edit, which opens an editor on the git config file"
   if (mode == "rename") {
-    if (nop >= j + 1 && gc_exec_section(OP[j + 1]))
+    if (nop >= j + 1 && (GW_SAFE || gc_exec_section(OP[j + 1])))
       return "renames a git config section onto \"" unmark(OP[j + 1]) "\", where its existing variables would become keys git executes"
     return ""
   }
@@ -471,6 +471,13 @@ function gc_scan(stage,   n, T, Q, i, j, tok, o, mode, nop, OP, key) {
   key = OP[j]
   # The bare form with no value is a READ: `git config core.pager` prints it.
   if (mode == "" && nop < j + 1) return ""
+  # Behind a safe `-c` every write is refused, not only the keys above: the
+  # `Bash(git -c *)` rule this replaced denied them all, and the exec-capable set
+  # is longer than any list (core.fsmonitor, core.sshCommand, core.gitProxy,
+  # include.path, includeIf.*.path, diff.*.textconv, filter.*.clean/smudge/
+  # process, uploadpack.packObjectsHook, protocol.*.allow, gpg.program, …).
+  if (GW_SAFE && !gc_exec_key(key))
+    return "writes git config " unmark(key) " behind a git -c prefix, where every config write is refused: many keys (core.fsmonitor, core.sshCommand, include.path, diff.*.textconv, filter.*.clean) make git run a program later"
   if (!gc_exec_key(key)) return ""
   return "writes git config " unmark(key) ", a key that names a command git runs later"
 }
@@ -685,14 +692,26 @@ function gcfg_scan(stage,   n, T, Q, how) {
 # Coarse on purpose — `git -c core.fsmonitor=false commit -m "$(cat msg)"` is
 # refused too — because what such a piece hands git is decided after this hook
 # has run.
-function gcfg_rawscan(s,   np, P, p, u) {
+#
+# Widened after the fourth review of #318 to ANY `{` or `(` outside a `${…}`
+# parameter expansion and outside single quotes, plus any backtick.  Claude Code
+# runs commands in the user's shell, zsh on macOS, and a stage boundary there is
+# not where this hook thinks: `git {fd}>/dev/null -c 'alias.zz=!cmd' zz` (a named
+# fd, bash 4.1+ and zsh), `git -C .(/) -c …` and `git -C *(/[1]) …` (zsh glob
+# qualifiers) and `shopt -s extglob; git -C @(pr) -c …` all ran an injected alias,
+# with the `-c` cut into a stage the walk never paired with git.  `=(` (zsh
+# process substitution) is a `(` too.  `>&`, `<&`, `&>` and `>|` are redirections,
+# not separators, so they are taken out before the split.
+function gcfg_rawscan(s,   np, P, p, u, c) {
+  gsub(/[<>]&|&>|>\|/, "R", s)
   np = split(s, P, /;|&|\||\n/)
   for (p = 1; p <= np; p++) {
     u = P[p]; gsub(/["'\\]/, "", u)
     if (u !~ /(^|[^A-Za-z0-9_.-])git([ \t]|$)/) continue
     if (u !~ /(^|[^A-Za-z0-9_-])-c/) continue
-    if (P[p] ~ /\$\(|`|<\(|>\(|\{[^ \t{}]*(,|\.\.)[^ \t{}]*\}/)
-      return "names git and a -c, and also holds a command substitution, a backtick, a process substitution or a brace expansion, whose words bash splices into git's arguments after this hook has read them"
+    c = P[p]; gsub(/'[^']*'/, "", c); gsub(/\$\{[^{}()]*\}/, "", c)
+    if (c ~ /[{(`]/)
+      return "names git and a -c, and also holds a brace, a parenthesis or a backtick (a substitution, a brace expansion, a named-fd redirection, a glob qualifier or an extended glob), whose words the shell splices into git's arguments after this hook has read them"
   }
   return ""
 }
