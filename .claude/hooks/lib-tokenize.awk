@@ -171,8 +171,8 @@ function kit_wrapper_operand(w, t) {
 # line continuation and is dropped whole, as the shell drops it: kept, the newline
 # landed inside a token, and `git config \<newline>core.hooksPath x` had a key
 # no gate recognised.
-function split_cmd(s,   i, c, c2, st, sp, out, j) {
-  out = ""; sp = 0; st[0] = "code"
+function split_cmd(s,   i, c, c2, st, sp, out, j, cm) {
+  out = ""; sp = 0; st[0] = "code"; cm = 0
   for (i = 1; i <= length(s); i++) {
     c = substr(s, i, 1); c2 = substr(s, i, 2)
     if (st[sp] == "sq") { out = out c; if (c == SQ) sp--; continue }
@@ -183,7 +183,7 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
         continue
       }
       if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-      if (c == "`")   { out = out " $__X__\002 "; st[++sp] = "bt"; continue }
+      if (c == "`")   { j = kit_bt_end(s, i); out = out " $__X__\002 " split_cmd(kit_bt_body(substr(s, i + 1, j - i - 1))) "\002"; i = j; continue }
       if (c == "\"")  { sp--; out = out c; continue }
       out = out c; continue
     }
@@ -195,13 +195,35 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
       # a quoted run of its own: `sh -c "sh -c \"npm publish\""` read wrong.
       if (c == " ") out = out "\003"; else if (c == SQ) out = out "\004"
       else if (c == "\"") out = out "\005"; else out = out c
+      # An escaped `$` opens no $'…' and pairs into no `$$`: the empty "" keeps
+      # tokenize from reading either.
+      if (c == "$" && substr(s, i + 1, 1) ~ /[$\047]/) out = out "\"\""
       continue
     }
+    # After a `#` that may start a comment, up to the newline, a $'…' is read as
+    # it was before #301, a `$` and a plain '…', with the empty "" keeping
+    # tokenize from decoding it: in `echo hi # $'\'` bash decodes nothing, and
+    # read as $'…' the `\'` ran the quote on over the next line's command.  No
+    # text is dropped as a comment, so the readers still see all bash runs.
+    if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n;&|()]/)) cm = 1
+    if (c == "\n") cm = 0
+    if (cm && c2 == "$" SQ) { out = out "$\"\""; continue }
+    # $"…" is "…" where no translation applies, as here: the `$` goes, so
+    # `$"git" push --force` is the push.  Done here rather than in tokenize, where
+    # `$""` is the empty-"" mark above and must keep its `$`.
+    if (c2 == "$\"") continue
+    if (kit_pid(s, i)) { out = out c2; i++; continue }
+    # $'…' is copied whole for tokenize to decode (#301).  Its `\'` is escaped,
+    # so read as '…' the region closed there: `echo $'it\'s; npm publish'` split.
+    if (c2 == "$" SQ) { kit_ansi_end(s, i + 1); out = out substr(s, i, KA_END - i + 1); i = KA_END; continue }
     if (c == SQ)    { st[++sp] = "sq"; out = out c; continue }
     if (c == "\"")  { st[++sp] = "dq"; out = out c; continue }
     if (c2 == "${") { j = index(substr(s, i), "}"); if (j > 0) { out = out substr(s, i, j); i += j - 1; continue } }
     if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-    if (c == "`")   { if (st[sp] == "bt") { sp--; out = out "\002" } else { out = out " $__X__\002 "; st[++sp] = "bt" } ; continue }
+    # `…` ends at the first unescaped backtick, whatever quotes stand before it
+    # (#301): its text is split as a command of its own, so a quote inside it,
+    # `$'\'` or a lone `'`, no longer runs on past it.
+    if (c == "`")   { j = kit_bt_end(s, i); out = out " $__X__\002 " split_cmd(kit_bt_body(substr(s, i + 1, j - i - 1))) "\002"; i = j; continue }
     if (c == ")" && sp > 0 && st[sp] == "code") { sp--; out = out "\002"; continue }
     # An `&` or `|` inside a redirection operator (`2>&1`, `<&3`, `&>log`, `>|f`)
     # separates nothing, and `|&` pipes stderr too: one stage boundary.  Read as
@@ -240,6 +262,9 @@ function tokenize(s, T, Q,   i, c, q, cur, n, hadq, L, j) {
       else { cur = cur substr(s, i, j - 1); q = ""; i += j - 1 }
       continue
     }
+    # $'…' is taken decoded, as bash runs it (kit_ansi, #301); `$$` is the PID.
+    if (kit_pid(s, i)) { cur = cur "$$"; i++; continue }
+    if (c == "$" && substr(s, i + 1, 1) == SQ) { cur = cur kit_ansi(s, i + 1); i = KA_END; hadq = 1; continue }
     if (c == SQ || c == "\"") { q = c; hadq = 1; continue }
     if (c == " " || c == "\t") { if (cur != "" || hadq) { T[++n] = cur; Q[n] = hadq; cur = ""; hadq = 0 } ; continue }
     cur = cur c
@@ -298,6 +323,7 @@ function kit_sep(s,   off, p, c, q) {
 # command name, so a quoted `;` or blank never becomes a separator.  With arg set
 # it reads any other word of the command, where `=` and `,` are plain too:
 # `npm "publish"` and `git push '--force'` hid the publish and the push (#297).
+# An ANSI-C quoted part is decoded (kit_ansi, #301): `$'git' push` runs git.
 function kit_unq(w, arg,   o, i, c, q, L) {
   if (w !~ /["\047\\]/) return w
   o = ""; q = ""; L = length(w)
@@ -310,12 +336,104 @@ function kit_unq(w, arg,   o, i, c, q, L) {
       continue
     }
     if (c == "\\" && i < L) { o = o substr(w, ++i, 1); continue }
+    if (kit_pid(w, i)) { o = o "$$"; i++; continue }
+    if (c == "$" && substr(w, i + 1, 1) == "\"") continue      # $"…" is "…"
+    if (c == "$" && substr(w, i + 1, 1) == SQ) { o = o kit_ansi(w, i + 1); if (KA_OPEN) return w; i = KA_END; continue }
     if (c == SQ || c == "\"") { q = c; continue }
     o = o c
   }
   if (q != "") return w
   if (arg) return (o ~ /^[A-Za-z0-9_.\/+${}~:@%=,-]+$/) ? o : w
   return (o ~ /^[A-Za-z0-9_.\/+${}~:@%-]+$/) ? o : w
+}
+
+# kit_ansi — the ANSI-C quoted part $'…' whose opening quote is at p in s, decoded
+# as bash decodes it before it runs the word (#301): `$'git' push --force`,
+# `$'\x67it' push --force` and `$'\147it' push --force` all run git push --force,
+# and read with the `$` and the escapes kept they met no gate.  KA_END is left at
+# the closing quote, or at the end of s with KA_OPEN set when none closes it.
+#
+# The region ends where bash's reader ends it: a backslash escapes the next
+# character, `\'` included, so `$'it\'s'` is one quoted part.  Inside it the
+# escapes bash supports are decoded: \a \b \e \E \f \n \r \t \v \\ \' \" \?,
+# \nnn octal, \xHH, \uHHHH, \UHHHHHHHH and \cx; any other is kept as written.  A
+# NUL ends the string, as it ends the C string bash builds.  Only the verdicts
+# depend on the result, so a byte past ASCII, and the \001-\005 bytes the readers
+# use as marks, all come back as KA_HI, \006: one character that matches no gated
+# word and that every awk reads.  A lone byte past 127 is no character in a UTF-8
+# locale, and macOS awk stops with an error on one.
+function kit_ansi(s, p,   b, o, j, c, v) {
+  if (KA_HI == "") kit_ansi_init()
+  b = substr(s, p + 1, kit_ansi_end(s, p))
+  o = ""
+  while ((j = index(b, "\\")) > 0 && j < length(b)) {
+    o = o substr(b, 1, j - 1); c = substr(b, j + 1, 1); b = substr(b, j + 2)
+    v = -1; KA_N = 0
+    if (c ~ /[0-7]/) { b = c b; v = kit_ansi_num(b, 3, 8) % 256 }
+    else if (c == "x" || c == "u" || c == "U") {
+      v = kit_ansi_num(b, (c == "x") ? 2 : (c == "u") ? 4 : 8, 16)
+      if (!KA_N) v = -1                                # `\x` with no digit is kept
+    }
+    else if (c == "c" && b != "") {                    # \cx is control-x; \c\\ is control-\
+      c = substr(b, 1, 1); b = substr(b, 2)
+      if (c == "\\" && substr(b, 1, 1) == "\\") b = substr(b, 2)
+      v = (c == "?") ? 127 : (index(KA_ORD, toupper(c)) + 31) % 32
+    }
+    else if (c in KA_ESC) v = KA_ESC[c]
+    b = substr(b, KA_N + 1)
+    if (v == 0) return o
+    o = o ((v < 0) ? "\\" c : (v <= 5 || v > 126) ? KA_HI : sprintf("%c", v))
+  }
+  return o b
+}
+# kit_pid — a `$$` at i in s that the readers take as one unit, the PID, before
+# they look for $'…': in `$$'\' ; npx -y evil ; echo 'x'` bash reads `$$` and then
+# a plain '…', where a backslash escapes nothing, so the npx runs.  Read as `$` and
+# `$'\' ; …'`, the npx was quoted.  Taken only where a `$` or a quote follows, the
+# one place the pairing decides anything, so `$$(…)` and `$${…}` read as before.
+function kit_pid(s, i) { return substr(s, i, 2) == "$$" && substr(s, i + 2, 1) ~ /[$\047]/ }
+# kit_bt_end — the closing backtick of the `…` opened at p in s, or past the end
+# of s.  bash looks for it skipping only backslash pairs: no quote counts there,
+# so `echo $'\'` closes at its second backtick and the `;` after it separates.
+function kit_bt_end(s, p,   e) {
+  match(substr(s, p + 1), /^([^`\\]|\\.)*/); e = p + RLENGTH + 1
+  return (substr(s, e, 1) == "`") ? e : length(s) + 1
+}
+# kit_bt_body — the text of a `…` as bash runs it: \`, \\ and \$ lose their backslash.
+function kit_bt_body(b,   o, j, c) {
+  o = ""
+  while ((j = index(b, "\\")) > 0) {
+    c = substr(b, j + 1, 1)
+    o = o substr(b, 1, j - 1) ((c == "`" || c == "\\" || c == "$") ? c : "\\" c)
+    b = substr(b, j + 2)
+  }
+  return o b
+}
+# kit_ansi_end — the length of what $'…' quotes, its opening quote at p in s.
+# Sets KA_END and KA_OPEN as kit_ansi describes, without decoding.
+function kit_ansi_end(s, p) {
+  match(substr(s, p + 1), /^([^\\\047]|\\.)*/)
+  KA_END = p + RLENGTH + 1; KA_OPEN = (substr(s, KA_END, 1) != SQ)
+  if (!KA_OPEN) return RLENGTH
+  KA_END = length(s); return KA_END - p
+}
+# kit_ansi_num — the value of the up to max base-b digits t starts with; KA_N is
+# how many there were.
+function kit_ansi_num(t, max, b,   v, d) {
+  v = 0
+  for (KA_N = 0; KA_N < max; KA_N++) {
+    d = substr(t, KA_N + 1, 1)
+    if (d == "" || (d = index(substr("0123456789abcdef", 1, b), tolower(d))) == 0) break
+    v = v * b + d - 1
+  }
+  return v
+}
+function kit_ansi_init(   j) {
+  KA_HI = sprintf("%c", 6); KA_ORD = ""
+  for (j = 32; j < 127; j++) KA_ORD = KA_ORD sprintf("%c", j)
+  KA_ESC["a"] = 7; KA_ESC["b"] = 8; KA_ESC["e"] = 27; KA_ESC["E"] = 27; KA_ESC["f"] = 12
+  KA_ESC["n"] = 10; KA_ESC["r"] = 13; KA_ESC["t"] = 9; KA_ESC["v"] = 11
+  KA_ESC["\\"] = 92; KA_ESC[SQ] = 39; KA_ESC["\""] = 34; KA_ESC["?"] = 63
 }
 
 # kit_lead_redir — kit_redir for the normalisers that rewrite a statement's text,
@@ -720,6 +838,10 @@ function kit_hd_subst(l,   out, i, L, c, st) {
       if (KHS_Q == SQ) { if (c == SQ) KHS_Q = ""; continue }
       if (c == "\\") { i++; continue }
       if (KHS_Q == "\"") { if (c == "\"") KHS_Q = ""; continue }
+      # e is $'…', where `\'` closes nothing; `$$` is the PID (#301, kit_pid).
+      if (KHS_Q == "e") { if (c == SQ) KHS_Q = ""; continue }
+      if (kit_pid(l, i)) { i++; continue }
+      if (substr(l, i, 2) == "$" SQ) { KHS_Q = "e"; i++; continue }
       if (c == SQ || c == "\"") KHS_Q = c
       else if (c == "(") KHS_DEPTH++
       else if (c == ")" && --KHS_DEPTH == 0) { out = out "; $(" KHS_BUF substr(l, st, i - st) ")"; KHS_IN = 0 }
@@ -737,9 +859,12 @@ function kit_hd_subst(l,   out, i, L, c, st) {
   }
   return out
 }
+# A quote still open when the body ends is closed there (#301): the body ends at
+# its delimiter whatever it holds, so `$(echo $'\')` or `$(echo ')` left open
+# quoted every command after the heredoc in the text the guards read.
 function kit_hd_subst_flush(   out) {
   if (KHS_IN == 0) return ""
-  out = "; $(" KHS_BUF ")"; KHS_IN = 0; return out
+  out = "; $(" KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"; KHS_IN = 0; KHS_Q = ""; return out
 }
 
 # kit_hd_ops — the `<<` heredoc operators the shell reads in l, starting in quote
@@ -759,7 +884,9 @@ function kit_hd_ops(l, q,   i, L, c, top, k) {
   for (i = 1; i <= L; i++) {
     c = substr(l, i, 1); top = substr(q, length(q))
     if (top == "s") { if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
+    if (top == "e") { if (c == "\\") i++; else if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
     if (c == "\\") { i++; continue }
+    if (top == "b") { if (c == "`") q = substr(q, 1, length(q) - 1); continue }   # as kit_qscan
     if (top == "d") {
       if (c == "\"") q = substr(q, 1, length(q) - 1)
       else if (substr(l, i, 3) == "$((") { q = q "a"; i += 2 }
@@ -767,7 +894,9 @@ function kit_hd_ops(l, q,   i, L, c, top, k) {
       else if (c == "`") q = q "b"
       continue
     }
-    if (c == SQ) q = q "s"
+    if (kit_pid(l, i)) i++                                 # $$ and $'…', as kit_qscan reads them
+    else if (substr(l, i, 2) == "$" SQ) { q = q "e"; i++ }
+    else if (c == SQ) q = q "s"
     else if (c == "\"") q = q "d"
     else if (c == "`") q = (top == "b") ? substr(q, 1, length(q) - 1) : q "b"
     else if (substr(l, i, 2) == "((") { q = q "a"; i++ }
@@ -950,8 +1079,8 @@ function hd_close(mode, body, kw,   s) {
 
 # ---------------------------------------------------------------- the shell's own reading
 
-# kit_qscan — the quote stack after reading l from stack q: s '…', d "…", b `…`,
-# p ( or $( (code again, inside "…" too), and S / D for the quote opening at
+# kit_qscan — the quote stack after reading l from stack q: s '…', e $'…', d "…",
+# b `…`, p ( or $( (code again, inside "…" too), and S / D for the quote opening at
 # position codeat, which the caller has identified as a wrapper's code payload
 # (`sh -c "…"`).  The rules are kit_hd_ops's, so the two agree on what is
 # quoted.  Three globals carry
@@ -968,14 +1097,20 @@ function kit_qscan(l, q, codeat,   i, L, c, top, p) {
   for (i = 1; i <= L; i++) {
     c = substr(l, i, 1); top = substr(q, length(q))
     if (top == "s" || top == "S") { if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
+    # e is $'…' (#301): a backslash escapes there, `\'` included, and continues nothing.
+    if (top == "e") { if (c == "\\") i++; else if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
     if (c == "\\") { if (i == L) KQ_CONT = 1; i++; continue }
+    # In `…` only the closing backtick counts, as in kit_bt_end: no quote opens.
+    if (top == "b") { if (c == "`") q = substr(q, 1, length(q) - 1); continue }
     if (top == "d" || top == "D") {
       if (c == "\"") q = substr(q, 1, length(q) - 1)
       else if (substr(l, i, 2) == "$(") { q = q "p"; i++ }
       else if (c == "`") q = q "b"
       continue
     }
-    if (c == SQ) q = q (i == codeat ? "S" : "s")
+    if (kit_pid(l, i)) i++                                 # `$$` is the PID (kit_pid)
+    else if (c == "$" && substr(l, i + 1, 1) == SQ) { q = q "e"; i++ }
+    else if (c == SQ) q = q (i == codeat ? "S" : "s")
     else if (c == "\"") q = q (i == codeat ? "D" : "d")
     else if (c == "`") q = (top == "b") ? substr(q, 1, length(q) - 1) : q "b"
     else if (c == "(") q = q "p"
@@ -1073,7 +1208,7 @@ function kit_stmt_sep(st, sep, q, codeat,   sp, sc, qq, top, code, esc) {
   esc = match(st, /\\+$/) && RLENGTH % 2 == 1
   KQ_PREV = sp; KQ_COMMENT = sc
   if (esc) return sep
-  if (sep == "$(") { if (!KQ_COMMENT && top != "s" && top != "S") KP = KP "$"; return sep }
+  if (sep == "$(") { if (!KQ_COMMENT && top != "s" && top != "S" && top != "e") KP = KP "$"; return sep }
   if (!code) return sep
   if (sep == "(") { KP = KP "("; return sep }
   top = substr(KP, length(KP)); KP = substr(KP, 1, length(KP) - 1)

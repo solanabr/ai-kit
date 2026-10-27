@@ -77,9 +77,10 @@ kit_parse
 # Medium+High.  The classifier (KIT_RMKILL in egress-guard.awk) denies a
 # catastrophic rm target in any spelling, `kill` of PID -1, and pkill/killall of a
 # peer agent; ordinary cleanup and killing one's own workers pass.  Prefiltered so
-# a command naming none of these never pays for the awk.
+# a command naming none of these never pays for the awk.  A $'…' word can spell
+# any name in escapes (`$'\x72m'` is rm), so it reaches the awk too (#301).
 case $KIT_CMD in
-  *rm\ * | *rm$KIT_NL* | *kill* | *pkill* | *killall*)
+  *"\$'"* | *rm\ * | *rm$KIT_NL* | *kill* | *pkill* | *killall*)
     if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ]; then
       RMK=$(printf '%s\n' "$KIT_CMD" | KIT_RMKILL=1 KIT_CWD="${KIT_CWD:-$PWD}" \
         awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null) || RMK=
@@ -223,8 +224,9 @@ KIT_CMDJ=$KIT_CMD
 case "$KIT_CMD
 $(kit_unquoted "$KIT_CMD")" in
   # Neither pattern can match a text naming none of these, and only a
-  # continuation could assemble one, so the awk pass is skipped there.
-  *publish* | *git* | *gh* | *"\\$KIT_NL"*)
+  # continuation could assemble one, so the awk pass is skipped there.  Nor can
+  # a $'…' word, which spells a name in escapes (`$'\x67it'` is git, #301).
+  *"\$'"* | *publish* | *git* | *gh* | *"\\$KIT_NL"*)
     if [ -f "$HOOK_DIR/lib-tokenize.awk" ] && [ -f "$HOOK_DIR/egress-guard.awk" ]; then
       KIT_CMDJ=$(printf '%s\n' "$KIT_CMD" | KIT_SHELL_TEXT=1 \
         awk -f "$HOOK_DIR/lib-tokenize.awk" -f "$HOOK_DIR/egress-guard.awk" 2>/dev/null) || KIT_CMDJ=

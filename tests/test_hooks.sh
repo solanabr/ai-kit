@@ -1998,6 +1998,165 @@ quiet "$M_EGRESS" 'git commit -m "fix: npm publish flow"'
 quiet "$M_EGRESS" 'echo "npm" "publish"'
 quiet "$M_EGRESS" "python3 - <<'EOF'${NL}print(['a', 'b'])${NL}EOF"
 quiet "$M_EGRESS" 'git log --format="%h %s" -3'
+
+# --- ANSI-C quoting (#301). bash decodes $'…' and drops its quotes before it runs a
+# --- word, so `$'git' push --force` and `$'\x67it' push --force` are the force push.
+# --- The readers kept the `$` and the escapes, and the prefilters looked for the name
+# --- as written, so each spelling walked past every gate. The region also ended at
+# --- the first quote, though `\'` is escaped inside it: `echo $'it\'s; npx -y x'`
+# --- split at its quoted `;`. Each spelling gets its bare form's verdict; each control
+# --- plants its mechanism back out.
+echo "[ANSI-C quoting: \$'…' read as bash decodes it]"
+MUT_ANSITOK="$(mutant ansitok lib-tokenize.awk '{ cur = cur kit_ansi(s, i + 1); i = KA_END; hadq = 1; continue }' '{ }')" || MUT_ANSITOK=
+MUT_ANSIUNQ="$(mutant ansiunq lib-tokenize.awk '{ o = o kit_ansi(w, i + 1); if (KA_OPEN) return w; i = KA_END; continue }' '{ }')" || MUT_ANSIUNQ=
+MUT_ANSIREG="$(mutant ansireg lib-tokenize.awk 'if (c2 == "$" SQ) { kit_ansi_end(s, i + 1);' 'if (0) { kit_ansi_end(s, i + 1);')" || MUT_ANSIREG=
+MUT_ANSIQ="$(mutant ansiq lib-tokenize.awk 'if (c == "$" && substr(l, i + 1, 1) == SQ) { q = q "e"; i++ }' 'if (0) { q = q "e"; i++ }')" || MUT_ANSIQ=
+MUT_ANSIPRE="$(mutant ansipre onchain-guard.sh "case \$KIT_PRE in *\"\\\$'\"* | " 'case $KIT_PRE in ' \
+  fetch-exec-guard.sh "  *\"\\\$'\"* | *npx* |" '  *npx* |' \
+  egress-guard.sh "  *\"\\\$'\"* | *publish* |" '  *publish* |' \
+  egress-guard.sh "  *\"\\\$'\"* | *rm\\ * |" '  *rm\ * |')" || MUT_ANSIPRE=
+for M in "$MUT_ANSITOK" "$MUT_ANSIUNQ" "$MUT_ANSIREG" "$MUT_ANSIQ" "$MUT_ANSIPRE"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'git' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "git \$'push' --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\x67it' push --force origin main" "$MUT_ANSIPRE"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\147it' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "\$'\\u0067it' push --force origin main" "$MUT_ANSIUNQ"
+same "$M_EGRESS" ask deny deny "npm publish" "npm \$'pub\\x6cish'" "$MUT_ANSIUNQ"
+same "$M_EGRESS" ask deny deny "npm publish" "sh -c \$'echo hi\\nnpm publish'" "$MUT_ANSITOK"
+same "$M_EGRESS" deny deny deny "rm -rf /" "\$'\\x72m' -rf /" "$MUT_ANSIPRE"
+same "$M_CHAIN" ask ask deny "$DA" "\$'\\x61nchor' deploy --provider.cluster mainnet" "$MUT_ANSIPRE"
+same "$M_CHAIN" ask ask deny "$DA" "anchor \$'deploy' --provider.cluster mainnet" "$MUT_ANSIUNQ"
+same "$M_SECRETS" deny deny deny "gh auth token" "gh \$'\\x61uth' token" "$MUT_ANSITOK"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "cat ~/.config/solana/\$'id\\x2ejson'" "$MUT_ANSITOK"
+same "$M_FETCH" silent silent deny "npx -y x" "\$'n\\x70x' -y x" "$MUT_ANSIPRE"
+# The near misses: a $'…' argument is prose, as a '…' one is, and its `\'` closes nothing.
+quiet "$M_EGRESS" "echo \$'git push --force origin main'"
+quiet "$M_EGRESS" "echo \$'npm publish'"
+quiet "$M_EGRESS" "echo $BS\$'$BS""x67it' push --force origin main"
+quiet "$M_SECRETS" "echo \$'cat ~/.config/solana/id.json'"
+quiet "$M_FETCH" "echo \$'it$BS's; npx -y x'" "$MUT_ANSIREG"
+quiet "$M_CHAIN" "echo \$'it$BS's; then anchor deploy --provider.cluster mainnet'" "$MUT_ANSIQ"
+# `$$` is the PID, so `$$'…'` opens a plain '…' where a backslash escapes nothing:
+# `echo $$'\' ; npx -y x ; echo 'x'` runs the npx. Read as `$` and $'…', the gated
+# command was quoted, on its line and as a heredoc's opener line. Every guard, both
+# shapes. brace_once and kit_hd_subst track quotes of their own and learn $'…' too.
+MUT_PID="$(mutant pid lib-tokenize.awk 'function kit_pid(s, i) { return substr(s, i, 2) == "$$"' 'function kit_pid(s, i) { return 0 && substr(s, i, 2) == "$$"')" || MUT_PID=
+MUT_ANSIBR="$(mutant ansibr secrets-guard.awk 'if (c == "$" && substr(s, i + 1, 1) == SQ) { q = "ansi"; i++; continue }' 'if (0) { q = "ansi"; i++; continue }')" || MUT_ANSIBR=
+MUT_ANSIHS="$(mutant ansihs lib-tokenize.awk '{ KHS_Q = "e"; i++; continue }' '{ KHS_Q = SQ; i++; continue }')" || MUT_ANSIHS=
+for M in "$MUT_PID" "$MUT_ANSIBR" "$MUT_ANSIHS"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+P="echo \$\$'$BS' ; @ ; echo 'x'"
+same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$MUT_PID"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$MUT_PID"
+same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$MUT_PID"
+# The patterns anchored on a statement start read past quotes on one line, so these
+# three held without kit_pid; asserted, with no control to move.
+PID_HOOKS=("$M_EGRESS" "$M_EGRESS" "$M_CHAIN")
+PID_CMDS=("npm publish" "git push --force origin main" "$DA")
+for t in relaxed medium high; do
+  for k in 0 1 2; do
+    run_bash "${PID_HOOKS[$k]}" "$t" "${PID_CMDS[$k]}"; b="$DECISION"
+    run_bash "${PID_HOOKS[$k]}" "$t" "${P//@/${PID_CMDS[$k]}}"
+    assert_eq "$b" "$DECISION" "[$t] $b, as its bare form: ${P//@/${PID_CMDS[$k]}}"
+  done
+done
+P="echo \$\$'$BS' a ' <<X '${NL}@${NL}X"
+same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$MUT_PID"
+same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$MUT_PID"
+same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$MUT_PID"
+same "$M_EGRESS" ask deny deny "npm publish" "${P//@/npm publish}" "$MUT_PID"
+same "$M_EGRESS" silent ask deny "git push --force origin main" "${P//@/git push --force origin main}" "$MUT_PID"
+same "$M_CHAIN" ask ask deny "$DA" "${P//@/$DA}" "$MUT_PID"
+# Where bash decodes no $'…' and opens no quote at all: inside `…`, which ends at
+# the first unescaped backtick, and past a heredoc body, which ends at its
+# delimiter with a quote in a `$( … )` still open. Read as $'…' there, the `\'`
+# ran the quote on over the gated command. The plain-quote spellings (a `'` in
+# backticks, `$(echo ')` in a body) were silent on main for the same reason and
+# are closed with them. After a `#` that may start a comment no $'…' is decoded,
+# which is how main read it; nothing is dropped as a comment, so `# don't` keeps
+# main's verdict.
+BQ='`'
+MUT_BT="$(mutant bt lib-tokenize.awk 'return (substr(s, e, 1) == "`") ? e : length(s) + 1' 'return length(s) + 1')" || MUT_BT=
+MUT_HASH="$(mutant hash lib-tokenize.awk 'if (cm && c2 == "$" SQ) { out = out "$\"\""; continue }' 'if (0) { out = out "$\"\""; continue }')" || MUT_HASH=
+MUT_HDQEND="$(mutant hdqend lib-tokenize.awk 'KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"' 'KHS_BUF ")"')" || MUT_HDQEND=
+MUT_BTBODY="$(mutant btbody lib-tokenize.awk '((c == "`" || c == "\\" || c == "$") ? c : "\\" c)' '("\\" c)')" || MUT_BTBODY=
+for M in "$MUT_BT" "$MUT_HASH" "$MUT_HDQEND" "$MUT_BTBODY"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+for P in "echo ${BQ}echo \$'$BS'${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo \$'$BS'${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
+         "echo ${BQ}echo '${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo '${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
+         "echo hi # \$'$BS'${NL}@${NL}echo '|$MUT_HASH" \
+         "cat <<X${NL}\$(echo \$'$BS')${NL}X${NL}@${NL}# '|$MUT_HDQEND" "cat <<X${NL}\$(echo ')${NL}X${NL}@${NL}# '|$MUT_HDQEND"; do
+  M="${P##*|}"; P="${P%|*}"
+  same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$M"
+  same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$M"
+  same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$M"
+done
+same "$M_FETCH" silent silent deny "npx -y x" "echo ${BQ}echo ${BS}${BQ}npx -y x${BS}${BQ}${BQ}" "$MUT_BTBODY"
+# No text is dropped as a comment (#301's review): each of these runs the gated
+# command in bash, or is read as main read it, and gets its bare form's verdict.
+# A comment rule got every one of them wrong at some point: a `#` after the `)`
+# of `$( )`, `$(( ))` or `<( )`, inside `[[ … =~ … ]]`, in a nested `${ … }`, or
+# after a case pattern's `)`. There is no mechanism to plant out, so no control.
+bare_as() { # bare_as <hook> <bare> <variant>
+  local t b
+  for t in relaxed medium high; do
+    run_bash "$1" "$t" "$2"; b="$DECISION"
+    run_bash "$1" "$t" "$3"
+    assert_eq "$b" "$DECISION" "[$t] $b, as its bare form: ${3//$NL/\\n}"
+  done
+}
+for P in 'echo $(true)#; @' 'x=$(true)#; @' 'echo $((1))#; @' 'cat <(true)#; @' '[[ x =~ (#) ]] || @' '[[ x =~ x|#y ]] || @' \
+         '[[ $(echo ]]) =~ (#) ]] || @' '[[ x =~ ( ]] |#) ]] || @' 'echo ${x:-${y} #}; @' 'echo ${x:+${y} #}; @' \
+         'echo ${a[${i}] #}; @' '( echo $(case x in x) true;; esac)#; @ )' 'ls # ; @' '(true)# ; @' 'echo a\ #; @'; do
+  bare_as "$M_FETCH" "npx -y x" "${P//@/npx -y x}"
+  bare_as "$M_SECRETS" "cat ~/.npmrc" "${P//@/cat ~/.npmrc}"
+done
+BRACE='cat ~/.{npmrc,netrc}'
+for P in 'echo $(true)#; @' '[[ x =~ (#) ]] || @' '[[ x =~ ( ]] |#) ]] || @'; do
+  bare_as "$M_SECRETS" "$BRACE" "${P//@/$BRACE}"
+done
+same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"
+same "$M_FETCH" silent silent deny "npx -y x" "cat <<X${NL}\$(echo \$'$BS')' ; npx -y x)${NL}X" "$MUT_ANSIHS"
+# $"…" is "…" where no translation applies (the PR #320 review): the `$` goes, so
+# `$"git" push --force` is the push. Silent on main.
+MUT_LOCALE="$(mutant locale lib-tokenize.awk 'if (c2 == "$\"") continue' 'if (0) continue' \
+  lib-tokenize.awk 'if (c == "$" && substr(w, i + 1, 1) == "\"") continue' 'if (0) continue')" || MUT_LOCALE=
+assert_eq "yes" "$([ -n "$MUT_LOCALE" ] && [ -d "$MUT_LOCALE/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: mut-locale"
+same "$M_EGRESS" silent ask deny "git push --force origin main" '$"git" push --force origin main' "$MUT_LOCALE"
+same "$M_EGRESS" silent ask deny "git push --force origin main" 'git push $"--force" origin main' "$MUT_LOCALE"
+same "$M_EGRESS" ask deny deny "npm publish" '$"npm" publish' "$MUT_LOCALE"
+same "$M_CHAIN" ask ask deny "$DA" '$"anchor" deploy --provider.cluster mainnet' "$MUT_LOCALE"
+same "$M_SECRETS" deny deny deny "gh auth token" '$"gh" auth token' "$MUT_LOCALE"
+same "$M_FETCH" silent silent deny "npx -y x" '$"npx" -y x' "$MUT_LOCALE"
+quiet "$M_EGRESS" 'echo $"npm publish"'
+# An unterminated $'…' fails closed: bash runs nothing, and kit_unq leaves the word as written.
+quiet "$M_FETCH" "echo \$'abc ; npx -y x"
+quiet "$M_FETCH" "\$'np${BS}x78 -y x"
+printf '%s\n' '{ m = split($0, W, " "); o = ""; for (i = 1; i <= m; i++) o = o (i > 1 ? "|" : "") kit_unq(W[i], i > 1); print o }' > "$WORK/unq.awk"
+unq() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/unq.awk"; }
+assert_eq "\$'abc|\$'abc$BS|npm|git" "$(unq "\$'abc \$'abc$BS \$\"npm\" \$'${BS}x67it'")" \
+  "kit_unq leaves an unterminated \$'…' as written, a trailing lone backslash included, and reads \$\"…\" as \"…\""
+# The decoder itself, one escape at a time: what tokenize hands every guard.
+printf '%s\n' '{ n = tokenize(split_cmd($0), T); o = ""; for (i = 1; i <= n; i++) o = o (i > 1 ? "|" : "") T[i]; print o }' > "$WORK/ansi.awk"
+ansi_tok() { printf '%s\n' "$1" | awk -f "$REPO_ROOT/.claude/hooks/lib-tokenize.awk" -f "$WORK/ansi.awk"; }
+assert_eq "npm|npm|npm|npm|npm|npm|npm" \
+  "$(ansi_tok "\$'npm' \$'\\x6epm' \$'\\156pm' \$'\\u006epm' \$'\\U0000006epm' \$'\\x6e'pm n\$'\\x70'm")" \
+  "\$'…' decodes plain, \\xHH, \\nnn, \\uHHHH and \\UHHHHHHHH spellings of a word"
+assert_eq "$(printf 'a\tb|it%ss|"q"|\\|?|\033[0m|\tz' "'")" \
+  "$(ansi_tok "\$'a\\tb' \$'it\\'s' \$'\\\"q\\\"' \$'\\\\' \$'\\?' \$'\\e[0m' \$'\\cI'z")" \
+  "\$'…' decodes \\t \\' \\\" \\\\ \\? \\e and \\cx, and \\' does not close it"
+assert_eq "abx|\\z|\\x|n" "$(ansi_tok "\$'ab\\0cd'x \$'\\z' \$'\\x' \$'\\556'")" \
+  "a NUL ends the string, an unknown escape is kept, an octal byte wraps at 256"
+assert_eq "\$\\x6epm|\$'npm'|\$npm" "$(ansi_tok "$BS\$'\\x6epm' \"\$'npm'\" '\$'npm")" \
+  "an escaped \$, a \$' inside double quotes and a \$ closing '…' open no \$'…'"
+assert_eq "echo|abc|echo|abc$BS" "$(ansi_tok "echo \$'abc")|$(ansi_tok "echo \$'abc$BS")" \
+  "an unterminated \$'…' takes the rest of the text as one word, a trailing lone backslash kept"
+assert_eq "\$\$a$BS|b|\$\$n|\$a" "$(ansi_tok "\$\$'a$BS' b \$\$\$'${BS}x6e' $BS\$\$'a'")" \
+  "\$\$ is the PID: \$\$'…' is a plain '…', \$\$\$'…' a PID and a \$'…', and \\\$\$'…' a \$ and a \$'…'"
 # --- The firewall-friction PR's hook halves, checked for the property that puts them
 # --- in a hook at all: the rm/kill floor and the nested-claude deny hold at EVERY
 # --- active tier (the rm/kill pass runs BEFORE egress-guard's Off early-exit, so Off
