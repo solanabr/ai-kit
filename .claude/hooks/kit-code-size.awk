@@ -4,12 +4,12 @@
 # KIT_CODE_LIMIT bytes and it has at most KIT_LINE_LIMIT lines, and "over"
 # otherwise.  Run with lib-tokenize.awk, which calls back into the two functions
 # below.  The line limit is there because every pass a guard makes costs per line,
-# and egress-guard makes up to four: the guards join their input once (kit_cat,
-# #300), so the cost is linear, but at 262,144 lines egress-guard's whole hook still
-# took 4-5.5 s of CPU and passed its 10 s timeout under load.  At 20,000 lines, nearly
-# all of them empty code lines, it takes 1.25 s of CPU, and under 5 s of wall
-# time beside 16 busy loops on 8 cores.  This
-# file reads line by line, and stops counting once the code limit is passed.
+# and egress-guard makes up to four.  The guards join their input once (kit_cat,
+# #300), so the cost is linear now, but at 10,000 lines of code (a gh write, then
+# `gh` on each line, then a 220 KB heredoc) egress-guard's whole hook still takes
+# 2.2 s of CPU, and 6 s of wall time beside 16 busy loops.  Raising the limit
+# needs egress-guard's passes merged first.  This file reads line by line, and
+# stops counting once the code limit is passed.
 #
 # It leaves a body out only when all of these hold, so a mistake here can only
 # refuse more:
@@ -58,7 +58,7 @@ BEGIN {
   LIMIT = ENVIRON["KIT_CODE_LIMIT"] + 0
   if (LIMIT < 1) LIMIT = 32768
   LINES = ENVIRON["KIT_LINE_LIMIT"] + 0
-  if (LINES < 1) LINES = 20000
+  if (LINES < 1) LINES = 10000
   SIZE = 0; q = ""; delim = ""; cont = 0
 }
 SIZE <= LIMIT { code_line($0) }

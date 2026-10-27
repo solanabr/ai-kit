@@ -1277,11 +1277,11 @@ fi
 # Every guard runs with timeout 10, and a hook that times out does not block the call.
 # Measured before the cap: an echo carrying 234 KB ahead of a mainnet anchor deploy
 # kept onchain-guard busy 18 s. lib-headless.sh's kit_size_cap holds a command past
-# 32 KB to 32 KB of code, 20,000 lines and 256 KB in all; kit-code-size.awk leaves
+# 32 KB to 32 KB of code, 10,000 lines and 256 KB in all; kit-code-size.awk leaves
 # out a heredoc body written to a file with cat or tee, and only on rules strict
 # enough that each case below is refused when one of them is broken. The guards
-# join their input once (#300), which took the line limit from 10,000 to 20,000;
-# past it, egress-guard's own passes still ran past the timeout under load.
+# join their input once (#300), but every pass still costs per line, so past
+# 10,000 lines egress-guard's passes can still run past the timeout under load.
 echo "[size cap]"
 SZ="$WORK/size"; mkdir -p "$SZ"
 python3 - "$SZ" <<'PY'
@@ -1301,9 +1301,7 @@ cases = {
     "final": "solana program set-upgrade-authority PID --final" + fill(" \\\n  x", 234000),
     "cat200k": "cat > f.txt <<'EOF'\n" + LINE * 5500 + "EOF",
     "cat433k": "cat > f.txt <<'EOF'\n" + LINE * 12000 + "EOF",
-    "lines": "cat > f.txt <<'EOF'\n" + "yyy\n" * 20100 + "EOF",
-    # Past the old 10,000-line limit and inside the new one.
-    "lines20k": "cat > f.txt <<'EOF'\n" + "yyy\n" * 19900 + "EOF",
+    "lines": "cat > f.txt <<'EOF'\n" + "yyy\n" * 10100 + "EOF",
     # #321 review: a gh secrets write ahead of 30,000 empty lines and a heredoc padded
     # to 256 KB ran egress-guard past its timeout under load with no line limit.
     "ghpad": "gh api -X PUT repos/o/r/actions/secrets/FOO -f encrypted_value=x\n" + "\n" * 30000
@@ -1349,8 +1347,6 @@ for g in "$M_CHAIN" "$M_SECRETS" "$M_EGRESS"; do
   for t in relaxed high; do
     run_payload "$g" "$t" "$SZ/cat200k.json"
     assert_eq silent "$DECISION" "[$t] a 200 KB file written with cat and a quoted heredoc is not code, and passes"
-    run_payload "$g" "$t" "$SZ/lines20k.json"
-    assert_eq silent "$DECISION" "[$t] a 19,900-line file written with cat passes: the line limit is 20,000"
   done
   run_payload "$g" relaxed "$SZ/unqplain.json"
   assert_eq silent "$DECISION" "an unquoted cat heredoc with no substitution in it is not code either"
@@ -1373,11 +1369,10 @@ MUT_SIZESUBST="$(mutant sizesubst kit-code-size.awk 'if (!quoted && (index(l, "$
 MUT_SIZEUNTERM="$(mutant sizeunterm kit-code-size.awk 'if (delim != "" && exempt) SIZE += pend' 'if (0) SIZE += pend')" || MUT_SIZEUNTERM=
 MUT_SIZECONT="$(mutant sizecont kit-code-size.awk '!cont && !wascont && ' '')" || MUT_SIZECONT=
 MUT_SIZELINES="$(mutant sizelines kit-code-size.awk 'NR <= LINES' '1')" || MUT_SIZELINES=
-MUT_SIZE10K="$(mutant size10k lib-headless.sh 'KIT_LINE_LIMIT=20000' 'KIT_LINE_LIMIT=10000')" || MUT_SIZE10K=
 MUT_SIZEHEAD="$(mutant sizehead kit-code-size.awk 'fw = first_word(HT, hn); hw = (fw <= hn) ? base(HT[fw]) : ""' 'hw = cmdword_x(HT, hn, 0, 0)')" || MUT_SIZEHEAD=
 for pair in "$MUT_SIZE|line40k|deny" "$MUT_SIZECAT|cat200k|silent" "$MUT_SIZEQ|fakemark|deny" \
             "$MUT_SIZEPIPE|pipebash|deny" "$MUT_SIZESUBST|unqsubst|deny" "$MUT_SIZEUNTERM|unterm|deny" \
-            "$MUT_SIZECONT|contbash|deny" "$MUT_SIZELINES|lines|deny" "$MUT_SIZE10K|lines20k|silent" "$MUT_SIZEHEAD|shellcat|deny"; do
+            "$MUT_SIZECONT|contbash|deny" "$MUT_SIZELINES|lines|deny" "$MUT_SIZEHEAD|shellcat|deny"; do
   mdir="${pair%%|*}"; rest="${pair#*|}"; payload="${rest%%|*}"; was="${rest#*|}"
   run_payload "$M_EGRESS" relaxed "$SZ/$payload.json" "$mdir"
   TOTAL=$((TOTAL + 1))
