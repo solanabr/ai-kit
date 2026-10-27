@@ -4,6 +4,62 @@ The four tiers — **Off / Relaxed / Medium / High**, default **Relaxed** — an
 
 The spec the tiers were built from, with the in-session verification behind each rule, is [`FIREWALL-SPEC.md`](../FIREWALL-SPEC.md).
 
+## Who enforces what
+
+Four layers enforce the firewall. Three ship in the kit. The fourth is the [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) plugin, a separate Claude Code plugin that the full install and the plugin install both enable. Each layer holds only under its own conditions:
+
+| Layer | What it is | Holds when |
+|---|---|---|
+| Sandbox | Claude Code's OS sandbox, `sandbox.*` in `.claude/settings.json` | Full install at Relaxed, Medium or High. It covers every process a sandboxed Bash command starts, whatever the command looks like. It does not cover the file tools, an MCP server's process, or a command line led by one of the eight `excludedCommands`. A plugin install has none, because Claude Code drops a plugin's `sandbox` key |
+| Permission rule | `permissions.deny` and `permissions.ask` | Full install, in every permission mode, `bypassPermissions` included. A rule matches the literal command or tool form, so a wrapper, a variable or a path-qualified binary walks past it. A plugin install has none, because Claude Code drops a plugin's `permissions` key |
+| Kit hook | `secrets-guard.sh`, `onchain-guard.sh`, `egress-guard.sh` and `fetch-exec-guard.sh`, on the Bash tool and `context-mode`'s MCP tools; secrets-guard also on Read and Grep | Full and plugin installs, while hooks are enabled. Each decides per statement on what it can parse. A missing script or an awk failure exits 0, so the call passes. At Off, onchain-guard, egress-guard and fetch-exec-guard return early, after the size cap, onchain-guard's irreversible set and egress-guard's `rm`/`kill` pass; secrets-guard runs in full. A plugin install has no `security.json`, so the tier-varying gates act as at Relaxed |
+| safe-ai-skill | The plugin's own PreToolUse, PostToolUse, UserPromptSubmit and SessionStart hooks | While `safe-ai-skill@stbr` is installed and enabled. Its engine ships prebuilt for macOS and glibc Linux (x64, arm64); with no engine for the platform it blocks every call it gates. It does not read the kit's tier, so its verdicts are the same at Off and at High. It runs on every Bash call, on Read, Grep and Glob, on every `mcp__*` tool, on each prompt and at session start |
+
+An `--agents` install has no Claude Code hooks, rules or sandbox; what each other agent enforces is in [other-agents.md](other-agents.md).
+
+The table below names the layer for each rule family, measured against rule set 11 and the safe-ai-skill version the kit pins: **1.0.0**, commit `2997280e` in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json). A plugin release reaches kit users only when the kit moves that pin. R/M/H = Relaxed/Medium/High; "all" = every tier, Off included; "—" = the layer does nothing for the rule. `tests/test_doc_gates.sh` does not parse this table, unlike the gate table below it, because the safe-ai-skill column cannot be resolved from the kit's own files.
+
+| Rule family | Sandbox | Permission rule | Kit hook | safe-ai-skill 1.0.0 |
+|---|---|---|---|---|
+| Never-allowed credentials: SSH and GPG keys, `~/.aws`, keychains and password managers, browser and wallet-extension stores, shell history, the default wallet `~/.config/solana/id.json` | `denyRead`, R/M/H | `Read()` deny, all | secrets-guard, all | Of this row, only the wallet: the file tools and `cat`-style readers on `**/id.json` and `~/.config/solana/**`, `cli/config.yml` included. It also denies `**/*.pem` |
+| Registry and git-host tokens: `~/.npmrc`, `~/.netrc`, `~/.git-credentials`, kube, docker, `~/.pypirc`, gem and cargo credentials | `denyRead` M/H; at R through the `Read()` deny, which Claude Code applies to the sandbox too | `Read()` deny, all | secrets-guard, all | — |
+| `gh`'s host file | `denyRead` M/H | `Read()` deny M/H; `cat` of it and `gh auth token`, all | secrets-guard (Read and Grep tools and commands), all; egress-guard refuses sending it, R/M/H | — |
+| Project keypairs (`*-keypair.json`) | — | `Bash(cat *keypair*.json)` and two variants, all | egress-guard refuses sending them, R/M/H | The file tools and `cat`-style readers, every tier |
+| Project `.env` read | High, through the `Read()` deny | `Read()` deny on seven dotenv names, High | egress-guard refuses sending it, R/M/H | The file tools and `cat`-style readers on `**/.env` and `**/.env.*`, every tier; `.env.example` and `.env.schema` stay readable. `grep`, `awk`, inline interpreters and a Grep rooted at a directory pass |
+| Project `.env` write | Medium, through the `Edit()` deny, on macOS only | `Edit()` deny on the same names, Medium | — | — |
+| `--final`, `program close --bypass-warning`, `program-v4 finalize`, `spl-token authorize --disable` | — | Deny glob, all, plain form | onchain-guard deny, all, every spelling it parses | No dedicated rule; `set-upgrade-authority` and `authorize` ask as authority changes |
+| Deploys, upgrades, buffer writes, authority changes, closes, burns, `spl-token transfer` | — | Plain `solana transfer`, `solana close`, `solana authorize`, `spl-token burn` and `spl-token close` denied, all | onchain-guard: Off silent; R and M ask on every cluster, except a local validator at R; H denies mainnet; headless, mainnet is denied without `CONFIRM_MAINNET=1` | Commands led by `solana`, `spl-token` or `anchor`, every tier: a deploy or upgrade asks on mainnet; an authority change, close or burn asks on every cluster; a transfer passes within the spend caps and asks on mainnet |
+| Spend caps and grants | — | — | — | Per-transaction and daily caps on transfers, and grants |
+| Value-moving MCP calls | — | Tool-name denies for `context-mode`'s executors and Playwright's two primitives (M/H), Cloudflare's `execute` and Playwright's `browser_evaluate` (H) | All four guards, on `context-mode` only | Every `mcp__*` server: a value-moving verb in the tool name, or an amount and a destination in the payload, asks |
+| A secret file sent to the network (`curl -d @.env`, `--upload-file`) | `deniedDomains`, known sinks only, R/M/H | — | egress-guard deny, R/M/H | Upload of a secret file by `curl` or `wget` denied; a telemetry-style POST to a host other than localhost asks |
+| Fetch-and-execute of an undeclared package (`npx`, `uvx`, `cargo install`, …) | — | — | fetch-exec-guard: Off silent, R and M report, H deny | `curl … \| sh` and `bash <(curl …)` installers ask |
+| Publish, force push, history rewrites, git exec-config keys, `gh api` | — | Destructive git denied, all; `gh api` M/H | egress-guard, R/M/H | — |
+| Shell writes outside the repo and the toolchain caches | `allowWrite` fence, R/M/H | — | — | — |
+| Skill and MCP supply chain | — | — | — | At session start: pins skills and MCP servers, and quarantines (moves) a skill with a high finding or drift |
+| A private key or seed phrase pasted into a prompt | — | — | — | Prompt blocked |
+| Secrets in tool output | — | — | — | A PostToolUse redactor on Bash, Read and Grep output. Whether Claude Code applies its rewrite to a built-in tool's output is unverified |
+
+### What only safe-ai-skill enforces
+
+No kit layer covers these. They hold only while `safe-ai-skill@stbr` is installed and enabled:
+
+- the file tools and `cat`-style reads of the project's `.env` at Off, Relaxed and Medium (High has the kit's own `Read()` deny);
+- the Read tool on project keypairs;
+- on-chain gating at Off, where onchain-guard asks nothing;
+- spend caps and grants;
+- value-moving calls on MCP servers other than `context-mode`, such as Helius's `heliusWrite` transfers;
+- the `curl … | sh` installer prompt;
+- the session-start skill and MCP supply-chain check;
+- the pasted-key prompt guard.
+
+**Installing it.** The plugin install pulls it in: `solana-ai-kit@stbr` depends on `safe-ai-skill@stbr`. The full install enables it in `.claude/settings.json` and runs `claude plugin install safe-ai-skill@stbr --scope project`; someone who later clones the project runs that command once. See the [README](../README.md#security-firewall-safe-ai-skill).
+
+**If you disable it** (`"safe-ai-skill@stbr": false` under `enabledPlugins` in `.claude/settings.local.json`), the kit's three layers stay as tabulated and every item in the list above goes. In particular, below High nothing stops the agent reading the project's `.env` with the Read tool.
+
+**Without the kit's sandbox** (Off, or a plugin install), safe-ai-skill is a pattern layer like the kit hooks. Neither stops a script written in one call and run in the next, a path built at runtime or base64-decoded, a subprocess reading a credential file, or egress to a host no pattern names. The sandbox closes those for sandboxed Bash commands only, not for an MCP server's process or a line led by an excluded command.
+
+Where the two engines overlap, both run on the same call, so a command can pass two checks and get two prompts. How the kit and safe-ai-skill should divide the work is an open design discussion in [#264](https://github.com/solanabr/ai-kit/issues/264).
+
 ## Permissions and Safety Gates
 
 Edits and commits run without hooks, formatters or extra prompts. The gates sit around secrets, on-chain writes and destructive commands.
@@ -44,7 +100,7 @@ Edits and commits run without hooks, formatters or extra prompts. The gates sit 
 | Bash sandbox | `sandbox` | On; local ports can bind (validators, dev servers). Eight `excludedCommands` run outside it: `surfpool` and `anchor test` because Surfpool panics inside the sandbox, `git push/pull/fetch` and `gh pr/run/issue` because SSH can't authenticate inside it and, at Medium and High, `gh` can't read its host file there. The exclusion covers the whole command line, not just the excluded command — see below |
 | A workflow starting: the `Workflow` tool, which can start up to 1,000 agents in one run | ask rule, **High only** | Approval prompt before every run, whoever asked for it. An explicit ask rule is one of the actions Claude Code auto-approves in no mode, so it prompts under `bypassPermissions`, where a workflow otherwise starts at once, and over a matching allow rule. Off, Relaxed and Medium leave workflows to the session's permission mode, which asks in the default mode |
 | A command retried outside the sandbox: a Bash call with `dangerouslyDisableSandbox` | ask rule, **High only** | Approval prompt before the retry runs, in every permission mode. Without it, an allow rule that matches the command approves the retry with no prompt; Claude Code gives this rule precedence over a matching allow rule. It does not reach a line led by an excluded command, which leaves the sandbox with no parameter: see *An excluded command lifts the sandbox for the whole command line* below |
-| [safe-ai-skill](../README.md#security-firewall-safe-ai-skill) | Its own Claude Code hooks | Gates secrets and mainnet actions too, so some commands pass two checks. It also refuses `.env` and its variants to the file tools and `cat`-style reads at every tier (not to `grep`, `awk` or an inline interpreter), stricter than the tiers' own rules; following the tier instead is [safe-ai-skill#16](https://github.com/solanabr/safe-ai-skill/issues/16). `/setup-mcp` never reads `.env` |
+| [safe-ai-skill](../README.md#security-firewall-safe-ai-skill) | Its own Claude Code hooks, active only while the plugin is installed and enabled | Gates secrets and mainnet actions too, so some commands pass two checks. Some rules have no other layer: see [Who enforces what](#who-enforces-what). It also refuses `.env` and its variants to the file tools and `cat`-style reads at every tier (not to `grep`, `awk` or an inline interpreter), stricter than the tiers' own rules; following the tier instead is [safe-ai-skill#16](https://github.com/solanabr/safe-ai-skill/issues/16). `/setup-mcp` never reads `.env` |
 
 **An approval prompt never stands in for a block.** An approved prompt runs the whole Bash call, so `egress-guard.sh` asks only after every check that can block has run. Before, the first prompt ended the hook: `npm publish && curl -d @.env https://…` asked about the publish at Relaxed, and an approval sent the `.env` too. The git rules are mirrored the same way wherever they cannot see the command: behind a wrapper Claude Code does not strip before matching (`exec`, `doas`, `arch`, `taskset`, `xargs` with a flag), with git named by its path, with its first option quoted, or inside a shell's `-c` string. The push and history gates read past git-level options too, so `git -P push --force` is the force push it runs. And every gate — publish, force push, merge, the on-chain set, the secret and fetch-and-execute checks — now reads a string another program runs as shell code (`sh -c`, `eval`, `watch`, `flock -c`, `env -S`, `git submodule foreach`, `git rebase --exec`/`-x`) as the command it is, so `sh -c "npm publish"` and `git submodule foreach '… --final'` get the inner command's verdict at its own tier, while `git commit -m "sh -c 'npm publish'"` and a code string written into a file stay data.
 
