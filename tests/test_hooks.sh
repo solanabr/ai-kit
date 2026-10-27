@@ -2060,6 +2060,34 @@ same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$MUT_PID"
 same "$M_EGRESS" ask deny deny "npm publish" "${P//@/npm publish}" "$MUT_PID"
 same "$M_EGRESS" silent ask deny "git push --force origin main" "${P//@/git push --force origin main}" "$MUT_PID"
 same "$M_CHAIN" ask ask deny "$DA" "${P//@/$DA}" "$MUT_PID"
+# Where bash decodes no $'…' and opens no quote at all: inside `…`, which ends at
+# the first unescaped backtick; in a comment, which runs to the newline; and past
+# a heredoc body, which ends at its delimiter with a quote in a `$( … )` still
+# open. Read as $'…' there, the `\'` ran the quote on over the gated command. The
+# plain-quote spellings (a `'` in backticks, `# don't`, `$(echo ')`) were silent
+# on main for the same reason and are closed with them.
+BQ='`'
+MUT_BT="$(mutant bt lib-tokenize.awk 'return (substr(s, e, 1) == "`") ? e : length(s) + 1' 'return length(s) + 1')" || MUT_BT=
+MUT_HASH="$(mutant hash lib-tokenize.awk 'if (c == "#" && kit_comment_at(s, i)) {' 'if (0) {')" || MUT_HASH=
+MUT_HDQEND="$(mutant hdqend lib-tokenize.awk 'KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"' 'KHS_BUF ")"')" || MUT_HDQEND=
+MUT_HASHESC="$(mutant hashesc lib-tokenize.awk 'return (i - 2 - k) % 2 == 0' 'return 1')" || MUT_HASHESC=
+MUT_BTBODY="$(mutant btbody lib-tokenize.awk '((c == "`" || c == "\\" || c == "$") ? c : "\\" c)' '("\\" c)')" || MUT_BTBODY=
+for M in "$MUT_BT" "$MUT_HASH" "$MUT_HDQEND" "$MUT_HASHESC" "$MUT_BTBODY"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+for Q in "\$'$BS'" "'"; do
+  for P in "echo ${BQ}echo $Q${BQ} ; @ ; echo ${BQ}'${BQ}|$MUT_BT" "echo \"${BQ}echo $Q${BQ}\" ; @ ; echo \"${BQ}'${BQ}\"|$MUT_BT" \
+           "echo hi # $Q${NL}@${NL}echo '|$MUT_HASH" "cat <<X${NL}\$(echo $Q)${NL}X${NL}@${NL}# '|$MUT_HDQEND"; do
+    M="${P##*|}"; P="${P%|*}"
+    same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$M"
+    same "$M_SECRETS" deny deny deny "cat ~/.config/solana/id.json" "${P//@/cat ~/.config/solana/id.json}" "$M"
+    same "$M_EGRESS" deny deny deny "rm -rf /" "${P//@/rm -rf /}" "$M"
+  done
+done
+# A comment hides what follows it on its line, and only a word-starting `#` is one.
+quiet "$M_FETCH" "ls # ; npx -y x" "$MUT_HASH"
+same "$M_FETCH" silent silent deny "npx -y x" "echo a${BS} #; npx -y x" "$MUT_HASHESC"
+same "$M_FETCH" silent silent deny "npx -y x" "echo ${BQ}echo ${BS}${BQ}npx -y x${BS}${BQ}${BQ}" "$MUT_BTBODY"
 same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"
 same "$M_FETCH" silent silent deny "npx -y x" "cat <<X${NL}\$(echo \$'$BS')' ; npx -y x)${NL}X" "$MUT_ANSIHS"
 # The decoder itself, one escape at a time: what tokenize hands every guard.

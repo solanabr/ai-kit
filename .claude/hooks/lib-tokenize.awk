@@ -183,7 +183,7 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
         continue
       }
       if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-      if (c == "`")   { out = out " $__X__\002 "; st[++sp] = "bt"; continue }
+      if (c == "`")   { j = kit_bt_end(s, i); out = out " $__X__\002 " split_cmd(kit_bt_body(substr(s, i + 1, j - i - 1))) "\002"; i = j; continue }
       if (c == "\"")  { sp--; out = out c; continue }
       out = out c; continue
     }
@@ -200,6 +200,9 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
       if (c == "$" && substr(s, i + 1, 1) ~ /[$\047]/) out = out "\"\""
       continue
     }
+    # A comment runs to the newline, and nothing in it quotes: read as text, the
+    # quote in `echo hi # it's` or `# $'\'` held every line after it (#301).
+    if (c == "#" && kit_comment_at(s, i)) { j = index(substr(s, i), "\n"); if (j == 0) break; i += j - 2; continue }
     if (kit_pid(s, i)) { out = out c2; i++; continue }
     # $'…' is copied whole for tokenize to decode (#301).  Its `\'` is escaped,
     # so read as '…' the region closed there: `echo $'it\'s; npm publish'` split.
@@ -208,7 +211,10 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
     if (c == "\"")  { st[++sp] = "dq"; out = out c; continue }
     if (c2 == "${") { j = index(substr(s, i), "}"); if (j > 0) { out = out substr(s, i, j); i += j - 1; continue } }
     if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
-    if (c == "`")   { if (st[sp] == "bt") { sp--; out = out "\002" } else { out = out " $__X__\002 "; st[++sp] = "bt" } ; continue }
+    # `…` ends at the first unescaped backtick, whatever quotes stand before it
+    # (#301): its text is split as a command of its own, so a quote inside it,
+    # `$'\'` or a lone `'`, no longer runs on past it.
+    if (c == "`")   { j = kit_bt_end(s, i); out = out " $__X__\002 " split_cmd(kit_bt_body(substr(s, i + 1, j - i - 1))) "\002"; i = j; continue }
     if (c == ")" && sp > 0 && st[sp] == "code") { sp--; out = out "\002"; continue }
     # An `&` or `|` inside a redirection operator (`2>&1`, `<&3`, `&>log`, `>|f`)
     # separates nothing, and `|&` pipes stderr too: one stage boundary.  Read as
@@ -376,6 +382,32 @@ function kit_ansi(s, p,   b, o, j, c, v) {
 # `$'\' ; …'`, the npx was quoted.  Taken only where a `$` or a quote follows, the
 # one place the pairing decides anything, so `$$(…)` and `$${…}` read as before.
 function kit_pid(s, i) { return substr(s, i, 2) == "$$" && substr(s, i + 2, 1) ~ /[$\047]/ }
+# kit_bt_end — the closing backtick of the `…` opened at p in s, or past the end
+# of s.  bash looks for it skipping only backslash pairs: no quote counts there,
+# so `echo $'\'` closes at its second backtick and the `;` after it separates.
+function kit_bt_end(s, p,   e) {
+  match(substr(s, p + 1), /^([^`\\]|\\.)*/); e = p + RLENGTH + 1
+  return (substr(s, e, 1) == "`") ? e : length(s) + 1
+}
+# kit_bt_body — the text of a `…` as bash runs it: \`, \\ and \$ lose their backslash.
+function kit_bt_body(b,   o, j, c) {
+  o = ""
+  while ((j = index(b, "\\")) > 0) {
+    c = substr(b, j + 1, 1)
+    o = o substr(b, 1, j - 1) ((c == "`" || c == "\\" || c == "$") ? c : "\\" c)
+    b = substr(b, j + 2)
+  }
+  return o b
+}
+# kit_comment_at — the `#` at i in s starts a comment: it begins a word, after
+# the start, an unescaped blank or newline, or an operator character.
+function kit_comment_at(s, i,   p, k) {
+  if (i == 1) return 1
+  p = substr(s, i - 1, 1)
+  if (p !~ /[ \t\n;&|()]/) return 0
+  for (k = i - 2; k >= 1 && substr(s, k, 1) == "\\"; k--) ;
+  return (i - 2 - k) % 2 == 0
+}
 # kit_ansi_end — the length of what $'…' quotes, its opening quote at p in s.
 # Sets KA_END and KA_OPEN as kit_ansi describes, without decoding.
 function kit_ansi_end(s, p) {
@@ -826,9 +858,12 @@ function kit_hd_subst(l,   out, i, L, c, st) {
   }
   return out
 }
+# A quote still open when the body ends is closed there (#301): the body ends at
+# its delimiter whatever it holds, so `$(echo $'\')` or `$(echo ')` left open
+# quoted every command after the heredoc in the text the guards read.
 function kit_hd_subst_flush(   out) {
   if (KHS_IN == 0) return ""
-  out = "; $(" KHS_BUF ")"; KHS_IN = 0; return out
+  out = "; $(" KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"; KHS_IN = 0; KHS_Q = ""; return out
 }
 
 # kit_hd_ops — the `<<` heredoc operators the shell reads in l, starting in quote
@@ -850,6 +885,7 @@ function kit_hd_ops(l, q,   i, L, c, top, k) {
     if (top == "s") { if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
     if (top == "e") { if (c == "\\") i++; else if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
     if (c == "\\") { i++; continue }
+    if (top == "b") { if (c == "`") q = substr(q, 1, length(q) - 1); continue }   # as kit_qscan
     if (top == "d") {
       if (c == "\"") q = substr(q, 1, length(q) - 1)
       else if (substr(l, i, 3) == "$((") { q = q "a"; i += 2 }
@@ -1063,6 +1099,8 @@ function kit_qscan(l, q, codeat,   i, L, c, top, p) {
     # e is $'…' (#301): a backslash escapes there, `\'` included, and continues nothing.
     if (top == "e") { if (c == "\\") i++; else if (c == SQ) q = substr(q, 1, length(q) - 1); continue }
     if (c == "\\") { if (i == L) KQ_CONT = 1; i++; continue }
+    # In `…` only the closing backtick counts, as in kit_bt_end: no quote opens.
+    if (top == "b") { if (c == "`") q = substr(q, 1, length(q) - 1); continue }
     if (top == "d" || top == "D") {
       if (c == "\"") q = substr(q, 1, length(q) - 1)
       else if (substr(l, i, 2) == "$(") { q = q "p"; i++ }
