@@ -57,7 +57,7 @@ source "$SCRIPT_DIR/helpers.sh"
 # walked past `Bash(git -c *)` before this gate existed, and `--config-env` had no rule
 # at all. For `--config-env` it is the same mirror with the same scope: the first-position
 # spelling is the rule's and must stay silent here. For `-c` it is the whole gate since
-# rule set 12 dropped `Bash(git -c *)` (#311), in every position and at every tier, Off
+# rule set 13 dropped `Bash(git -c *)` (#311), in every position and at every tier, Off
 # included: `core.fsmonitor=false` and `core.hooksPath=/dev/null` take a program away and
 # pass, every other value is denied, and the subcommand after the safe prefix keeps the
 # verdict it has bare. A message or a pattern that merely names either option is data.
@@ -464,7 +464,7 @@ expect relaxed PASS "--config-env <k>=<var> first" "git --config-env core.fsmoni
 expect relaxed PASS "behind a VAR=value, which a deny rule matches past" \
   "X=/tmp/x.sh git --config-env=core.fsmonitor=X status"
 
-# ── -c in first position: GITCFG's alone since rule set 12 (#311) ──────────────
+# ── -c in first position: GITCFG's alone since rule set 13 (#311) ──────────────
 # `Bash(git -c *)` refused auditor-skill's `git -c core.fsmonitor=false <subcommand>`, and
 # a deny beats every allow and hook, so the rule went and this pass took the whole gate.
 # Two values pass, because each takes a program away: the fsmonitor hook off, and every
@@ -786,7 +786,7 @@ expect relaxed PASS "nice --adjustment 5 git status" "nice --adjustment 5 git st
 echo ""
 echo "[tiers: the deny does not ladder, and holds headless]"
 # GITCFG runs ahead of the Off early-exit, since it holds the every-tier `git -c` deny
-# rule set 12 dropped; the rest of the git passes are still Off's to skip.
+# rule set 13 dropped; the rest of the git passes are still Off's to skip.
 expect off     DENY "GITCFG holds at Off"        "git --no-pager --config-env=core.fsmonitor=X status"
 expect off     DENY "-c <program> at Off"        "git -c core.fsmonitor=/tmp/x.sh status"
 expect off     DENY "-c <program> behind -C at Off" "git -C . -c core.hooksPath=.git/hooks commit -m x"
@@ -1285,7 +1285,7 @@ flips "git's environment no longer read" "$M" "GIT_CONFIG_COUNT=1 git log" DENY 
 flips_at high "git's environment no longer read, at High" "$M" "GIT_SSH_COMMAND='ssh -i k' git push origin main" ASK PASS
 M="$(mutate 'if (!cc_strips(w) || (w == "xargs" && T[j + 1] ~ /^-/)) GW_HOW = "behind " w' 'if (0) GW_HOW = "behind " w')"
 # These four probe with a first-position --config-env, which only GW_HOW decides: a `-c`
-# with an unsafe value is denied in every position since rule set 12, so it no longer
+# with an unsafe value is denied in every position since rule set 13, so it no longer
 # shows whether the walk read the wrapper, path, quote or code string.
 flips "a wrapper the rules keep reads as one they strip" "$M" "exec git --config-env=core.pager=X log" DENY PASS
 M="$(mutate 'if (GW_HOW == "" && T[CWI] != "git") GW_HOW = "with git named by its path"' 'if (0) GW_HOW = "with git named by its path"')"

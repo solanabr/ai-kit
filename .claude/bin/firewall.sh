@@ -191,7 +191,13 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           retried outside the sandbox (`Bash(dangerouslyDisableSandbox:true)`): the
 #           first permissions.ask entries any tier emits, and High's alone (ASK_HIGH).
 #           Off, Relaxed and Medium generate the same bytes they did at 10.
-#   11 -> 12: `Bash(git -c *)` and its `git -C * -c` twins leave the deny set at every
+#   11 -> 12: the on-chain denies at every tier (#306). `solana close *` and `solana
+#           authorize *`, which matched no solana-cli subcommand, become
+#           `solana close-vote-account *` and `solana authorize-nonce-account *`, and
+#           each solana and spl-token rule in DENY_IRREVERSIBLE_ONCHAIN gains its
+#           global-option twin (`solana -* transfer *`), so `solana -um transfer` is
+#           denied like `solana transfer`.
+#   12 -> 13: `Bash(git -c *)` and its `git -C * -c` twins leave the deny set at every
 #           tier (#311): a deny beats every allow and hook, and no glob can let
 #           auditor-skill's `git -c core.fsmonitor=false <subcommand>` through while
 #           refusing `-c core.fsmonitor=/tmp/x.sh`. egress-guard.awk's GITCFG pass holds
@@ -200,7 +206,7 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           else. DENY_GIT_DASH_LOWER_C twins every destructive git rule behind each literal safe value,
 #           and ALLOW_GIT_SAFE_CONFIG each git allow rule behind the two safe values, so
 #           the subcommand after the prefix keeps the verdict it has bare.
-RULE_SET_VERSION = 12
+RULE_SET_VERSION = 13
 # enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
 # without it predate #165, when a first apply recorded the user's own rules as well.
 RULEIDS_SCOPE = "generated"
@@ -891,7 +897,7 @@ DENY_WRAPPERS = [
     # (`command -v`, `xargs grep|rg|wc|ls`) rather than as blanket globs, because
     # `Bash(xargs *)` pre-approved `xargs -I{} solana program deploy …` outright.
     #
-    # `git -c` is NOT here any more (rule set 12, #311). `git -c core.fsmonitor=/tmp/x.sh
+    # `git -c` is NOT here any more (rule set 13, #311). `git -c core.fsmonitor=/tmp/x.sh
     # status` is arbitrary code execution whatever subcommand follows, and through rule
     # set 11 `Bash(git -c *)` denied the whole form at every tier. But a deny beats every
     # allow and every hook, and no glob can tell that from `git -c core.fsmonitor=false
@@ -927,7 +933,7 @@ DENY_WRAPPERS = [
     # covers the `--config-env=<k>=<v>` spelling and the space-separated one alike,
     # because its `*` touches the option name: a `*` touching a non-space may be empty
     # and matches `=` as readily as a space. `Bash(git --config-env *)`, the shape the -c
-    # rule had through rule set 11, would have required the space and let the `=` form straight
+    # rule had through rule set 12, would have required the space and let the `=` form straight
     # through; gap_probe's port of the matcher and tests/test_firewall.sh pin both facts.
     # No twin: the lone wildcard holds with its gap empty, so bare `git --config-env` is
     # covered too. A leading VAR=value is no way round it either, since a deny rule
@@ -1197,7 +1203,7 @@ DENY_GIT_DASH_C = [
     "Bash(git -C * ls-remote *--upload-pack*)",
     "Bash(git -C * ls-remote --upload-pack*)",
     # config-execution twins (mirror DENY_WRAPPERS' --config-env / --exec-path= / alias).
-    # `git -C * -c *` and its bare twin left with `git -c *` in rule set 12: a `-c`
+    # `git -C * -c *` and its bare twin left with `git -c *` in rule set 13: a `-c`
     # behind `-C <dir>` is GITCFG's, like a `-c` anywhere else.
     "Bash(git -C * --config-env*)",
     "Bash(git -C * --exec-path=*)",
@@ -1207,7 +1213,7 @@ DENY_GIT_DASH_C = [
 
 # Every tier. A twin of each rule in DENY_GIT_DASH_C behind each safe `-c` value, which is
 # what keeps a subcommand's verdict at the permission layer once `Bash(git -c *)` is gone
-# (rule set 12, #311; see DENY_WRAPPERS). GITCFG lets `git -c core.fsmonitor=false` and
+# (rule set 13, #311; see DENY_WRAPPERS). GITCFG lets `git -c core.fsmonitor=false` and
 # `git -c core.hooksPath=/dev/null` through, and without these `git -c
 # core.fsmonitor=false clean -fdx` would meet no rule: every destructive deny is anchored
 # on `git <subcommand>`. The prefix is the literal safe value, not `git -c *`: a `*` there
@@ -1279,8 +1285,12 @@ DENY_IRREVERSIBLE_ONCHAIN = [
     "Bash(spl-token authorize *--disable*)",
     "Bash(spl-token authorize --disable*)",
     "Bash(solana transfer *)",
-    "Bash(solana close *)",
-    "Bash(solana authorize *)",
+    # Rule set 12 (#306): these two replace `solana close *` and `solana authorize *`,
+    # which named no solana-cli subcommand (3.x and 4.x alike) and so blocked only
+    # `solana close --help`. Closing a vote account withdraws everything in it, and the
+    # nonce authority is what withdraw-from-nonce-account, below, spends with.
+    "Bash(solana close-vote-account *)",
+    "Bash(solana authorize-nonce-account *)",
     "Bash(solana withdraw-from-nonce-account *)",
     "Bash(spl-token burn *)",
     "Bash(spl-token close *)",
@@ -1288,6 +1298,30 @@ DENY_IRREVERSIBLE_ONCHAIN = [
     "Bash(solana config set *-k*)",
     "Bash(solana config set -k*)",
 ]
+
+
+def option_first(rules):
+    """The global-option twin of each solana and spl-token rule (#306). Both CLIs take
+    -u/--url, -k/--keypair, -C/--config, --commitment and the rest BEFORE the
+    subcommand, so `solana -um transfer X 1` and `solana --url <rpc> transfer X 1` ran
+    past `Bash(solana transfer *)`: the glob is anchored on the literal subcommand.
+    `<bin> -* <rest>` puts any run of options in that gap. The `-*` gap is never empty
+    in a real command (a lone `-` is not an option), which gap_probe is taught, and a
+    trailing ` *` gains its bare twin, because the added wildcard makes it mandatory.
+    anchor's own rules already put a `*` straight after `anchor`."""
+    out = []
+    for rule in rules:
+        body = rule[len("Bash("):-1]
+        binary, _, rest = body.partition(" ")
+        if binary not in ("solana", "spl-token"):
+            continue
+        out.append("Bash(%s -* %s)" % (binary, rest))
+        if rest.endswith(" *"):
+            out.append("Bash(%s -* %s)" % (binary, rest[:-2]))
+    return out
+
+
+DENY_IRREVERSIBLE_ONCHAIN += option_first(DENY_IRREVERSIBLE_ONCHAIN)
 
 DENY_SUPPLY_CHAIN = [
     # Publishing is NOT here. It is irreversible (npm unpublish closes after 72h,
@@ -2147,7 +2181,11 @@ LEGACY_RULE_IDS = [
     "Bash(git branch *--delete*)",
     "Bash(git branch -f*)",
     "Bash(git branch * -f*)",
-    # Dropped by rule set 12 (#311), and emitted by every release before #165. Its `-C`
+    # Dropped by rule set 12 (#306): neither is a solana-cli subcommand. Every release
+    # since the four-tier firewall emitted both.
+    "Bash(solana close *)",
+    "Bash(solana authorize *)",
+    # Dropped by rule set 13 (#311), and emitted by every release before #165. Its `-C`
     # twins arrived in rule set 10, after #165, so a record lists them and they need no
     # entry here.
     "Bash(git -c *)",

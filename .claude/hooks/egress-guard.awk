@@ -378,7 +378,7 @@ function git_walk(T, n, Q,   i, o, k, j, w, safe, hasc, r) {
         || T[i] == "--exec-path") return 0
     # k counts the options before this one: the first option is what the
     # `git --config-env*` rule is anchored on, so only a later one is a spelling
-    # it cannot see.  `-c` has had no rule since rule set 12, because no glob can
+    # it cannot see.  `-c` has had no rule since rule set 13, because no glob can
     # deny `-c core.fsmonitor=/tmp/x.sh` and let `-c core.fsmonitor=false`
     # through, so every position of it is this walk's.
     safe = (o == "-c" && T[i] == "-c" && gcfg_safe(T[i + 1]))
@@ -656,7 +656,7 @@ function gd_scan(stage,   n, T, Q, i) {
 # rule — which already matches it behind a VAR=value, since a deny rule matches
 # past any leading assignment.
 #
-# For `-c` this pass is the whole gate, in every position, since rule set 12
+# For `-c` this pass is the whole gate, in every position, since rule set 13
 # dropped `Bash(git -c *)`.  A deny rule wins over everything, and no glob can
 # tell `-c core.fsmonitor=false` (which takes a program away) from `-c
 # core.fsmonitor=/tmp/x.sh` (which names one), so the rule refused auditor-skill's
