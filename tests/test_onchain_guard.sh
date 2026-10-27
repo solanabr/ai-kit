@@ -202,7 +202,7 @@ want relaxed ask "a devnet write beside a Relaxed-silent local one still asks" \
 assert_eq silent "$(hverdict "$GUARD" relaxed "solana program deploy -ud a.so; solana program deploy -ut b.so")" \
   "[relaxed] headless: two known non-mainnet writes stay quiet"
 # Controls.
-M="$(omutant nosplit 'gsub(/[;&|]/, "&\n", s)' 'x = 1')"
+M="$(omutant nosplit 'gsub(/[;&|]/, "&\n")' 'x = 1')"
 assert_eq silent "$(hverdict "$M/onchain-guard.sh" relaxed "solana program deploy -ud a.so; solana program deploy -um b.so")" \
   "planted failure caught — statements left joined: the write after the ; is never matched"
 rm -rf "$M"
@@ -217,7 +217,7 @@ rm -rf "$M"
 # project default and --final/--disable slipped past the irreversible check. These run
 # with a devnet default (Anchor.toml and a stub `solana config`), which is what made
 # the mainnet flag after the redirection matter.
-echo "[redirections do not end a write; backticks start one; every cluster flag counts]"
+echo "[redirections do not end a write; backticks read as on main; every cluster flag counts]"
 DEVP="$(mktemp -d "${TMPDIR:-/tmp}/onchain-devnet.XXXXXX")"
 mkdir -p "$DEVP/bin"
 printf '[provider]\ncluster = "devnet"\n' > "$DEVP/Anchor.toml"
@@ -263,125 +263,46 @@ for C in "${REDIR_IRREV[@]}"; do
     assert_eq deny "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] the irreversible flag after a redirection still denies :: $C"
   done
 done
-M="$(omutant redir 'gsub(/[0-9]*[<>]&[0-9]*-?/, " ", s)' 'x = 1')"
+M="$(omutant redir 'gsub(/[0-9]*[<>]&[0-9]*-?/, " ")' 'x = 1')"
 assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 "solana program deploy a.so 2>&1 -um")" \
   "planted failure caught — redirections read as separators again: the mainnet flag is lost"
 rm -rf "$M"
 
-# A backtick substitution runs its command exactly as $( ) does.
-BTICK=(
-  'echo `solana program deploy b.so -um`'
-  'X=`anchor deploy --provider.cluster mainnet`'
-  'echo ok `solana program deploy b.so --url https://rpc.mycorp.io` done'
-)
-for C in "${BTICK[@]}"; do
-  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: a write in backticks is gated :: $C"
-  assert_eq deny "$(dverdict "$GUARD" high 1 "$C")" "[high] headless: a write in backticks is gated :: $C"
-  assert_eq ask "$(dverdict "$GUARD" relaxed 0 "$C")" "[relaxed] interactive: a write in backticks asks :: $C"
-done
-assert_eq deny "$(dverdict "$GUARD" relaxed 0 'echo `solana program deploy b.so --final`')" \
-  "[relaxed] an irreversible write in backticks denies"
-assert_eq silent "$(dverdict "$GUARD" relaxed 0 'echo `solana balance -um`')" \
-  "[relaxed] a read in backticks stays silent"
-M="$(omutant btick 's = cut($0)' 's = $0')"
-assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 'echo `solana program deploy b.so -um`')" \
-  "planted failure caught — substitutions left in place: the write in backticks is not seen"
-rm -rf "$M"
-
-# A substitution is a word of the statement around it, not its end: the outer write
-# keeps every word before and after it. Splitting the outer command AT the backtick
-# lost everything after it, which main (where a backtick was just a character) did
-# not: these were all denied on main.
-BTICK_OUTER=(
-  'solana program deploy p.so --program-id `solana address -k k.json` -um'
-  'solana transfer --with-memo "release `date +%F`" RCPT 1 -um'
-  "solana transfer --with-memo 'release \`date +%F\`' RCPT 1 -um"
-  'solana program deploy -ud p.so --program-id `solana address -k k.json` --url https://rpc.mycorp.io'
-)
-for C in "${BTICK_OUTER[@]}"; do
-  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: the flag after the substitution is still read :: $C"
-  assert_eq deny "$(dverdict "$GUARD" high 1 "$C")" "[high] headless: same :: $C"
-done
-for C in "solana program deploy -um p.so --program-id \`solana address -k k.json\`" \
-         "solana transfer --with-memo 'release \`date +%F\`' RCPT 1 -um"; do
-  assert_eq deny "$(dverdict "$GUARD" high 0 "$C")" "[high] interactive: mainnet around a substitution is denied :: $C"
-done
-for T in relaxed medium high; do
-  assert_eq deny "$(dverdict "$GUARD" "$T" 0 'solana program deploy -ud p.so `echo` --final')" \
-    "[$T] --final after a substitution still denies"
-  assert_eq deny "$(dverdict "$GUARD" "$T" 0 'spl-token authorize MINT mint `echo x` --disable')" \
-    "[$T] --disable after a substitution still denies"
-done
-# The substitution stays judged on its own as well, in double quotes too; inside
-# single quotes it is literal text, and a devnet write around a harmless one stays quiet.
-assert_eq deny "$(dverdict "$GUARD" relaxed 1 'echo "x `solana program deploy b.so -um` y"')" \
-  "[relaxed] headless: a write in backticks inside double quotes is gated"
-assert_eq silent "$(dverdict "$GUARD" relaxed 1 "echo 'x \`solana program deploy b.so -um\` y'")" \
-  "[relaxed] headless: backticks inside single quotes are literal text, not a write"
-# A write with a substitution among its words is at least unidentified: what the
-# substitution prints becomes arguments, a cluster flag included.
-assert_eq deny "$(dverdict "$GUARD" relaxed 1 'solana program deploy -ud p.so --program-id `solana address -k k.json`')" \
-  "[relaxed] headless: a write carrying a substitution is unidentified, so denied"
-assert_eq ask "$(dverdict "$GUARD" relaxed 0 'solana program deploy -ud p.so --program-id `solana address -k k.json`')" \
-  "[relaxed] interactive: the same write asks"
-
-# A substitution that PRINTS the dangerous word. Its output becomes words of the outer
-# command, so main — which read the backtick as an ordinary character — saw them, and
-# the cut-out text alone does not. Both readings are judged now.
-for T in relaxed medium high; do
-  for C in 'solana program deploy `echo --final` p.so' \
-           'spl-token authorize mint `echo mint` `echo --disable`' \
-           'solana program deploy -ud p.so `echo --final`'; do
-    assert_eq deny "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] an irreversible flag printed by a substitution denies :: $C"
-  done
-done
-for C in 'solana program deploy `echo -um` p.so' \
-         'solana program deploy -ud p.so `echo --url mainnet-beta`' \
-         'anchor deploy `echo --provider.cluster mainnet`'; do
-  assert_eq deny "$(dverdict "$GUARD" relaxed 1 "$C")" "[relaxed] headless: a cluster flag printed by a substitution is not lost :: $C"
-  assert_eq deny "$(dverdict "$GUARD" high 0 "$C")" "[high] interactive: read as mainnet, denied :: $C"
-done
-M="$(omutant rawirr 'if printf '"'"'%s\n%s\n'"'"' "$SEG" "$SEG_RAW" | grep -qE -e' 'if printf '"'"'%s\n'"'"' "$SEG" | grep -qE -e')"
-assert_eq ask "$(dverdict "$M/onchain-guard.sh" relaxed 0 'solana program deploy `echo --final` p.so')" \
-  "planted failure caught — irreversible check on the cut text only: a printed --final asks instead of denying"
-rm -rf "$M"
-M="$(omutant rawseg 'SEG_RAW=$(printf '"'"'%s\n'"'"' "$KIT_NORM" | grep -oE "$RE") || SEG_RAW=' 'SEG_RAW='"$(printf '\n')"'')"
-assert_eq ask "$(dverdict "$M/onchain-guard.sh" high 0 'solana program deploy `echo -um` p.so')" \
-  "planted failure caught — cluster judged on the cut text only: a printed -um is judged unidentified, not mainnet"
-rm -rf "$M"
-
-# A backtick inside a single-quoted string that spans lines is text, on every line of
-# it: the quote state carries across lines. Reset per line, it read the backtick as a
-# substitution and the prose inside it as a write.
-ML=(
-  $'git commit -m \'fix: gate authority changes\n\nsee `spl-token authorize MINT mint --disable` in docs\''
-  $'gh pr create --title t --body \'Summary\nrun `solana program deploy p.so -um` after merge\''
-  $'node -e \'const a = 1;\nconst s = `solana transfer X 1 -um`;\''
-)
-for C in "${ML[@]}"; do
-  for T in relaxed high; do
-    assert_eq silent "$(dverdict "$GUARD" "$T" 0 "$C")" "[$T] a backtick in a multi-line single-quoted string is text :: ${C//$'\n'/\\n}"
-  done
-done
-M="$(omutant sqreset 's = cut($0)' 'sq = 0; dq = 0; s = cut($0)')"
-assert_eq deny "$(dverdict "$M/onchain-guard.sh" relaxed 0 "${ML[0]}")" \
-  "planted failure caught — quote state reset per line: the commit message's backticked prose is denied"
-rm -rf "$M"
-M="$(omutant btickouter 'out = out " kit_subst "' 'out = out " kit_subst "; break')"
-# The uncut reading and the at-least-unidentified rule below would also catch this;
-# switch both off so the control measures the cut-out layer on its own.
-python3 - "$M/onchain-guard.sh" <<'PY'
-import sys
-p = sys.argv[1]; s = open(p, encoding="utf-8").read()
-for find, repl in [('SEG_RAW=$(printf \'%s\\n\' "$KIT_NORM" | grep -oE "$RE") || SEG_RAW=', 'SEG_RAW='),
-                   ('    *kit_subst*)\n', '    *kit_never*)\n')]:
-    assert s.count(find) == 1, "mutation target %r not found" % find
-    s = s.replace(find, repl)
-open(p, "w", encoding="utf-8").write(s)
-PY
-assert_eq silent "$(dverdict "$M/onchain-guard.sh" relaxed 1 'solana program deploy p.so --program-id `solana address -k k.json` -um')" \
-  "planted failure caught — the outer write cut at the substitution: the -um after it is lost"
-rm -rf "$M"
+# Backticks are read exactly as on main: an ordinary character, so a substitution's
+# text is part of the words around it. Each verdict below is main's, measured side by
+# side against main's hook (relaxed / relaxed headless / high / high headless), except
+# the one marked: there the repeated-flag rule above reads a second cluster flag main
+# ignored, which is stricter. A backtick substitution is no statement start —
+# `` echo `solana program deploy b.so -um` `` meets no gate — which predates this
+# change and is a follow-up, not something this file claims to cover.
+# bt <want r/rh/h/hh> <command>
+bt() {
+  local got
+  got="$(dverdict "$GUARD" relaxed 0 "$2")/$(dverdict "$GUARD" relaxed 1 "$2")/$(dverdict "$GUARD" high 0 "$2")/$(dverdict "$GUARD" high 1 "$2")"
+  assert_eq "$1" "$got" "backticks as on main :: ${2//$'\n'/\\n}"
+}
+bt deny/deny/deny/deny 'solana program deploy `echo --final` p.so'
+bt deny/deny/deny/deny 'spl-token authorize mint `echo mint` `echo --disable`'
+bt deny/deny/deny/deny 'solana program deploy -ud p.so `echo --final`'
+bt deny/deny/deny/deny 'solana program deploy -ud p.so `echo` --final'
+bt deny/deny/deny/deny 'spl-token authorize MINT mint `echo x` --disable'
+bt ask/deny/deny/deny 'solana program deploy `echo -um` p.so'
+bt ask/deny/deny/deny 'anchor deploy `echo --provider.cluster mainnet`'
+bt ask/deny/deny/deny 'solana program deploy p.so --program-id `solana address -k k.json` -um'
+bt ask/deny/deny/deny 'solana transfer --with-memo "release `date +%F`" RCPT 1 -um'
+bt ask/deny/deny/deny "solana transfer --with-memo 'release \`date +%F\`' RCPT 1 -um"
+bt ask/silent/ask/silent 'solana program deploy -ud p.so --program-id `solana address -k k.json`'
+# Stricter than main (main: ask/silent/ask/silent): every cluster flag counts, and the
+# second one here, printed by the substitution, is mainnet.
+bt ask/deny/deny/deny 'solana program deploy -ud p.so `echo --url mainnet-beta`'
+# Main's gap, kept: a substitution starts no statement.
+bt silent/silent/silent/silent 'echo `solana program deploy b.so -um`'
+# A backtick inside quoted prose stays prose, however the quotes are spelled around it.
+bt silent/silent/silent/silent $'git commit -m \'fix: gate authority changes\n\nsee `spl-token authorize MINT mint --disable` in docs\''
+bt silent/silent/silent/silent $'gh pr create --title t --body \'Summary\nrun `solana program deploy p.so -um` after merge\''
+bt silent/silent/silent/silent $'node -e \'const a = 1;\nconst s = `solana transfer X 1 -um`;\''
+bt silent/silent/silent/silent $'# don\'t deploy yet\necho \'note: `solana program deploy p.so --final` is blocked\''
+bt silent/silent/silent/silent $'MSG="$(printf "%s" "it\'s")"\ngit commit -m \'docs: `solana program deploy p.so --final`\''
 
 # Every cluster flag in a statement counts; clap lets the last repeat win, so the first
 # is not safe to trust.
