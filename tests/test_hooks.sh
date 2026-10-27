@@ -2068,7 +2068,7 @@ same "$M_CHAIN" ask ask deny "$DA" "${P//@/$DA}" "$MUT_PID"
 # on main for the same reason and are closed with them.
 BQ='`'
 MUT_BT="$(mutant bt lib-tokenize.awk 'return (substr(s, e, 1) == "`") ? e : length(s) + 1' 'return length(s) + 1')" || MUT_BT=
-MUT_HASH="$(mutant hash lib-tokenize.awk 'if (c == "#" && kit_comment_at(s, i)) {' 'if (0) {')" || MUT_HASH=
+MUT_HASH="$(mutant hash lib-tokenize.awk 'if (c == "#" && !dbr && kit_comment_at(s, i,' 'if (0 && !dbr && kit_comment_at(s, i,')" || MUT_HASH=
 MUT_HDQEND="$(mutant hdqend lib-tokenize.awk 'KHS_BUF ((KHS_Q == "e") ? SQ : KHS_Q) ")"' 'KHS_BUF ")"')" || MUT_HDQEND=
 MUT_HASHESC="$(mutant hashesc lib-tokenize.awk 'return (i - 2 - k) % 2 == 0' 'return 1')" || MUT_HASHESC=
 MUT_BTBODY="$(mutant btbody lib-tokenize.awk '((c == "`" || c == "\\" || c == "$") ? c : "\\" c)' '("\\" c)')" || MUT_BTBODY=
@@ -2086,6 +2086,27 @@ for Q in "\$'$BS'" "'"; do
 done
 # A comment hides what follows it on its line, and only a word-starting `#` is one.
 quiet "$M_FETCH" "ls # ; npx -y x" "$MUT_HASH"
+quiet "$M_SECRETS" "ls # ; cat ~/.npmrc" "$MUT_HASH"
+# After a `)` a `#` starts a comment only when the `)` closed a plain subshell or
+# group: the `)` of `$( )`, `$(( ))` and `<( )` ends no word, so the `#` is text
+# and the `;` after it separates. Inside `[[ … ]]` the `(` and `|` are a regex's,
+# and a `#` after them is text too.
+MUT_PK="$(mutant pk lib-tokenize.awk 'if (p == ")" && pk != "p") return 0' 'if (0) return 0')" || MUT_PK=
+MUT_PKALL="$(mutant pkall lib-tokenize.awk 'if (p == ")" && pk != "p") return 0' 'if (p == ")") return 0')" || MUT_PKALL=
+MUT_DBR="$(mutant dbr lib-tokenize.awk 'a ~ /[ \t\n]/) return 1' 'a ~ /[ \t\n]/) return 0')" || MUT_DBR=
+for M in "$MUT_PK" "$MUT_PKALL" "$MUT_DBR"; do
+  assert_eq "yes" "$([ -n "$M" ] && [ -d "$M/.claude/hooks" ] && echo yes || echo no)" "mutation fixture built: ${M##*/}"
+done
+for P in 'echo $(true)#; @|pk' 'x=$(true)#; @|pk' 'echo $((1))#; @|pk' 'cat <(true)#; @|pk' \
+         '[[ x =~ (#) ]] || @|dbr' '[[ x =~ x|#y ]] || @|dbr'; do
+  case ${P##*|} in pk) M="$MUT_PK" ;; dbr) M="$MUT_DBR" ;; esac; P="${P%|*}"
+  same "$M_FETCH" silent silent deny "npx -y x" "${P//@/npx -y x}" "$M"
+  same "$M_SECRETS" deny deny deny "cat ~/.npmrc" "${P//@/cat ~/.npmrc}" "$M"
+done
+same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" 'echo $(true)#; cat ~/.{npmrc,netrc}' "$MUT_PK"
+same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" '[[ x =~ (#) ]] || cat ~/.{npmrc,netrc}' "$MUT_DBR"
+quiet "$M_FETCH" "(true)# ; npx -y x" "$MUT_PKALL"
+quiet "$M_SECRETS" "(true)# ; cat ~/.npmrc" "$MUT_PKALL"
 same "$M_FETCH" silent silent deny "npx -y x" "echo a${BS} #; npx -y x" "$MUT_HASHESC"
 same "$M_FETCH" silent silent deny "npx -y x" "echo ${BQ}echo ${BS}${BQ}npx -y x${BS}${BQ}${BQ}" "$MUT_BTBODY"
 same "$M_SECRETS" deny deny deny "cat ~/.{npmrc,netrc}" "echo \$'$BS'' ; cat ~/.{npmrc,netrc}" "$MUT_ANSIBR"

@@ -171,8 +171,8 @@ function kit_wrapper_operand(w, t) {
 # line continuation and is dropped whole, as the shell drops it: kept, the newline
 # landed inside a token, and `git config \<newline>core.hooksPath x` had a key
 # no gate recognised.
-function split_cmd(s,   i, c, c2, st, sp, out, j) {
-  out = ""; sp = 0; st[0] = "code"
+function split_cmd(s,   i, c, c2, st, sp, out, j, pk, np, lastk, lastp, dbr) {
+  out = ""; sp = 0; st[0] = "code"; np = 0; lastp = 0; dbr = 0
   for (i = 1; i <= length(s); i++) {
     c = substr(s, i, 1); c2 = substr(s, i, 2)
     if (st[sp] == "sq") { out = out c; if (c == SQ) sp--; continue }
@@ -182,7 +182,7 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
         if (c == "\"") out = out "\005"; else if (c != "\n") out = out c
         continue
       }
-      if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
+      if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; pk[++np] = "$"; i++; continue }
       if (c == "`")   { j = kit_bt_end(s, i); out = out " $__X__\002 " split_cmd(kit_bt_body(substr(s, i + 1, j - i - 1))) "\002"; i = j; continue }
       if (c == "\"")  { sp--; out = out c; continue }
       out = out c; continue
@@ -202,7 +202,13 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
     }
     # A comment runs to the newline, and nothing in it quotes: read as text, the
     # quote in `echo hi # it's` or `# $'\'` held every line after it (#301).
-    if (c == "#" && kit_comment_at(s, i)) { j = index(substr(s, i), "\n"); if (j == 0) break; i += j - 2; continue }
+    # Not inside `[[ … ]]`, where `(` and `|` are a regex's and `#` follows them
+    # as text (`[[ x =~ (#) ]]`); and after a `)` only when it closed a plain
+    # subshell (lastk "p"): `$(true)#`, `$((1))#` and `<(true)#` go on as one word.
+    if ((c == "[" || c == "]") && st[sp] == "code") dbr = kit_dbr(s, i, dbr)
+    if (c == "#" && !dbr && kit_comment_at(s, i, (lastp == i - 1) ? lastk : "")) { j = index(substr(s, i), "\n"); if (j == 0) break; i += j - 2; continue }
+    if (c == "(") pk[++np] = (i > 1 && substr(s, i - 1, 1) ~ /[$<>?*+@!=]/) ? "x" : "p"
+    if (c == ")") { lastk = (np > 0) ? pk[np--] : ""; lastp = i }
     if (kit_pid(s, i)) { out = out c2; i++; continue }
     # $'…' is copied whole for tokenize to decode (#301).  Its `\'` is escaped,
     # so read as '…' the region closed there: `echo $'it\'s; npm publish'` split.
@@ -210,7 +216,7 @@ function split_cmd(s,   i, c, c2, st, sp, out, j) {
     if (c == SQ)    { st[++sp] = "sq"; out = out c; continue }
     if (c == "\"")  { st[++sp] = "dq"; out = out c; continue }
     if (c2 == "${") { j = index(substr(s, i), "}"); if (j > 0) { out = out substr(s, i, j); i += j - 1; continue } }
-    if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; i++; continue }
+    if (c2 == "$(") { out = out " $__X__\002 "; st[++sp] = "code"; pk[++np] = "$"; i++; continue }
     # `…` ends at the first unescaped backtick, whatever quotes stand before it
     # (#301): its text is split as a command of its own, so a quote inside it,
     # `$'\'` or a lone `'`, no longer runs on past it.
@@ -400,13 +406,27 @@ function kit_bt_body(b,   o, j, c) {
   return o b
 }
 # kit_comment_at — the `#` at i in s starts a comment: it begins a word, after
-# the start, an unescaped blank or newline, or an operator character.
-function kit_comment_at(s, i,   p, k) {
+# the start, an unescaped blank or newline, or an operator character.  After a
+# `)` it does only when that `)` closed a plain subshell or group, which the
+# caller knows and passes as pk "p": the `)` of `$( )`, `$(( ))`, `<( )` or an
+# extglob ends no word, so `$(true)#` is one word and `$(true)#; npx` runs npx.
+# After a `(` it does unless the `(` opens an extglob.
+function kit_comment_at(s, i, pk,   p, k) {
   if (i == 1) return 1
   p = substr(s, i - 1, 1)
   if (p !~ /[ \t\n;&|()]/) return 0
+  if (p == ")" && pk != "p") return 0
+  if (p == "(" && substr(s, i - 2, 1) ~ /[$<>?*+@!=]/) return 0
   for (k = i - 2; k >= 1 && substr(s, k, 1) == "\\"; k--) ;
   return (i - 2 - k) % 2 == 0
+}
+# kit_dbr — whether the reader is inside `[[ … ]]` after the `[` or `]` at i in
+# s, from d before it.  Only a word `[[` opens one and a word `]]` closes it.
+function kit_dbr(s, i, d,   b, a) {
+  b = (i == 1) ? " " : substr(s, i - 1, 1); a = substr(s, i + 2, 1)
+  if (substr(s, i, 2) == "[[" && b ~ /[ \t\n;&|(!{]/ && a ~ /[ \t\n]/) return 1
+  if (substr(s, i, 2) == "]]" && b ~ /[ \t\n]/ && (a == "" || a ~ /[ \t\n;&|)]/)) return 0
+  return d
 }
 # kit_ansi_end — the length of what $'…' quotes, its opening quote at p in s.
 # Sets KA_END and KA_OPEN as kit_ansi describes, without decoding.
