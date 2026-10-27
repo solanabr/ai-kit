@@ -21,7 +21,8 @@
 # RPC URLs never reach the prompt text — only a cluster name, or a bare host for
 # an endpoint that cannot be classified.  Private RPC URLs carry API keys.
 #
-# The --final / program-v4 finalize / authorize --disable block is exit 2 at
+# The --final / program-v4 finalize / authorize --disable / anchor idl
+# erase-authority block is exit 2 at
 # every tier including Off: the matching permission rule
 # `Bash(solana program deploy *--final*)` has the two-wildcard shape that was
 # verified inert, so this hook is the only thing standing in front of them.
@@ -78,7 +79,26 @@ fi
 # Position-anchored: the verb has to start a statement, optionally behind env
 # assignments and a path prefix.  Matching the verb anywhere in the string is
 # what makes a hook fire on prose about deploying.
-RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?((solana|anchor) program (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana program-v4 (deploy|retract|transfer-authority|finalize)|anchor (deploy|upgrade)|solana (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account)|spl-token (transfer|burn|close|authorize))([[:space:]][^;&|]*)?([;&|)]|$)'
+#
+# The verb is found behind the CLI's global options too (#306): clap takes them
+# before the subcommand, so `solana -um transfer`, `solana --url <rpc> transfer`,
+# `solana -k kp.json transfer` and `anchor --provider.cluster mainnet idl
+# erase-authority` all run, and the old `solana transfer` literal saw none of them.
+# GO is any run of options, each followed by any number of value words; a value word
+# never starts with `-`.  The normaliser splits words on whitespace without reading
+# quotes, so `-k 'my kp.json'` and `-k my\ kp.json` reach this text as `-k my kp.json`:
+# one option and two value words, which a one-value GO missed (the verb went unread).
+# A value word may carry `(` and `)`: `--url $(cat .rpc)` and `--provider.wallet
+# $(pwd)/id.json` are option values, and a GO that stopped at the paren left the verb
+# behind them unread.  `;`, `&` and `|` still end it, so it never runs into the next
+# statement.
+GO='( -[^[:space:];&|()]*( [^-[:space:];&|][^[:space:];&|]*)*)*'
+# verbs <GO> — the gated subcommand paths, with <GO> between the words.
+verbs() {
+  printf '%s' "((solana|anchor)$1 program$1 (deploy|write-buffer|upgrade|extend|migrate|close|set-upgrade-authority|set-buffer-authority)|solana$1 program-v4$1 (deploy|retract|transfer-authority|finalize)|anchor$1 (deploy|upgrade|idl$1 (erase-authority|set-authority))|solana$1 (transfer|withdraw-stake|withdraw-from-vote-account|withdraw-from-nonce-account|close-vote-account|stake-authorize(-checked)?|vote-authorize-voter(-checked)?|vote-authorize-withdrawer(-checked)?|authorize-nonce-account)|spl-token$1 (transfer|burn|close|authorize|approve))"
+}
+LEAD='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:];&|()]*/)?'
+RE="$LEAD$(verbs "$GO")"'([[:space:]][^;&|]*)?([;&|)]|$)'
 # One write per line.  A match consumes the separator that ends it, so with the
 # statements left on one line a write right after a `;` or `|` had no separator
 # left to start on and was never seen: `deploy -ud a.so; deploy --url <mainnet>
@@ -97,19 +117,51 @@ RE='(^|[;&|(]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+
 # backtick substitution is part of the words around it.  `` echo `solana program
 # deploy b.so -um` `` therefore starts no statement and meets no gate; that gap
 # predates this file's per-statement split and is tracked as a follow-up.
+#
+# The normaliser also treats `)` as a statement end and drops the space after it, so
+# `--url $(cat .rpc) program deploy` reaches here as `$(cat .rpc)program deploy`; the
+# space is put back before matching.
 SEG=$(printf '%s\n' "$KIT_NORM" | awk '{
     gsub(/[0-9]*[<>]&[0-9]*-?/, " ")
     gsub(/&>>?/, " ")
     gsub(/>\|/, ">")
     gsub(/[;&|]/, "&\n")
     print
-  }' | grep -oE "$RE") || SEG=
+  }' | sed 's/)\([^[:space:];&|)]\)/) \1/g' | grep -oE "$RE") || SEG=
 [ -n "$SEG" ] || exit 0
 
 # ---- irreversible: deny at every tier, no env escape.  The user runs these.
-if printf '%s\n' "$SEG" | grep -qE -e '--final|--bypass-warning|program-v4 finalize|spl-token authorize[^;&|]*--disable'; then
-  kit_deny "irreversible on-chain action (--final, program close --bypass-warning, program-v4 finalize or authorize --disable). If the user wants it, they run it themselves outside Claude."
+# `anchor idl erase-authority` sets the IDL authority to none; no instruction gives it back.
+# Read on every statement, and before the help exemption below, so no help word can
+# quiet these: `solana transfer -h; anchor idl erase-authority …` and `solana transfer
+# X 1; solana program deploy --final p.so` each reach this check as two statements.
+if printf '%s\n' "$SEG" | grep -qE -e '--final|--bypass-warning|program-v4 finalize|spl-token[^;&|]* authorize[^;&|]*--disable|idl[^;&|]* erase-authority'; then
+  kit_deny "irreversible on-chain action (--final, program close --bypass-warning, program-v4 finalize, authorize --disable or anchor idl erase-authority). If the user wants it, they run it themselves outside Claude."
 fi
+
+# ---- a help or version call sends nothing.  clap prints and exits on -h, --help, -V
+# or --version, so `solana -ud transfer --help` is a read.  The exemption is narrow on
+# purpose, because the normalised text above has lost what made a word an argument:
+#   - the help word must sit directly after the binary (`solana --help transfer`) or
+#     directly after the verb (`spl-token approve --help`), behind options of plain
+#     words with at most one value each, so it cannot be an option's value;
+#   - the command as written must carry no quote, backslash, `#`, `$`, backtick or
+#     redirection, so the word is an argv word of that command, and not a comment
+#     (`--final # --help`), a redirection target (`2> -h`), a substitution
+#     (`$(: --help)`) or one piece of a quoted value (`--with-memo 'a -h b'`).
+# A statement that fails either test is gated as a write, which is the safe reading.
+# The test is per statement: only the help call's own line leaves SEG, so the write
+# beside it (`spl-token approve --help; anchor deploy …`) is still judged below.
+case $KIT_CMD in
+  *[\'\"\\#\$\`\<\>]*) ;;
+  *)
+    GO1='( -[A-Za-z0-9][A-Za-z0-9._:/=-]*( [A-Za-z0-9._:/][A-Za-z0-9._:/=-]*)?)*'
+    HW='(-h|--help|-V|--version)([[:space:];&|)]|$)'
+    HRE="^$LEAD((solana|anchor|spl-token) $HW|$(verbs "$GO1") $HW)"
+    SEG=$(printf '%s\n' "$SEG" | grep -vE "$HRE") || SEG=
+    [ -n "$SEG" ] || exit 0
+    ;;
+esac
 
 TIER=$(kit_tier)
 [ "$TIER" = "off" ] && exit 0
