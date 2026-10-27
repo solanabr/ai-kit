@@ -246,7 +246,8 @@ fi
 # Every `bash|sh|zsh|dash|ksh -c` an agent runs on the Bash tool or through context-mode
 # is denied below (SHELLC), at every tier, Off included: a -c string is a program no
 # permission rule can read.  A shell fed its program on stdin (`… | sh`, `sh < f`, -s)
-# is the same block under its own verdict (SHELLIN), so its message does not claim -c.  In a full install the permission layer also denies
+# is the same block under its own verdict (SHELLIN), so its message does not claim -c.
+# In a full install the permission layer also denies
 # `sh -c *`, `bash -lc *` and `zsh -c *` at every tier, and `bash -c *` at Medium and
 # High only (DENY_WRAPPERS and DENY_BASH_C in firewall.sh).  So for an agent's `bash -c`
 # at Off and Relaxed, and for every shell -c in a plugin install, which carries no
