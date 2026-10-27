@@ -407,6 +407,148 @@ echo "[no on-chain verb: silent]"
 want relaxed silent "a local build is not an on-chain write" "cargo build-sbf"
 want relaxed silent "a solana query is not a write"          "solana balance --url http://localhost:8899"
 
+# ── #306: anchor idl authority, option-first verbs, stake/vote/nonce authority ──
+# All of these were silent at every tier: `idl` was not in the verb list, the solana
+# authority verbs were not either, and a global option in front of the subcommand
+# (`solana -um transfer`) kept the literal `solana transfer` from matching.
+echo "[#306: anchor idl erase-authority is irreversible, at every tier and cluster]"
+PID=11111111111111111111111111111111
+for C in "anchor idl erase-authority -p $PID --provider.cluster mainnet" \
+         "anchor idl erase-authority -p $PID --provider.cluster devnet" \
+         "anchor --provider.cluster devnet idl erase-authority -p $PID" \
+         "anchor idl --provider.cluster http://localhost:8899 erase-authority -p $PID" \
+         "spl-token -ud authorize MINT mint --disable"; do
+  for T in off relaxed high; do want "$T" deny "irreversible wherever it points" "$C"; done
+done
+
+CFG306="${TMPDIR:-/tmp}/kit-onchain-306.$$.yml"
+printf 'json_rpc_url: https://api.mainnet-beta.solana.com\n' > "$CFG306"
+echo "[#306: mainnet authority and value verbs gate like the verbs beside them]"
+MAINNET306=(
+  "anchor idl set-authority -p $PID -n NEW --provider.cluster mainnet"
+  "anchor --provider.cluster mainnet idl set-authority -p $PID -n NEW"
+  "solana -um transfer TO 0.5"
+  "solana -u m transfer TO 0.5"
+  "solana --url https://api.mainnet-beta.solana.com transfer TO 0.5"
+  "solana --url=mainnet-beta transfer TO 0.5"
+  "solana -k kp.json transfer TO 0.5 -um"
+  "solana -kkp.json -um transfer TO 0.5"
+  "solana --keypair kp.json --commitment finalized -um transfer TO 0.5"
+  "solana -v -um transfer TO 0.5"
+  "solana -C $CFG306 transfer TO 0.5"
+  "solana -um program deploy p.so"
+  "solana program -um deploy p.so"
+  "solana -um stake-authorize STAKE --new-stake-authority X --stake-authority A"
+  "solana stake-authorize-checked STAKE --new-stake-authority X -um"
+  "solana vote-authorize-withdrawer VOTE AUTH NEW -um"
+  "solana vote-authorize-withdrawer-checked VOTE AUTH NEW -um"
+  "solana vote-authorize-voter VOTE AUTH NEW -um"
+  "solana vote-authorize-voter-checked VOTE AUTH NEW -um"
+  "solana authorize-nonce-account NONCE NEW -um"
+  "solana --url mainnet-beta close-vote-account VOTE DEST"
+  "spl-token approve ACCT 100 DELEGATE -um"
+  "spl-token -um approve ACCT 100 DELEGATE"
+  "spl-token --program-2022 -um transfer MINT 1 RECIP"
+)
+for C in "${MAINNET306[@]}"; do
+  want relaxed ask  "mainnet asks below High" "$C"
+  want high    deny "mainnet is denied at High" "$C"
+done
+echo "[#306: devnet still asks at every tier]"
+for C in "solana -ud transfer TO 0.5" "solana -ud stake-authorize STAKE --new-stake-authority X" \
+         "anchor idl set-authority -p $PID -n NEW --provider.cluster devnet" \
+         "spl-token approve ACCT 100 DELEGATE -ud" "solana -ud authorize-nonce-account NONCE NEW" \
+         "solana -ud transfer -- TO --help"; do
+  want relaxed ask "devnet asks" "$C"
+  want high    ask "devnet asks at High too" "$C"
+done
+rm -f "$CFG306"
+
+echo "[#306: reads, help and prose stay silent]"
+for C in "solana -ud transfer --help" "solana transfer -h -ud" "solana --help transfer" \
+         "spl-token approve --help" "solana -um transfer -V" "solana -k kp.json -um stake-authorize --help" \
+         "anchor idl fetch $PID --provider.cluster mainnet" \
+         "anchor idl authority $PID --provider.cluster mainnet" \
+         "anchor --provider.cluster mainnet idl fetch $PID" \
+         "solana -um balance" "solana -um stake-account STAKE" "solana -um vote-account VOTE" \
+         "solana -k kp.json address" "spl-token -um accounts" "solana-keygen pubkey kp.json" \
+         "echo 'solana -um transfer TO 1'" "git commit -m 'gate anchor idl erase-authority'"; do
+  for T in relaxed high; do want "$T" silent "not an on-chain write" "$C"; done
+done
+
+# ── #306 review: a help word that is not an argv word of the command ─────────
+# The first cut dropped any statement with a standalone -h/--help/-V/--version, before
+# the irreversible check, so a comment, a redirection target, a substitution or a piece
+# of a quoted value silenced a real write. The irreversible set is now read first, and
+# a help word counts only directly after the binary or the verb, in a command with no
+# quote, backslash, comment, substitution or redirection.
+echo "[#306 review: the help exemption never quiets a write]"
+for C in "solana program deploy p.so --final # --help" \
+         "anchor idl erase-authority -p $PID # -h" \
+         "anchor idl erase-authority --help" \
+         "solana program deploy --final --help p.so" \
+         "solana program-v4 finalize PID 2> -h" \
+         "spl-token authorize MINT mint --disable \$(: --help)"; do
+  for T in relaxed high; do want "$T" deny "irreversible, whatever the help word says" "$C"; done
+done
+for C in "solana -um program deploy p.so # -h" \
+         "solana -um transfer TO 1 > --help" \
+         "solana -um transfer TO 1 \$(: --help)" \
+         "solana -um transfer TO 1 \`: -h\`" \
+         "spl-token -um transfer MINT 1 RECIP --with-memo 'a -h b'" \
+         "spl-token -um approve ACCT 1 DELEGATE --with-memo \"x --help\"" \
+         "solana -um stake-authorize STAKE --new-stake-authority X # -V" \
+         "solana -um program set-upgrade-authority PID --new-upgrade-authority X 'a --version'" \
+         "solana -um transfer TO 1 --help" \
+         "solana -um transfer TO 1 -- --help"; do
+  want relaxed ask  "a help word that is not argv does not exempt the write" "$C"
+  want high    deny "and High still denies it on mainnet" "$C"
+done
+# Option values with spaces: the verb is still found behind them.
+for C in "solana -k 'my kp.json' -um stake-authorize STAKE --new-stake-authority X" \
+         "solana -k my\\ kp.json -um stake-authorize STAKE --new-stake-authority X" \
+         "solana --keypair \"a b c.json\" --url mainnet-beta transfer TO 1" \
+         "spl-token --fee-payer 'my payer.json' -um approve ACCT 1 DELEGATE"; do
+  want relaxed ask  "a quoted or escaped option value does not hide the verb" "$C"
+  want high    deny "mainnet behind a spaced option value is denied at High" "$C"
+done
+
+# A global option whose value is a command substitution: GO stopped at the paren, and
+# the normaliser drops the space after a `)`, so the verb behind it went unread.
+echo "[#306 review: a \$( ) option value does not hide the verb]"
+for C in "anchor --provider.cluster \$(cat c) idl erase-authority --program-id X" \
+         "anchor --provider.cluster \"\$(cat c)\" idl erase-authority --program-id X" \
+         "solana --url \$(cat .rpc) program deploy --final p.so"; do
+  for T in relaxed high; do want "$T" deny "irreversible behind a substituted option value" "$C"; done
+done
+for C in "solana --url \"\$(cat .rpc)\" transfer X 1" \
+         "solana --url \$(cat .rpc) program deploy p.so" \
+         "solana --url \`cat .rpc\` transfer X 1" \
+         "solana -u \"\$(cat .rpc)\" -k \"\$(echo a b)\" stake-authorize STAKE --new-stake-authority X"; do
+  for T in relaxed high; do want "$T" ask "an unresolvable cluster asks" "$C"; done
+done
+for C in "anchor --provider.wallet \$(pwd)/id.json deploy --provider.cluster mainnet" \
+         "solana -k \$(pwd)/id.json -um transfer X 1"; do
+  want relaxed ask  "mainnet behind a substituted option value asks" "$C"
+  want high    deny "and is denied at High" "$C"
+done
+want relaxed silent "a read behind a substituted option value stays silent" "solana --url \$(cat .rpc) balance"
+
+# Per statement, on #316's split: a help call or a harmless write ahead of a `;` does
+# not take the next statement out of the help exemption or the irreversible check.
+echo "[#306 on #316: the help exemption and the irreversible set are per statement]"
+for T in off relaxed medium high; do
+  want "$T" deny "the irreversible statement after a help call is still refused" \
+    "solana transfer -h; anchor idl erase-authority --program-id X"
+  want "$T" deny "--final in the second statement exits 2" \
+    "solana transfer X 1; solana program deploy --final p.so"
+done
+want relaxed ask  "the mainnet write after a help call is still gated" \
+  "spl-token approve --help; anchor deploy --provider.cluster mainnet"
+want high    deny "and denied at High" \
+  "spl-token approve --help; anchor deploy --provider.cluster mainnet"
+want relaxed silent "two help calls are two reads" "spl-token approve --help; solana transfer -h"
+
 # ── an MCP call's own tool_name or command argument changes nothing ─────────
 # kit_parse reads the tool name from the payload's top level and always rebuilds an
 # MCP call's command from the fields the tool runs. A context-mode call carrying a
