@@ -25,13 +25,15 @@
 #     ignores the matcher. One gap: an internal agent carries the session's own agent
 #     name, so in a session started as `claude --agent <kit agent>` it can be sent back
 #     once, for one extra turn.
-#   - Where the project teaches it. No agent's own prompt carries the labels. They reach
-#     a kit agent through the project's instruction files, as CLAUDE-solana.md's subagent
-#     line, which install.sh writes as the project's ./CLAUDE.md, and through the briefs
-#     /implement, /parallel and /research write, which this hook does not read. Where
-#     none of those files carries the line, the check steps aside: a plugin ships no
-#     project ./CLAUDE.md, and an older install's ./CLAUDE.md lacks the line until the user
-#     merges it in from the ./CLAUDE.md.upstream that /update leaves beside it.
+#   - Where the project teaches it, or the brief does. No agent's own prompt carries the
+#     labels. They reach a kit agent through the project's instruction files, as
+#     CLAUDE-solana.md's subagent line (install.sh writes it as the project's ./CLAUDE.md),
+#     or through the brief /implement, /parallel and /research write. When no instruction
+#     file carries the line, the hook reads the agent's own brief, the first message in its
+#     transcript, and holds the agent to the labels only when the brief named them. So a
+#     plugin install, or an older install whose ./CLAUDE.md predates the line (until the
+#     user merges the ./CLAUDE.md.upstream /update leaves beside it), still checks an agent
+#     a kit command briefed, and steps aside for any other.
 #   - Once per stop: stop_hook_active means a stop hook already sent this agent back.
 #   - The report as delivered. In auto mode a subagent reports through the
 #     SubagentHandback tool and last_assistant_message holds only its closing text, so
@@ -163,13 +165,33 @@ taught() {
       index(l, "assumptions") && index(l, "next owner") { t = 1; exit }
     END { exit !t }' "$@" 2>/dev/null
 }
-taught || exit 0
+# briefed — true when the agent's own brief names all five labels. The brief is the first
+# user message in the transcript, the delegation prompt the parent wrote; /implement,
+# /parallel and /research write it with the labels. It reaches the agent whole, no HTML
+# comment stripped, so a plain lowercase search over that one line is enough. Only the
+# first user message, never a later one, so a report the agent writes cannot teach its own
+# check. Read only when no instruction file teaches the line, nothing without a transcript.
+briefed() {
+  [ "$T" != /dev/null ] || return 1
+  LC_ALL=C awk '
+    /"type": ?"user"/ {
+      l = tolower($0)
+      if (index(l, "verified") && index(l, "decisions made") && index(l, "decisions needed") &&
+          index(l, "assumptions") && index(l, "next owner")) b = 1
+      exit
+    }
+    END { exit !b }' "$T" 2>/dev/null
+}
 
 # Absolute paths only: awk reads an operand shaped like name=value as an assignment.
 T=/dev/null
 if json_str agent_transcript_path || json_str agentTranscriptPath; then
   case $V in /*) [ -f "$V" ] && [ -r "$V" ] && T=$V ;; esac
 fi
+
+# Taught by an instruction file, or, failing that, by the agent's own brief. Checking the
+# files first leaves the transcript unread in the common case.
+taught || briefed || exit 0
 
 # One awk pass: the payload on stdin first, then the transcript. It prints the parts
 # the report is missing, OK when none are, or SKIP when there is no prose to judge.

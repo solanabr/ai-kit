@@ -710,6 +710,58 @@ assert_eq "block" "$(verdict)" "plugin-only, the line merged into CLAUDE.md: the
 HOOK_PLUGIN_ROOT="$REPO_ROOT/plugin" run "$P_CHECK" "$T_KIT" "$(stop solana-ai-kit:anchor-engineer "$THIN")"
 assert_eq "0|silent" "$RC|$(decision "$OUT")" "next to a full install that teaches it, the plugin's copy still steps aside"
 
+# ── the agent's own brief teaches the contract when no file does ────────────
+echo ""
+echo "[report check: brief]"
+# /implement, /parallel and /research write briefs that name the five labels. When no
+# instruction file teaches the contract, the hook reads the agent's own brief — the first
+# user message in its transcript — so an agent a kit command briefed is still held, while
+# any other steps aside. Only the first message counts, so the agent's own report naming
+# the labels cannot teach its own check.
+python3 - "$WORK" <<'PY'
+import json, os, sys
+work = sys.argv[1]
+labels = "Verified, Decisions made, Decisions needed, Assumptions and Next owner"
+def umsg(content):
+    return json.dumps({"type": "user", "message": {"role": "user", "content": content}})
+brief_yes = umsg("Task: build the vault. End your report with one line each for " + labels + ", none where empty.")
+brief_yes_list = umsg([{"type": "text", "text": "Return contract: " + labels + "."}])
+brief_no = umsg("Task: build the vault and run the tests, then report back when done.")
+# A tool result is also a type:user line; it carries the labels but is never the first.
+tool_result = json.dumps({"type": "user", "message": {"role": "user",
+    "content": [{"type": "tool_result", "tool_use_id": "t1", "content": labels}]}})
+# The real transcript shape: compact, extra envelope fields, userType before type.
+brief_real = '{"parentUuid":null,"isSidechain":true,"userType":"external","type":"user",' \
+    '"message":{"role":"user","content":"Return contract: ' + labels + '."}}'
+open(os.path.join(work, "b-yes.jsonl"), "w").write(brief_yes + "\n" + tool_result + "\n")
+open(os.path.join(work, "b-yes-list.jsonl"), "w").write(brief_yes_list + "\n")
+open(os.path.join(work, "b-real.jsonl"), "w").write(brief_real + "\n")
+open(os.path.join(work, "b-no.jsonl"), "w").write(brief_no + "\n")
+open(os.path.join(work, "b-later.jsonl"), "w").write(brief_no + "\n" + tool_result + "\n")
+PY
+B_PROJ="$(proj no-file-brief)"   # a project with no instruction file of its own
+INCOMPLETE="Done. Tests pass.${NL}Verified: cargo test${NL}Next owner: the lead"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-yes.jsonl")"
+D="$(decision "$OUT")"
+assert_eq "block" "${D%%|*}" "no instruction file, but the brief names the labels: an incomplete report is sent back"
+assert_contains "$D" "missing: Decisions made, Decisions needed, Assumptions." "and names what the report left out"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-yes-list.jsonl")"
+assert_eq "block" "$(verdict)" "a brief whose content is a list of blocks is read too"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-real.jsonl")"
+assert_eq "block" "$(verdict)" "the real compact transcript shape (userType before type, no spaces) is read"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$FULL" agent_transcript_path="$WORK/b-yes.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a complete report passes, brief or no brief"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-no.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a brief that does not name the labels teaches nothing: step aside"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-later.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "the labels in a later message, not the first, do not count"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "no instruction file and no transcript: step aside"
+# An instruction file decides first, so the brief is not consulted (|| short-circuits):
+# a teaching file sends back even when the brief does not name the labels.
+run "$CHECK" "$T_KIT" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-no.jsonl")"
+assert_eq "block" "$(verdict)" "a teaching instruction file holds the agent even when the brief does not"
+
 # ── controls: each mechanism planted back out must change the verdict ────────
 echo ""
 echo "[controls]"
@@ -745,9 +797,9 @@ GOT=; [ -z "$MUT" ] || { cp "$SHIPPED" "$MUT/CLAUDE.md"; run "$CHECK" "$MUT" "$(
 control "stop_hook_active" silent "$GOT"
 # The report check's step aside, where nothing taught the contract. The mutants sit inside
 # the fixture repository, whose CLAUDE.md is above them and is not read.
-MUT="$(mutant contract decisions-report-check.sh 'taught || exit 0' ':')" || MUT=
+MUT="$(mutant contract decisions-report-check.sh 'taught || briefed || exit 0' ':')" || MUT=
 GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
-control "a project with no instruction file" silent "$GOT"
+control "a project with no instruction file or brief" silent "$GOT"
 MUT="$(mutant comment decisions-report-check.sh 'match($0, /^ *<!--/) && RLENGTH <= 7 {' '0 {')" || MUT=
 GOT=; [ -z "$MUT" ] || { printf '<!--\n%s\n-->\n' "$LABELS_LINE" > "$MUT/CLAUDE.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
 control "a labels line commented out" silent "$GOT"
@@ -760,6 +812,16 @@ if [ -z "$ABOVE" ]; then
   GOT=; [ -z "$MUT" ] || { cp "$SHIPPED" "$MUT/AGENTS.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
   control "a CLAUDE.md above the project, which keeps AGENTS.md unread" silent "$GOT"
 fi
+# The brief fallback: with no file teaching the contract, the agent's own brief does.
+# Dropping the briefed() call leaves such an agent unchecked; scanning past the first
+# message would let a later message — the agent's own report — teach its own check.
+MUT="$(mutant brief-off decisions-report-check.sh 'taught || briefed || exit 0' 'taught || exit 0')" || MUT=
+GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." agent_transcript_path="$WORK/b-yes.jsonl")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "the brief fallback" block "$GOT"
+BRF_FIND="          index(l, \"assumptions\") && index(l, \"next owner\")) b = 1${NL}      exit"
+MUT="$(mutant brief-first decisions-report-check.sh "$BRF_FIND" "${BRF_FIND%%${NL}*}")" || MUT=
+GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." agent_transcript_path="$WORK/b-later.jsonl")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "the brief is read only to the first message" silent "$GOT"
 MUT="$(mutant link decisions-inject.sh '[ ! -L "$R/in-force.md" ]' ':')" || MUT=
 GOT=
 if [ -n "$MUT" ]; then
