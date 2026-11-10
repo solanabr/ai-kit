@@ -742,7 +742,7 @@
       "tier": "extension",
       "domain": "go-to-market",
       "path": ".claude/skills/ext/elevenlabs",
-      "commit": "503d4e9fda0190ab9357142f44e51de626f97f90",
+      "commit": "32f48f6ebf4a97e963a824ade7d5cb14beacf774",
       "description": "ElevenLabs' own pack: text-to-speech, speech-to-text, voice changer, voice isolator, dubbing, sound effects, music and conversational agents. The audio lane for a launch — demo-video narration, localisation and trailer sound — next to the kit's content-gen and marketing-video routes.",
       "triggers": ["text to speech", "voiceover", "demo video narration", "dubbing", "sound effects", "transcription"],
       "source": "https://github.com/elevenlabs/skills",
