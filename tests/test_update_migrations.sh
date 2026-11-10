@@ -134,6 +134,10 @@ assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.memsearch/')"
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.claude/worktrees/')" "a CRLF .gitignore keeps one .claude/worktrees/ line across two updates"
 assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.claude/reports/')" \
   "an existing install's .gitignore gains .claude/reports/ (report pages), once across two updates"
+# A 1.x install never ignored context/, where /crew's stage file and /rundown --handoff,
+# with the record's export appended, are written.
+assert_eq "1" "$(tr -d '\r' < "$TEMP_DIR/.gitignore" | grep -cxF '.claude/context/')" \
+  "an existing install's .gitignore gains .claude/context/ (hand-offs), once across two updates"
 
 # grep -q stopping at an early match used to kill `tr` with SIGPIPE under pipefail, so a
 # large .gitignore whose match came first read as "not found" and got a second line.

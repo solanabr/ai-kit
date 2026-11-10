@@ -252,7 +252,7 @@ Read these in order; stop at the first that matches.
 - WARN `installed` shows a sha other than `pinned`: the plugin lags the kit's pin. `claude plugin update safe-ai-skill@stbr`.
 - OK otherwise: report its scope and sha.
 
-**12. Decision hooks.** `decisions-inject.sh` (SessionStart, SubagentStart) and `decisions-push.sh` (PreToolUse, every tool) hand the session and every subagent the user's decisions in force from the record in check 13; `decisions-report-check.sh` (SubagentStop) sends one of the kit's agents back once when its report leaves out one of its five labelled lines. None of those three can block a tool call. `decisions-guard.sh` (PreToolUse) is the one that can: it refuses a subagent's write to the record, so only the main session writes it. `/update` copies the scripts and registers any the project lacks, recording the hook set it applied as `hookSetVersion` in `.claude/security.json`.
+**12. Decision hooks.** `decisions-inject.sh` (SessionStart, SubagentStart) and `decisions-push.sh` (PreToolUse, every tool) hand the session and every subagent the user's decisions in force from the record in check 13; `decisions-report-check.sh` (SubagentStop) sends one of the kit's agents back once when its report leaves out one of its five labelled lines. It holds an agent to them where the project's instruction files carry the subagent line, or — when they don't — where the agent's own brief named the labels, as the agent-workflow commands write it; otherwise it steps aside (a plugin install, or files that predate the line until the user merges the `.upstream` copy `/update` leaves beside them). `contract:` below reports which. None of those three can block a tool call. `decisions-guard.sh` (PreToolUse) is the one that can: it refuses a subagent's write to the record, so only the main session writes it. `/update` copies the scripts and registers any the project lacks, recording the hook set it applied as `hookSetVersion` in `.claude/security.json`.
 ```bash
 python3 - <<'PY'
 import json, pathlib
@@ -273,6 +273,33 @@ print("guard_files:", all(pathlib.Path(".claude/hooks", f).is_file() for f in ("
 print("hook_set:", load(".claude/security.json").get("hookSetVersion") or 0)
 print("full_install:", pathlib.Path(".claude/VERSION").is_file())
 print("config_dir:", pathlib.Path(".claude/VERSION").parent.name)
+# contract: does anything ask the kit's agents for the five labelled lines? The report
+# check holds an agent only where a project instruction file carries the subagent line,
+# or the agent's own brief does (the agent-workflow commands write it).
+labels = ("verified", "decisions made", "decisions needed", "assumptions", "next owner")
+def teaches(p, strip=True):
+    try:
+        text = pathlib.Path(p).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    incomment = False
+    for line in text.splitlines():
+        if strip:
+            s = line.lstrip()
+            if incomment:
+                incomment = "-->" not in line; continue
+            if s.startswith("<!--") and "-->" not in s[4:]:
+                incomment = True; continue
+        if all(k in line.lower() for k in labels):
+            return True
+    return False
+instr = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "AGENTS.md"]
+if any(teaches(p) for p in instr):
+    print("contract: present")
+elif any(teaches(".claude/commands/%s.md" % c, strip=False) for c in ("implement", "parallel", "research", "decide")):
+    print("contract: briefs")
+else:
+    print("contract: absent")
 PY
 ```
 Read these in order; stop at the first that matches.
@@ -281,7 +308,7 @@ Read these in order; stop at the first that matches.
 - WARN `wired: 0` and `guards: 0`: no kit hook is registered at all, so the `hooks` array was emptied or rewritten by hand — **removed on purpose**. Report it and offer no fix.
 - WARN `scripts: False`: a decision hook's script is missing, and a registration whose script is gone runs nothing, silently. Usually **this install predates the decision hooks**; `/update` copies the scripts in and registers the ones the project lacks.
 - WARN `guard_files: False`: a file `decisions-guard.sh` reads is missing (`decisions-guard.awk`, `lib-tokenize.awk` or `lib-headless.sh`), so the guard lets every call through, silently, as the firewall guards do without their libraries. `/update` copies `hooks/` wholesale; run it.
-- OK `wired: 5 of 5`: the hooks are live. Report check 13's state beside it.
+- OK `wired: 5 of 5`: the hooks are live. `contract:` says whether the report check fires — `present`, an instruction file carries the subagent line, so every kit agent is held to the five labels; `briefs`, no instruction file does, but the agent-workflow commands (`/implement`, `/parallel`, `/research`, `/decide`) still brief their agents with the labels, so those are held and any other agent steps aside; `absent`, nothing asks for the labels, so the check steps aside for every agent (the line was never merged in, or the commands were removed). Informational, not a fault. Report check 13's state beside it.
 - WARN `wired: 0` and `hook_set` below 4: the scripts are on disk, but `/update`'s registration has not run since they shipped, or it skipped this project. Run `/update`; it prints `[registered]`, or `[skipped]` with the reason.
 - WARN `wired: 0`: `/update` registered them and they were removed since — **removed on purpose**. Report it and offer no fix; the kit re-registers them only when a later version changes its hook set.
 - WARN anything else (`wired` 1 to 4): partly hand-edited. Name what `missing` lists and let the user decide; do not rewrite it. A missing `PreToolUse/decisions-guard.sh` means a subagent can write the record.

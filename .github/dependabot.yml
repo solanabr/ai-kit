@@ -26,6 +26,12 @@ updates:
     # The content review is .github/workflows/submodule-review.yml plus a human merge.
     cooldown:
       default-days: 7
+    # elevenlabs is held at 32f48f6. Its later commits add a symlink to a directory, which
+    # the copy loop in update.sh (frozen for every install) fails on under macOS, and an
+    # onboarding skill that tells the agent to follow an unpinned CLI's output. Lift the
+    # hold once upstream drops both, after the scan any bump gets.
+    ignore:
+      - dependency-name: ".claude/skills/ext/elevenlabs"
     open-pull-requests-limit: 2
     commit-message:
       prefix: "chore(skills)"

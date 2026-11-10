@@ -189,7 +189,7 @@ Which gate stops what, how a tier is generated, and — at length — **what the
 |----------|----------------|
 | [install.md](docs/install.md) | Every install route in full, pinning a release, `--agents`, the no-install route, GitHub template, updating |
 | [firewall.md](docs/firewall.md) | Permission and safety gates, tier generation, and the limits of all of it |
-| [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 54 commands and how the agent workflow chains, agent teams |
+| [agents-and-commands.md](docs/agents-and-commands.md) | All 15 agents with their models, all 54 commands and how the agent workflow chains, agent teams, and the [report pages](docs/agents-and-commands.md#how-the-agent-workflow-chains): the local HTML pages `/report` and `/decide` write to `.claude/reports/` with `.claude/bin/report-page.sh` |
 | [skill-packs.md](docs/skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry |
 | [other-agents.md](docs/other-agents.md) | Codex, Grok Build, Cursor, Gemini CLI, opencode: what each one actually enforces |
 | [configuration.md](docs/configuration.md) | MCP servers including the opt-in ones, secrets with varlock, the standard plugins and the optional ones with what each costs per session, and the settings the kit leaves to you |

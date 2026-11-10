@@ -7,7 +7,7 @@ This directory is the kit's full spec: everything the [README](../README.md) lin
 | [install.md](install.md) | Every install route in full: installer variants, pinning a release from a clone, `--agents` for Codex and opencode, the no-install route, GitHub template, updating |
 | [plugin.md](plugin.md) | The Claude Code plugin route, why it is not recommended, and how to keep the exposure small if you use it |
 | [firewall.md](firewall.md) | The permission and safety gates, how a tier is generated, and — at length — what the tiers do not do |
-| [agents-and-commands.md](agents-and-commands.md) | All 15 agents with the model each runs on, all 54 commands, how the agent-workflow commands chain and stack, agent teams and team patterns |
+| [agents-and-commands.md](agents-and-commands.md) | All 15 agents with the model each runs on, all 54 commands, how the agent-workflow commands chain and stack, the [report pages](agents-and-commands.md#how-the-agent-workflow-chains) (the local HTML pages `/report` and `/decide` write to `.claude/reports/` with `.claude/bin/report-page.sh`), agent teams and team patterns |
 | [decisions.md](decisions.md) | The decision record: where it lives and who writes it, the `decisions.sh` helper, the hooks that hand the decisions in force to the session and every subagent, the check on what the kit's agents report back, the guard that keeps the record the main session's, and what each tier and install route gets |
 | [skill-packs.md](skill-packs.md) | The pinned `ext/` packs, core vs extension, the opt-in add-on registry, Anthropic's skills |
 | [other-agents.md](other-agents.md) | Codex, Grok Build, Cursor, Copilot, Gemini CLI, opencode: what each actually enforces |

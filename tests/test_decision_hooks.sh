@@ -18,7 +18,7 @@ source "$SCRIPT_DIR/helpers.sh"
 # a project with no record sees nothing at all; no hook can block a tool call or fail a
 # session whatever goes wrong inside it; the push is silent until the list changes and
 # then reaches each agent exactly once; and the report check holds the kit's own agents to
-# the contract and no one else.
+# the contract, in a project whose instruction files teach it, and no one else.
 
 echo "[test_decision_hooks] The decision record reaches agents, and kit agents report what they decided"
 echo ""
@@ -46,7 +46,9 @@ INJECT_SA="$(reg "$SETTINGS" SubagentStart decisions-inject.sh)"
 PUSH="$(reg "$SETTINGS" PreToolUse decisions-push.sh)"
 CHECK="$(reg "$SETTINGS" SubagentStop decisions-report-check.sh)"
 P_INJECT="$(reg "$PLUGIN_HOOKS" SubagentStart decisions-inject.sh)"
-for pair in "SessionStart|$INJECT_SS" "SubagentStart|$INJECT_SA" "PreToolUse|$PUSH" "SubagentStop|$CHECK" "plugin SubagentStart|$P_INJECT"; do
+P_CHECK="$(reg "$PLUGIN_HOOKS" SubagentStop decisions-report-check.sh)"
+for pair in "SessionStart|$INJECT_SS" "SubagentStart|$INJECT_SA" "PreToolUse|$PUSH" "SubagentStop|$CHECK" \
+            "plugin SubagentStart|$P_INJECT" "plugin SubagentStop|$P_CHECK"; do
   TOTAL=$((TOTAL + 1))
   if [ -n "${pair#*|}" ]; then
     echo "  PASS: ${pair%%|*} has a registered decision hook to replay"
@@ -456,6 +458,11 @@ except ValueError:
     print("INVALID"); raise SystemExit
 print("%s|%s" % (d.get("decision"), d.get("reason", "")))'
 }
+# The check holds an agent to the contract only where the project's instruction files teach
+# it ([report check: contract] below). The fixture repository teaches it from here on, with
+# the CLAUDE.md a full install writes: the shipped file, whose subagent line names the labels.
+SHIPPED="$REPO_ROOT/CLAUDE-solana.md"
+cp "$SHIPPED" "$REPO/CLAUDE.md"
 run "$CHECK" "$REPO" "$(stop anchor-engineer "$FULL")"
 assert_eq "0|silent" "$RC|$(decision "$OUT")" "a report carrying all five parts passes: bold, bullets, headings, numbering, tables, dashes"
 run "$CHECK" "$REPO" "$(stop anchor-engineer "Done. Tests pass.${NL}Verified: cargo test${NL}Next owner: the lead")"
@@ -537,11 +544,223 @@ HOOK_PATH="$WORK/nojq" run "$CHECK" "$REPO" "$(stop anchor-engineer "All done.")
 assert_eq "block" "$(decision "$OUT" | cut -d'|' -f1)" "without jq on PATH the check still runs"
 for shx in sh dash; do
   command -v "$shx" >/dev/null 2>&1 || continue
-  OUT="$(stop anchor-engineer "Done." agent_transcript_path="$WORK/t-thin.jsonl" | "$shx" "$HOOKS_SRC/decisions-report-check.sh" 2>/dev/null)"
+  OUT="$(stop anchor-engineer "Done." agent_transcript_path="$WORK/t-thin.jsonl" \
+    | CLAUDE_PROJECT_DIR="$REPO" "$shx" "$HOOKS_SRC/decisions-report-check.sh" 2>/dev/null)"
   assert_contains "$(decision "$OUT")" "missing: Decisions made" "$shx runs the check the same way"
   OUT="$(cd "$WT" && payload PreToolUse agent_id="shell-$shx" | CLAUDE_PROJECT_DIR="$WT" "$shx" "$HOOKS_SRC/decisions-push.sh" 2>/dev/null)"
   assert_contains "$(ctx "$OUT")" "D-" "$shx runs the push the same way"
 done
+
+# ── the report check asks only for what the project taught ──────────────────
+echo ""
+echo "[report check: contract]"
+# The labels reach a kit agent through the project's instruction files: the shipped
+# CLAUDE.md's subagent line. A plugin ships no project CLAUDE.md, and an install whose
+# CLAUDE.md predates the line keeps it until the user merges CLAUDE.md.upstream. There
+# nothing asked the agent for the labels, so the check steps aside.
+LABELS_LINE="$(grep -m1 'Decisions needed' "$SHIPPED" || true)"
+assert_eq "yes" "$([ -n "$LABELS_LINE" ] && echo yes || echo no)" "the shipped CLAUDE.md has a labels line to build fixtures from"
+THIN="All done."
+ONE_SHORT="Done.${NL}Verified: anchor test, 3 passing${NL}Decisions made: none${NL}Decisions needed: none${NL}Next owner: the lead"
+# proj <name> — a full-install project outside the fixture repository, its hooks copied in.
+proj() {
+  local d="$WORK/teach/$1"
+  mkdir -p "$d/.claude/hooks"
+  cp "$HOOKS_SRC"/decisions-*.sh "$d/.claude/hooks/"
+  printf '%s' "$d"
+}
+verdict() { decision "$OUT" | cut -d'|' -f1; }
+
+T_NONE="$(proj none)"
+run "$CHECK" "$T_NONE" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "no instruction file in the project: not sent back"
+T_PLAIN="$(proj unlabelled)"
+printf '# My program\n\nBuild with anchor build; test with anchor test.\n' > "$T_PLAIN/CLAUDE.md"
+run "$CHECK" "$T_PLAIN" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a CLAUDE.md without the labels line: not sent back"
+T_KIT="$(proj shipped)"
+cp "$SHIPPED" "$T_KIT/CLAUDE.md"
+run "$CHECK" "$T_KIT" "$(stop anchor-engineer "$ONE_SHORT")"
+D="$(decision "$OUT")"
+assert_eq "block" "${D%%|*}" "the shipped CLAUDE.md teaches it: a report missing one label is sent back"
+assert_contains "$D" "missing: Assumptions." "naming the one label missing"
+run "$CHECK" "$T_KIT" "$(stop anchor-engineer "$FULL")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "and a complete report there passes"
+T_DOT="$(proj dot-claude)"
+cp "$SHIPPED" "$T_DOT/.claude/CLAUDE.md"
+run "$CHECK" "$T_DOT" "$(stop anchor-engineer "$THIN")"
+assert_eq "block" "$(verdict)" ".claude/CLAUDE.md teaches it as well"
+T_LOCAL="$(proj local)"
+printf '# My program\n' > "$T_LOCAL/CLAUDE.md"
+printf '# Mine\n\n%s\n' "$LABELS_LINE" > "$T_LOCAL/CLAUDE.local.md"
+run "$CHECK" "$T_LOCAL" "$(stop anchor-engineer "$THIN")"
+assert_eq "block" "$(verdict)" "and so does CLAUDE.local.md, beside a CLAUDE.md that does not"
+
+# Claude Code strips a block-level HTML comment from the file before the model reads it.
+# The hook does not track code fences, so it reads a comment opened inside one as a
+# comment too: wrong in that rare case, and only ever toward stepping aside.
+T_COM="$(proj commented)"
+printf '# My program\n\n<!-- off for now:\n%s\n-->\n' "$LABELS_LINE" > "$T_COM/CLAUDE.md"
+run "$CHECK" "$T_COM" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a labels line inside an HTML comment teaches nothing: not sent back"
+printf '# Example\n\n````markdown\n```bash\n````\n<!--\n%s\n-->\n' "$LABELS_LINE" > "$T_COM/CLAUDE.md"
+run "$CHECK" "$T_COM" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "nor one after fences of different lengths, which hide no comment"
+printf '# Example\n\n```text\n%s\n```\n' "$LABELS_LINE" > "$T_COM/CLAUDE.md"
+run "$CHECK" "$T_COM" "$(stop anchor-engineer "$THIN")"
+assert_eq "block" "$(verdict)" "a labels line inside a code fence, which Claude Code keeps, teaches it"
+printf '# Example\n\n```text\n<!-- opened inside a fence\n%s\n```\n' "$LABELS_LINE" > "$T_COM/CLAUDE.md"
+run "$CHECK" "$T_COM" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a comment opened inside a fence reads as a comment, so the check steps aside"
+
+# The hook runs outside the sandbox, so it follows a link only to a file beside it.
+T_BESIDE="$(proj linked-beside)"
+cp "$SHIPPED" "$T_BESIDE/AGENTS.md"
+ln -s AGENTS.md "$T_BESIDE/CLAUDE.md"
+run "$CHECK" "$T_BESIDE" "$(stop anchor-engineer "$THIN")"
+assert_eq "block" "$(verdict)" "a CLAUDE.md linked to a file beside it (ln -s AGENTS.md CLAUDE.md) is read"
+HOOK_PATH="$WORK/nojq" run "$CHECK" "$T_BESIDE" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "without readlink on PATH a link is not followed, and the check steps aside"
+mkdir -p "$WORK/teach/elsewhere"
+cp "$SHIPPED" "$WORK/teach/elsewhere/CLAUDE.md"
+T_OUT="$(proj linked-out)"
+ln -s "$WORK/teach/elsewhere/CLAUDE.md" "$T_OUT/CLAUDE.md"
+run "$CHECK" "$T_OUT" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a CLAUDE.md linked outside the project is not read: not sent back"
+rm -f "$T_OUT/CLAUDE.md"
+ln -s ../elsewhere/CLAUDE.md "$T_OUT/CLAUDE.md"
+run "$CHECK" "$T_OUT" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "nor through a relative link that climbs out of it"
+mkdir -p "$WORK/teach/shared-claude/hooks" "$WORK/teach/claude-linked"
+cp "$HOOKS_SRC"/decisions-*.sh "$WORK/teach/shared-claude/hooks/"
+cp "$SHIPPED" "$WORK/teach/shared-claude/CLAUDE.md"
+ln -s "$WORK/teach/shared-claude" "$WORK/teach/claude-linked/.claude"
+run "$CHECK" "$WORK/teach/claude-linked" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a .claude that is a link out is not looked into"
+T_LOOP="$(proj link-loop)"
+ln -s AGENTS.md "$T_LOOP/CLAUDE.md"
+ln -s CLAUDE.md "$T_LOOP/AGENTS.md"
+run "$CHECK" "$T_LOOP" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a link loop ends, unread"
+
+# Claude Code reads AGENTS.md as the project's instructions where no CLAUDE.md,
+# .claude/CLAUDE.md or CLAUDE.local.md sits in the project or above it, ~/.claude/CLAUDE.md
+# aside, and an --agents install writes one. Above the fixtures is this machine's own tree.
+ABOVE=""
+d="$WORK"
+while :; do
+  for n in CLAUDE.md CLAUDE.local.md .claude/CLAUDE.md; do
+    if [ "$d/$n" != "${HOME%/}/.claude/CLAUDE.md" ] && { [ -e "$d/$n" ] || [ -L "$d/$n" ]; }; then ABOVE="$d/$n"; fi
+  done
+  [ -n "$d" ] || break
+  d="${d%/*}"
+done
+T_AG="$(proj agents-md)"
+cp "$SHIPPED" "$T_AG/AGENTS.md"
+mkdir -p "$WORK/teach/home/.claude"
+printf '# Me\n' > "$WORK/teach/home/.claude/CLAUDE.md"
+T_HOME="$(proj home/project)"
+cp "$SHIPPED" "$T_HOME/AGENTS.md"
+if [ -n "$ABOVE" ]; then
+  echo "  SKIP: AGENTS.md in place of CLAUDE.md ($ABOVE sits above the fixtures, so Claude Code would not read it)"
+else
+  run "$CHECK" "$T_AG" "$(stop anchor-engineer "$THIN")"
+  assert_eq "block" "$(verdict)" "AGENTS.md, read where the project has no CLAUDE.md, teaches it"
+  HOME="$WORK/teach/home" run "$CHECK" "$T_HOME" "$(stop anchor-engineer "$THIN")"
+  assert_eq "block" "$(verdict)" "a ~/.claude/CLAUDE.md above the project does not stop AGENTS.md being read"
+fi
+printf '# Mine\n' > "$T_AG/CLAUDE.local.md"
+run "$CHECK" "$T_AG" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "but beside a CLAUDE.local.md, which Claude Code reads instead, AGENTS.md is not read"
+mkdir -p "$WORK/teach/mono"
+printf '# Monorepo\n' > "$WORK/teach/mono/CLAUDE.md"
+T_PKG="$(proj mono/package)"
+cp "$SHIPPED" "$T_PKG/AGENTS.md"
+run "$CHECK" "$T_PKG" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "nor below a directory whose CLAUDE.md Claude Code reads instead"
+mkdir -p "$WORK/teach/mono-local" "$WORK/teach/mono-dot/.claude"
+printf '# Mine\n' > "$WORK/teach/mono-local/CLAUDE.local.md"
+printf '# Team\n' > "$WORK/teach/mono-dot/.claude/CLAUDE.md"
+T_PKG="$(proj mono-local/package)"
+cp "$SHIPPED" "$T_PKG/AGENTS.md"
+run "$CHECK" "$T_PKG" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "nor below one with a CLAUDE.local.md"
+T_PKG="$(proj mono-dot/package)"
+cp "$SHIPPED" "$T_PKG/AGENTS.md"
+run "$CHECK" "$T_PKG" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "nor below one with a .claude/CLAUDE.md"
+# A .claude that is a link might hold a CLAUDE.md, which would keep AGENTS.md unread.
+# Rather than look inside, the hook counts it as holding one, and steps aside.
+mkdir -p "$WORK/teach/linked-config/hooks" "$WORK/teach/agents-linked-config"
+cp "$HOOKS_SRC"/decisions-*.sh "$WORK/teach/linked-config/hooks/"
+ln -s "$WORK/teach/linked-config" "$WORK/teach/agents-linked-config/.claude"
+cp "$SHIPPED" "$WORK/teach/agents-linked-config/AGENTS.md"
+run "$CHECK" "$WORK/teach/agents-linked-config" "$(stop anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "beside a .claude that is a link, AGENTS.md is not counted"
+
+# The plugin's copy runs where the project has no .claude/hooks of its own: a plugin-only
+# project, the case this guards most.
+T_PO="$WORK/teach/plugin-only"
+mkdir -p "$T_PO"
+HOOK_PLUGIN_ROOT="$REPO_ROOT/plugin" run "$P_CHECK" "$T_PO" "$(stop solana-ai-kit:anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "plugin-only, no CLAUDE.md: the plugin's copy steps aside, and the agent is not sent back"
+cp "$SHIPPED" "$T_PO/CLAUDE.md"
+HOOK_PLUGIN_ROOT="$REPO_ROOT/plugin" run "$P_CHECK" "$T_PO" "$(stop solana-ai-kit:anchor-engineer "$THIN")"
+assert_eq "block" "$(verdict)" "plugin-only, the line merged into CLAUDE.md: the plugin's copy holds the agent to it"
+HOOK_PLUGIN_ROOT="$REPO_ROOT/plugin" run "$P_CHECK" "$T_KIT" "$(stop solana-ai-kit:anchor-engineer "$THIN")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "next to a full install that teaches it, the plugin's copy still steps aside"
+
+# ── the agent's own brief teaches the contract when no file does ────────────
+echo ""
+echo "[report check: brief]"
+# /implement, /parallel and /research write briefs that name the five labels. When no
+# instruction file teaches the contract, the hook reads the agent's own brief — the first
+# user message in its transcript — so an agent a kit command briefed is still held, while
+# any other steps aside. Only the first message counts, so the agent's own report naming
+# the labels cannot teach its own check.
+python3 - "$WORK" <<'PY'
+import json, os, sys
+work = sys.argv[1]
+labels = "Verified, Decisions made, Decisions needed, Assumptions and Next owner"
+def umsg(content):
+    return json.dumps({"type": "user", "message": {"role": "user", "content": content}})
+brief_yes = umsg("Task: build the vault. End your report with one line each for " + labels + ", none where empty.")
+brief_yes_list = umsg([{"type": "text", "text": "Return contract: " + labels + "."}])
+brief_no = umsg("Task: build the vault and run the tests, then report back when done.")
+# A tool result is also a type:user line; it carries the labels but is never the first.
+tool_result = json.dumps({"type": "user", "message": {"role": "user",
+    "content": [{"type": "tool_result", "tool_use_id": "t1", "content": labels}]}})
+# The real transcript shape: compact, extra envelope fields, userType before type.
+brief_real = '{"parentUuid":null,"isSidechain":true,"userType":"external","type":"user",' \
+    '"message":{"role":"user","content":"Return contract: ' + labels + '."}}'
+open(os.path.join(work, "b-yes.jsonl"), "w").write(brief_yes + "\n" + tool_result + "\n")
+open(os.path.join(work, "b-yes-list.jsonl"), "w").write(brief_yes_list + "\n")
+open(os.path.join(work, "b-real.jsonl"), "w").write(brief_real + "\n")
+open(os.path.join(work, "b-no.jsonl"), "w").write(brief_no + "\n")
+open(os.path.join(work, "b-later.jsonl"), "w").write(brief_no + "\n" + tool_result + "\n")
+PY
+B_PROJ="$(proj no-file-brief)"   # a project with no instruction file of its own
+INCOMPLETE="Done. Tests pass.${NL}Verified: cargo test${NL}Next owner: the lead"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-yes.jsonl")"
+D="$(decision "$OUT")"
+assert_eq "block" "${D%%|*}" "no instruction file, but the brief names the labels: an incomplete report is sent back"
+assert_contains "$D" "missing: Decisions made, Decisions needed, Assumptions." "and names what the report left out"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-yes-list.jsonl")"
+assert_eq "block" "$(verdict)" "a brief whose content is a list of blocks is read too"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-real.jsonl")"
+assert_eq "block" "$(verdict)" "the real compact transcript shape (userType before type, no spaces) is read"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$FULL" agent_transcript_path="$WORK/b-yes.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a complete report passes, brief or no brief"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-no.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "a brief that does not name the labels teaches nothing: step aside"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-later.jsonl")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "the labels in a later message, not the first, do not count"
+run "$CHECK" "$B_PROJ" "$(stop anchor-engineer "$INCOMPLETE")"
+assert_eq "0|silent" "$RC|$(decision "$OUT")" "no instruction file and no transcript: step aside"
+# An instruction file decides first, so the brief is not consulted (|| short-circuits):
+# a teaching file sends back even when the brief does not name the labels.
+run "$CHECK" "$T_KIT" "$(stop anchor-engineer "$INCOMPLETE" agent_transcript_path="$WORK/b-no.jsonl")"
+assert_eq "block" "$(verdict)" "a teaching instruction file holds the agent even when the brief does not"
 
 # ── controls: each mechanism planted back out must change the verdict ────────
 echo ""
@@ -574,8 +793,35 @@ control() {
   fi
 }
 MUT="$(mutant once decisions-report-check.sh "*'\"stop_hook_active\":true'*" "*'\"no_such_key\":true'*")" || MUT=
-GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." stop_hook_active=true)"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+GOT=; [ -z "$MUT" ] || { cp "$SHIPPED" "$MUT/CLAUDE.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." stop_hook_active=true)"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
 control "stop_hook_active" silent "$GOT"
+# The report check's step aside, where nothing taught the contract. The mutants sit inside
+# the fixture repository, whose CLAUDE.md is above them and is not read.
+MUT="$(mutant contract decisions-report-check.sh 'taught || briefed || exit 0' ':')" || MUT=
+GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "a project with no instruction file or brief" silent "$GOT"
+MUT="$(mutant comment decisions-report-check.sh 'match($0, /^ *<!--/) && RLENGTH <= 7 {' '0 {')" || MUT=
+GOT=; [ -z "$MUT" ] || { printf '<!--\n%s\n-->\n' "$LABELS_LINE" > "$MUT/CLAUDE.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "a labels line commented out" silent "$GOT"
+MUT="$(mutant link-out decisions-report-check.sh "'' | . | .. | */*)" "'' | . | ..)")" || MUT=
+GOT=; [ -z "$MUT" ] || { ln -s ../../teach/elsewhere/CLAUDE.md "$MUT/CLAUDE.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "a link out of the project" silent "$GOT"
+# AGENTS.md below a directory that has a CLAUDE.md: here the fixture repository's own.
+if [ -z "$ABOVE" ]; then
+  MUT="$(mutant above decisions-report-check.sh '[ -L "$D/CLAUDE.md" ] || [ -e "$D/CLAUDE.md" ] || ' '')" || MUT=
+  GOT=; [ -z "$MUT" ] || { cp "$SHIPPED" "$MUT/AGENTS.md"; run "$CHECK" "$MUT" "$(stop anchor-engineer "All done.")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+  control "a CLAUDE.md above the project, which keeps AGENTS.md unread" silent "$GOT"
+fi
+# The brief fallback: with no file teaching the contract, the agent's own brief does.
+# Dropping the briefed() call leaves such an agent unchecked; scanning past the first
+# message would let a later message — the agent's own report — teach its own check.
+MUT="$(mutant brief-off decisions-report-check.sh 'taught || briefed || exit 0' 'taught || exit 0')" || MUT=
+GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." agent_transcript_path="$WORK/b-yes.jsonl")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "the brief fallback" block "$GOT"
+BRF_FIND="          index(l, \"assumptions\") && index(l, \"next owner\")) b = 1${NL}      exit"
+MUT="$(mutant brief-first decisions-report-check.sh "$BRF_FIND" "${BRF_FIND%%${NL}*}")" || MUT=
+GOT=; [ -z "$MUT" ] || { run "$CHECK" "$MUT" "$(stop anchor-engineer "All done." agent_transcript_path="$WORK/b-later.jsonl")"; GOT="$(decision "$OUT" | cut -d'|' -f1)"; }
+control "the brief is read only to the first message" silent "$GOT"
 MUT="$(mutant link decisions-inject.sh '[ ! -L "$R/in-force.md" ]' ':')" || MUT=
 GOT=
 if [ -n "$MUT" ]; then

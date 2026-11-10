@@ -4,7 +4,16 @@ name: Sync skill pins
 # fails when that record and the gitlink disagree. Dependabot can only move the gitlink,
 # so without this job every weekly bump PR would be red until a human ran one command.
 # This job runs it for them: it rewrites the registry from the new gitlinks and pushes
-# that back onto the bump branch, which re-runs CI and turns the PR green.
+# that back onto the bump branch.
+#
+# That push does not test itself. GitHub creates the pull_request runs a GITHUB_TOKEN
+# push causes in an approval-required state ("Triggering a workflow from a workflow" in
+# the Actions docs), so the PR's merge box shows "Approve workflows to run" and the
+# required checks on the new head report nothing until someone with write access
+# approves them. #249 was approved and went green; #326 merged before its runs started,
+# and main went red. Dispatching CI from here would not help: checks from a
+# workflow_dispatch run are not evaluated for a pull request or a ruleset's required
+# checks ("Troubleshooting required status checks"). Approve, wait for green, then merge.
 #
 # Why workflow_run and not pull_request: a workflow triggered directly by Dependabot gets
 # a read-only GITHUB_TOKEN and cannot push. A workflow_run job runs from the default

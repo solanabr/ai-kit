@@ -110,10 +110,14 @@ for required in test_firewall test_egress_guard test_fetch_exec_guard test_doc_g
     exit 1
   fi
 done
-# The decision record's two protections, each with one suite: a field that looks like a
-# credential never reaches the record (test_decisions), and only the user's main session
-# writes it (test_decisions_guard). Whatever the record holds reaches every agent.
-for required in test_decisions test_decisions_guard; do
+# The decision record's three protections, each with one suite: a field that looks like a
+# credential never reaches the record (test_decisions), only the user's main session
+# writes it (test_decisions_guard), and the hooks that read it follow no link planted in
+# it (test_decision_hooks). Those hooks run outside the sandbox while an agent inside it
+# can write .git/, so a link they followed would turn that into a write the sandbox
+# forbids, or let a tracked file speak as the user. Whatever the record holds reaches
+# every agent.
+for required in test_decisions test_decisions_guard test_decision_hooks; do
   if [ ! -f "$SCRIPT_DIR/$required.sh" ]; then
     echo "MISSING SUITE: tests/$required.sh (the decision record's protections ship with it)"
     exit 1

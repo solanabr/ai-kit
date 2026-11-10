@@ -6,7 +6,7 @@ What the record holds, where it lives and who writes it, the `decisions.sh` help
 
 A decision you make in conversation reaches an agent only if someone copies it into that agent's brief, and a brief is frozen when it is written: a decision left out of it, or made after it, never arrives. A subagent loads the project's instructions, not your conversation. So agents re-ask what you settled, or quietly decide it the other way.
 
-The record keeps the decisions you made, the principles you set and the standing orders you gave, one small file per entry, and three hooks hand the entries in force to your session and to every subagent, and again whenever the list changes. Nothing depends on an agent remembering to look.
+The record keeps the decisions you made, the principles you set and the standing orders you gave, one small file per entry, and two hooks hand the entries in force to your session and to every subagent, and again whenever the list changes. Nothing depends on an agent remembering to look.
 
 ## Where it lives, and who can see it
 
@@ -86,7 +86,7 @@ Run it from the project root (`.agents/bin/decisions.sh` in an `--agents` instal
 | `export [--handoff]` | Prints every entry, oldest first; `--handoff` prints a digest grouped *In force*, *Provisional*, *Proposed* and *Superseded*, with back-links |
 | `path` | Prints the record directory |
 
-The other options for `add` and `supersede` are `--premises`, `--enforced-by`, `--covers`, `--requires`, `--expires`, `--by you|panel|agent` (default `you`), `--status in-force|provisional|proposed` (default `in-force`), `--slug` for the name part of the id, `--date YYYY-MM-DD` (default today) and `--stdin`; `decisions.sh help` lists them all. Exit status is 0 when done, 1 when refused or failed, 2 on bad usage. Outside a git repository, or before the first entry, the readers print nothing, exit 0 and create nothing.
+The other options for `add` and `supersede` are `--premises`, `--enforced-by`, `--covers`, `--requires`, `--expires`, `--by you|panel|agent` (default `you`), `--status in-force|provisional|proposed` (default `in-force`), `--slug` for the name part of the id, `--date YYYY-MM-DD` (default `$DECISIONS_DATE`, else today) and `--stdin`; `decisions.sh help` lists them all. `DECISIONS_DATE` also dates the heading of `export --handoff`. `--your-words` is `--words` under the name the entry's front matter gives it, so a `--stdin` field written `your-words:` is read as the words. Exit status is 0 when done, 1 when refused or failed, 2 on bad usage. Outside a git repository, or before the first entry, the readers `in-force`, `hash` and `export` print nothing, exit 0 and create nothing. `path` is not one of them: outside a repository it exits 1 with an error, and before the first entry it prints the directory the record will use, which does not exist yet.
 
 **`--stdin` reads the fields as `name: value` lines,** an indented line continuing the value above it. Use it through a quoted heredoc for words that span lines or carry quotes, and for any text that names a credential path, which a guard hook can read on the command line as a file the call opens, and block. Values are taken as written, so leave them unquoted:
 
@@ -127,7 +127,7 @@ What keeps them cheap and safe:
 
 ## The report check
 
-`decisions-report-check.sh` runs when a subagent stops. When the agent is one of the kit's own, bare or as `solana-ai-kit:<name>`, and its report leaves out any of five labelled lines, the hook sends it back once, naming what is missing:
+`decisions-report-check.sh` runs when a subagent stops. When the agent is one of the kit's own, bare or as `solana-ai-kit:<name>`, the project's instructions ask for five labelled lines (below), and its report leaves out any of them, the hook sends it back once, naming what is missing:
 
 ```text
 Verified: anchor test, 14 passing
@@ -139,7 +139,11 @@ Next owner: solana-qa-engineer, for the fuzz pass
 
 `none` is a fine answer. Decoration doesn't matter (bold, headings, bullets, numbering), and common variants count, such as "What I verified", "Open questions", "Premises" or "Next steps". So do up to eight words between a label and its colon, as in "Assumptions made:", "Decisions needed from you:" or "Verified by running anchor test:", and a heading or a line wholly in bold needs no colon. A sentence that merely opens with one of the words, such as "Verified the build works.", is not a label. The project's `CLAUDE.md` asks every subagent for these five lines, so a kit agent that follows it passes first time; one that doesn't costs one extra turn.
 
-It holds no other agent to the contract: not general-purpose, Explore, Plan or agents you wrote, nor Claude Code's internal ones. It reads the report as delivered, including one handed back through the `SubagentHandback` tool, skips a report that is JSON (a workflow agent's structured output) or empty, and sends an agent back at most once: the stop that follows goes through whatever it holds. It checks that the labels are there, not that what follows them is true, and it reads English labels only. It runs in every project, with a record or without one.
+**Only where the project asks for them.** No agent's own prompt carries the labels. They reach a kit agent two ways: through that line in the project's instructions, and through the brief `/implement`, `/parallel`, `/research` and `/decide` write. So the check first looks for a line naming all five, in `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the project directory, or in `AGENTS.md` where Claude Code reads it in their place, because none of those three sits in the project or above it (your `~/.claude/CLAUDE.md` aside). A line inside an HTML comment doesn't count, because Claude Code strips those before the model reads the file. Since the hook runs outside the sandbox, it follows a link only to a file beside it, as `ln -s AGENTS.md CLAUDE.md` makes. It checks before it reads, so a file swapped for a link in between is still opened; such a swap can change only the verdict, or hold the stop until the hook's 10-second timeout.
+
+**The brief is the fallback.** When no instruction file carries the line, the hook reads the agent's own brief — the first user message in its transcript, which is the parent's delegation prompt — and holds the agent to the labels only when the brief named them. This relies on the transcript being JSONL whose first `"type":"user"` entry is the brief, Claude Code's format; it lowercases that one line and looks for the five labels, with no comment stripping, since a brief is a prompt passed whole. Only the first message counts, never a later one, so a report the agent writes cannot teach its own check. Checking the files first leaves the transcript unread in the common case. So an agent a kit command briefed is still checked in a plugin install, or in an install whose `CLAUDE.md` predates the line (until you merge it in from the `CLAUDE.md.upstream` that `/update` leaves beside it); an agent spawned any other way there steps aside.
+
+It holds no other agent to the contract: not general-purpose, Explore, Plan or agents you wrote, nor Claude Code's internal ones. It reads the report as delivered, including one handed back through the `SubagentHandback` tool, skips a report that is JSON (a workflow agent's structured output) or empty, and sends an agent back at most once: the stop that follows goes through whatever it holds. It checks that the labels are there, not that what follows them is true, and it reads English labels only. Where the project asks for the labels, it runs with a record or without one.
 
 ## The write guard
 
@@ -148,7 +152,7 @@ Whatever the record holds reaches every agent as your decision, so only your mai
 - **runs `decisions.sh add` or `supersede`**, from whatever path and however wrapped: behind `env` or `timeout`, inside `sh -c` or `eval`, or in a heredoc that a shell or an interpreter runs; or
 - **points a file tool inside the record directory**, at an entry, `in-force.md` or the hooks' `seen/` markers, after resolving `..`, links and letter case, so another spelling of the path is the same path, and a link into the record is the record whatever the link is named.
 
-Claude Code adds an `agent_id` to the payload of a hook that fires inside a subagent, a workflow's agents included, or an in-process teammate, and never to your main session's, so your session passes before anything else is read. Every agent can still read the record and run the helper's readers (`in-force`, `hash`, `export`, `path`), and a command that only names the helper, such as a grep, an echo or a commit message, is not a call. The refusal tells the agent to list the decision in its report under Decisions made or Decisions needed, which your main session records once you confirm it.
+Claude Code adds an `agent_id` to the payload of a hook that fires inside a subagent, a workflow's agents included, or an in-process teammate, and never to your main session's, so your session passes before anything else is read. Every agent can still read the record and run the helper's readers (`in-force`, `hash` and `export`) and `path`, and a command that only names the helper, such as a grep, an echo or a commit message, is not a call. The refusal tells the agent to list the decision in its report under Decisions made or Decisions needed, which your main session records once you confirm it.
 
 It runs at every firewall tier, Off included: who may speak for you does not vary with the firewall. A call that never names the helper passes on the payload alone, and a file path that does not resolve into a directory named like the record's passes on the shell's own builtins, with no `jq` or `awk` spent.
 
@@ -166,11 +170,11 @@ The write guard refuses a subagent's write at every tier.
 | Install | The helper | The pushes, the report check and the write guard |
 |---------|------------|--------------------------------------------------|
 | Full install | `.claude/bin/decisions.sh` | All four hooks, registered in `.claude/settings.json` |
-| Existing install, after `/update` | Copied in | Registered by `/update`'s hook migration (`HOOK_SET_VERSION` 4), which appends a kit hook a project lacks and never rewrites an entry you edited |
-| Plugin | None: a plugin carries no `bin/` | All four, from the plugin's `hooks/hooks.json`. Next to a full install, the plugin's copies of the three context hooks step aside; both copies of the guard run, to the same verdict |
+| Existing install, after `/update` | Copied in | Registered by `/update`'s hook migration (`HOOK_SET_VERSION` 4), which appends a kit hook a project lacks and never rewrites an entry you edited. Until your `CLAUDE.md` carries the subagent line (which `/update` offers in `CLAUDE.md.upstream` rather than writing over your file), the report check holds only an agent whose brief named the labels, as the agent-workflow commands write it |
+| Plugin | None: a plugin carries no `bin/` | All four, from the plugin's `hooks/hooks.json`. A plugin ships no project `CLAUDE.md`, so [the report check](#the-report-check) holds only an agent a kit command briefed with the labels, unless your own instruction files carry the subagent line. Next to a full install, the plugin's copies of the three context hooks step aside; both copies of the guard run, to the same verdict |
 | `--agents` (Codex, opencode and other tools) | `.agents/bin/decisions.sh` | None: an `--agents` install writes no settings file, so the scripts sit in `.agents/hooks/` unregistered, and nothing hands agents the list, checks their reports or refuses their writes |
 
-`/doctor` reports whether the hooks are wired (check 12) and whether the record is in a state they can read (check 13).
+`/doctor` reports whether the hooks are wired and whether the project teaches the report contract (check 12), and whether the record is in a state they can read (check 13).
 
 ## Limits
 
@@ -179,3 +183,5 @@ The write guard refuses a subagent's write at every tier.
 - **Recording is a choice the session makes.** An answer you give in chat reaches the record only when the session records it.
 - **A subagent's compaction drops the list it was handed.** Auto-compaction discards the copy injected at spawn, and Claude Code injects the hook's list again only at that agent's next resume or teammate message. The push stays quiet meanwhile, since the agent has already seen this version, so until the list changes it works from whatever its summary kept. Your main session is unaffected: its compaction fires `SessionStart`, which hands it the list again.
 - **In a session started as `claude --agent <kit agent>`,** Claude Code's internal agents carry that agent's name, so the report check can send one back once.
+- **The report check reads the project's own instruction files and the agent's brief, nothing else.** A line that reaches the agent only through an `@` import, a `CLAUDE.md` above the project, `.claude/rules/` or your `~/.claude/CLAUDE.md` is not seen; nor is a brief past its first message. Where none of what it reads carries the line, the check steps aside and holds no agent to the labels.
+- **It reads those files as they sit under `CLAUDE_PROJECT_DIR`.** It doesn't apply Claude Code's own skip rules: `claudeMdExcludes`, the Project instructions setting, the 4 MiB cap on a file, and no `AGENTS.md` before Claude Code 2.1.277. So a file Claude Code skips still counts, and an agent that never saw its line can be sent back once. In a session that entered a worktree, `CLAUDE_PROJECT_DIR` stays on the main checkout while `CLAUDE.md` loads from the worktree, so the main checkout's files decide.
