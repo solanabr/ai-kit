@@ -27,11 +27,11 @@
 #     once, for one extra turn.
 #   - Where the project teaches it. No agent's own prompt carries the labels. They reach
 #     a kit agent through the project's instruction files, as CLAUDE-solana.md's subagent
-#     line, which install.sh writes as the project's CLAUDE.md, and through the briefs
+#     line, which install.sh writes as the project's ./CLAUDE.md, and through the briefs
 #     /implement, /parallel and /research write, which this hook does not read. Where
 #     none of those files carries the line, the check steps aside: a plugin ships no
-#     project CLAUDE.md, and an older install's CLAUDE.md lacks the line until the user
-#     merges it in from the CLAUDE.md.upstream that /update leaves beside it.
+#     project ./CLAUDE.md, and an older install's ./CLAUDE.md lacks the line until the user
+#     merges it in from the ./CLAUDE.md.upstream that /update leaves beside it.
 #   - Once per stop: stop_hook_active means a stop hook already sent this agent back.
 #   - The report as delivered. In auto mode a subagent reports through the
 #     SubagentHandback tool and last_assistant_message holds only its closing text, so
@@ -91,11 +91,11 @@ case ${V#solana-ai-kit:} in
 esac
 
 # Does the project teach the contract? The files read are the ones Claude Code loads as
-# the project's instructions, under CLAUDE_PROJECT_DIR: CLAUDE.md, .claude/CLAUDE.md and
+# the project's instructions, under CLAUDE_PROJECT_DIR: ./CLAUDE.md, .claude/CLAUDE.md and
 # CLAUDE.local.md, or AGENTS.md where it reads that in their place. Not @imports, files
 # above the project or .claude/rules/: the kit writes none of them, and a file not read
 # here only makes the check step aside. In a session that entered a worktree,
-# CLAUDE_PROJECT_DIR stays on the main checkout while CLAUDE.md loads from the worktree,
+# CLAUDE_PROJECT_DIR stays on the main checkout while ./CLAUDE.md loads from the worktree,
 # so there the main checkout's files decide. Checked before the transcript is read: a
 # project with no instruction file costs a few stat calls, and one whose files lack the
 # line one awk over those files.
@@ -124,10 +124,10 @@ plain() {
 }
 
 # agents_md — AGENTS.md, in F, when Claude Code reads it as the project's instructions,
-# which by default it does only when no CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md
+# which by default it does only when no ./CLAUDE.md, .claude/CLAUDE.md or ./CLAUDE.local.md
 # sits in the project or a directory above it, ~/.claude/CLAUDE.md aside.
 # `install.sh --agents` writes one. A .claude that is a link counts as holding a
-# CLAUDE.md, rather than be looked into.
+# .claude/CLAUDE.md, rather than be looked into.
 agents_md() {
   D=$P
   while :; do
@@ -148,7 +148,7 @@ agents_md() {
 # make the check step aside, never send an agent back.
 taught() {
   set --
-  for N in CLAUDE.md .claude/CLAUDE.md CLAUDE.local.md; do
+  for N in CLAUDE.md .claude/CLAUDE.md CLAUDE.local.md; do  # AGENTS.md: agents_md, after the loop
     case $N in .claude/*) [ -L "$P/.claude" ] && continue ;; esac
     if plain "$P/$N"; then set -- "$@" "$F"; fi
   done
