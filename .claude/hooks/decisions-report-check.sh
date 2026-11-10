@@ -25,6 +25,13 @@
 #     ignores the matcher. One gap: an internal agent carries the session's own agent
 #     name, so in a session started as `claude --agent <kit agent>` it can be sent back
 #     once, for one extra turn.
+#   - Where the project teaches it. No agent's own prompt carries the labels. They reach
+#     a kit agent through the project's instruction files, as CLAUDE-solana.md's subagent
+#     line, which install.sh writes as the project's CLAUDE.md, and through the briefs
+#     /implement, /parallel and /research write, which this hook does not read. Where
+#     none of those files carries the line, the check steps aside: a plugin ships no
+#     project CLAUDE.md, and an older install's CLAUDE.md lacks the line until the user
+#     merges it in from the CLAUDE.md.upstream that /update leaves beside it.
 #   - Once per stop: stop_hook_active means a stop hook already sent this agent back.
 #   - The report as delivered. In auto mode a subagent reports through the
 #     SubagentHandback tool and last_assistant_message holds only its closing text, so
@@ -82,6 +89,81 @@ case ${V#solana-ai-kit:} in
   unity-engineer) ;;
   *) exit 0 ;;
 esac
+
+# Does the project teach the contract? The files read are the ones Claude Code loads as
+# the project's instructions, under CLAUDE_PROJECT_DIR: CLAUDE.md, .claude/CLAUDE.md and
+# CLAUDE.local.md, or AGENTS.md where it reads that in their place. Not @imports, files
+# above the project or .claude/rules/: the kit writes none of them, and a file not read
+# here only makes the check step aside. In a session that entered a worktree,
+# CLAUDE_PROJECT_DIR stays on the main checkout while CLAUDE.md loads from the worktree,
+# so there the main checkout's files decide. Checked before the transcript is read: a
+# project with no instruction file costs a few stat calls, and one whose files lack the
+# line one awk over those files.
+P=${CLAUDE_PROJECT_DIR:-$PWD}
+case $P in /*) ;; *) P=$PWD/$P ;; esac
+
+# plain <path> — true when <path> is a regular file this hook may read, in F: the file
+# itself, or reached through links that each name a file beside them, as
+# `ln -s AGENTS.md CLAUDE.md` makes, up to eight. No other link is followed. These hooks
+# run outside the sandbox, and a link elsewhere can name a file outside the project, a
+# FIFO that never answers, or a network path whose lookup alone contacts the host named.
+# The check comes before the read, and a shell cannot open a file without following a
+# link, so a file swapped for a link in between still gets its open. That swap can
+# change only the verdict, or hold the stop until the registration's 10-second timeout.
+plain() {
+  F=$1 HOPS=0
+  while [ -L "$F" ]; do
+    [ "$HOPS" -lt 8 ] || return 1
+    HOPS=$((HOPS + 1))
+    L=$(readlink "$F" 2>/dev/null) || return 1
+    L=${L#./}
+    case $L in '' | . | .. | */*) return 1 ;; esac
+    F=${F%/*}/$L
+  done
+  [ -f "$F" ] && [ -r "$F" ]
+}
+
+# agents_md — AGENTS.md, in F, when Claude Code reads it as the project's instructions,
+# which by default it does only when no CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md
+# sits in the project or a directory above it, ~/.claude/CLAUDE.md aside.
+# `install.sh --agents` writes one. A .claude that is a link counts as holding a
+# CLAUDE.md, rather than be looked into.
+agents_md() {
+  D=$P
+  while :; do
+    [ -L "$D/CLAUDE.md" ] || [ -e "$D/CLAUDE.md" ] || [ -L "$D/CLAUDE.local.md" ] \
+      || [ -e "$D/CLAUDE.local.md" ] && return 1
+    if [ "$D" != "${HOME%/}" ]; then
+      [ -L "$D/.claude" ] || [ -L "$D/.claude/CLAUDE.md" ] || [ -e "$D/.claude/CLAUDE.md" ] && return 1
+    fi
+    case $D in */*[!/]*) D=${D%/*}; [ -n "$D" ] || D=/ ;; *) break ;; esac
+  done
+  plain "$P/AGENTS.md"
+}
+
+# taught — true when one of those files has a line naming all five labels, outside a
+# block-level HTML comment: Claude Code strips those from an instruction file before the
+# model reads it, so a line commented out there asks for nothing. Code fences are not
+# tracked, so a comment opened inside one reads as a comment too: an error that can only
+# make the check step aside, never send an agent back.
+taught() {
+  set --
+  for N in CLAUDE.md .claude/CLAUDE.md CLAUDE.local.md; do
+    case $N in .claude/*) [ -L "$P/.claude" ] && continue ;; esac
+    if plain "$P/$N"; then set -- "$@" "$F"; fi
+  done
+  if [ $# -eq 0 ] && agents_md; then set -- "$F"; fi
+  [ $# -gt 0 ] || return 1
+  LC_ALL=C awk '
+    FNR == 1 { c = 0 }
+    c { if (index($0, "-->")) c = 0; next }
+    match($0, /^ *<!--/) && RLENGTH <= 7 { c = !index(substr($0, RLENGTH + 1), "-->"); next }
+    { l = tolower($0) }
+    index(l, "verified") && index(l, "decisions made") && index(l, "decisions needed") &&
+      index(l, "assumptions") && index(l, "next owner") { t = 1; exit }
+    END { exit !t }' "$@" 2>/dev/null
+}
+taught || exit 0
 
 # Absolute paths only: awk reads an operand shaped like name=value as an assignment.
 T=/dev/null
