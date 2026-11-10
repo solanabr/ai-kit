@@ -116,6 +116,28 @@ elif [ "$long_desc" -eq 0 ]; then
 fi
 echo ""
 
+# --- Instruction file budget ---
+# CLAUDE-solana.md ships as every project's CLAUDE.md and loads in every session and every
+# subagent, so CLAUDE.md's Token Loading Model holds it to 60 lines. Every line counts, HTML
+# comments included: that over-counts what reaches the model, which strips them, so it fails
+# safe. awk also counts a last line that has no newline, which `wc -l` would miss. A tree
+# without the file has no budget to hold and is not failed for it, as the root-docs scan
+# below skips a missing file too: tests/test_validate.sh runs this in trees that copy only
+# .claude/ and a few root files, and the suites that read CLAUDE-solana.md fail without it.
+echo "[Instruction budget]"
+if [ -f CLAUDE-solana.md ]; then
+  instr_lines="$(awk 'END { print NR }' CLAUDE-solana.md)"
+  if [ "$instr_lines" -le 60 ]; then
+    check "CLAUDE-solana.md is at most 60 lines ($instr_lines)" 0
+  else
+    echo "  FAIL: CLAUDE-solana.md is $instr_lines lines (limit 60); move the detail into docs/, a skill or a command"
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo "  (no CLAUDE-solana.md in this tree, so its 60-line budget is not checked)"
+fi
+echo ""
+
 # --- Skill references ---
 echo "[Skills]"
 if [ -f .claude/skills/SKILL.md ]; then

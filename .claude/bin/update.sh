@@ -1301,8 +1301,10 @@ GITIGNORE="$TARGET_DIR/.gitignore"
 # installs, so without this an existing project never gets them. Appended outside the
 # kit config block, since a user may have removed that block with /commit-claude-config.
 # reports/ holds the pages bin/report-page.sh writes, which can hold private decisions.
+# context/ holds the commands' hand-offs (/crew's stage file, /rundown --handoff with the
+# record's export appended); install.sh has ignored it since 2.0.0, so a 1.x install lacks it.
 if [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ]; then
-  for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/" "$CONFIG_NAME/reports/"; do
+  for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/" "$CONFIG_NAME/reports/" "$CONFIG_NAME/context/"; do
     # Git for Windows checks a tracked .gitignore out with CRLF: match without the CR,
     # or the line is appended a second time. Two patterns rather than `tr | grep -q`:
     # under pipefail an early match kills `tr` with SIGPIPE, and a large file then

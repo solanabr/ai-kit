@@ -100,17 +100,28 @@ for agent_file in "$REPO_ROOT/.claude/agents/"*.md; do
 done
 
 # --- Command names appear in the commands reference ---
+# Matched as whole names, never as substrings: a substring match let /report stand in for
+# /rep, /research for /res and /explain-code for /exp, so a short name could vanish from a
+# doc unnoticed. A name starts at a slash no word character precedes and ends before a
+# character that could continue it; a hyphen continues one, since command names use it.
+mentions_command() {  # mentions_command <file> <name>, the name's regex characters escaped
+  local name
+  name="$(printf '%s' "$2" | sed 's/[][\.*^$+?(){}|]/\\&/g')"
+  [ -f "$1" ] && grep -qE "(^|[^[:alnum:]_])/${name}([^[:alnum:]_-]|\$)" "$1"
+}
 echo "[command-names-doc]"
 for cmd_file in "$REPO_ROOT/.claude/commands/"*.md; do
   CMD_BASENAME=$(basename "$cmd_file" .md)
-  assert_file_contains "$AGENTS_DOC" "/$CMD_BASENAME" "docs/agents-and-commands.md contains command: /$CMD_BASENAME"
+  assert_cmd_success "mentions_command '$AGENTS_DOC' '$CMD_BASENAME'" \
+    "docs/agents-and-commands.md names /$CMD_BASENAME as a whole command name"
 done
 
 # --- Command names appear in QUICK-START.md ---
 echo "[command-names]"
 for cmd_file in "$REPO_ROOT/.claude/commands/"*.md; do
   CMD_BASENAME=$(basename "$cmd_file" .md)
-  assert_file_contains "$REPO_ROOT/QUICK-START.md" "/$CMD_BASENAME" "QUICK-START.md contains command: /$CMD_BASENAME"
+  assert_cmd_success "mentions_command '$REPO_ROOT/QUICK-START.md' '$CMD_BASENAME'" \
+    "QUICK-START.md names /$CMD_BASENAME as a whole command name"
 done
 
 # --- README version badge matches .claude/VERSION ---

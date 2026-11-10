@@ -69,10 +69,32 @@ for pair in adv:adversarial par:parallel rep:report res:research exp:explore; do
   # second one, meant to name the target's placeholder, would arrive as that text instead.
   assert_eq "1" "$(grep -o '\$ARGUMENTS' "$f" 2>/dev/null | wc -l | tr -d ' ')" "/$short uses \$ARGUMENTS exactly once"
 done
-for name in adv par rep res exp explore; do
+# The fleet commands are held user-only too. CLAUDE-solana.md lets /adversarial, /parallel and
+# /explore start only from the user's call or their own words, since each multiplies agents,
+# and /proceed relaunches whatever is unfinished; docs/agents-and-commands.md promises all four
+# wait for the user. That rule is prose, and this flag is its only enforcement: an auditor who
+# took it off /parallel, /adversarial or /proceed in a scratch copy found every suite still green.
+for name in adv par rep res exp explore parallel adversarial proceed; do
   assert_eq "disable-model-invocation: true" "$(front "$CMDS_DIR/$name.md" | grep -x 'disable-model-invocation:[[:space:]]*true' || true)" \
     "/$name is user-only (disable-model-invocation: true in its frontmatter)"
   assert_eq "" "$(front "$CMDS_DIR/$name.md" | grep '^model:' || true)" "/$name sets no model: line"
+done
+# The other way round for /crew's stages: /crew runs each one through the Skill tool, and
+# Claude Code blocks that tool on a command that sets disable-model-invocation: true, so a
+# stage made user-only would stop the chain there. The stages are read from crew.md's numbered
+# list, so a stage added later is held to this too; the ship gate, which leaves /ship to the
+# user, opens with no command and is not read. Any value but false counts as setting it. The
+# floor is the seven stages crew.md has today, so a reworded list cannot pass by matching
+# none: removing a stage means lowering it, and a numbered line that opens with a command
+# but is not a stage would be read as one.
+CREW_STAGES="$(sed -n '/^## Stages$/,/^## /p' "$CMDS_DIR/crew.md" | grep -E '^[0-9]+\. `/' \
+  | grep -oE '`/[a-z0-9-]+' | tr -d '`/' | awk '!seen[$0]++' | tr '\n' ' ' || true)"
+CREW_N="$(printf '%s' "$CREW_STAGES" | wc -w | tr -d ' ')"
+assert_cmd_success "[ $CREW_N -ge 7 ]" "crew.md's numbered stages were read ($CREW_N: $CREW_STAGES)"
+for stage in $CREW_STAGES; do
+  assert_file_exists "$CMDS_DIR/$stage.md" "/crew's stage /$stage exists"
+  assert_eq "" "$(front "$CMDS_DIR/$stage.md" | grep '^disable-model-invocation:' | grep -vE ':[[:space:]]*false[[:space:]]*$' || true)" \
+    "/crew's stage /$stage stays model-invocable, so the Skill tool can run it"
 done
 EXPLORE="$CMDS_DIR/explore.md"
 for label in adversarial parallel serial user; do
@@ -106,18 +128,18 @@ assert_file_contains "$CMDS_DIR/adversarial.md" "it runs no pairs of its own" "/
 assert_file_contains "$CMDS_DIR/parallel.md" "is three items" "Composition splits /par(a and b and c) into three items"
 assert_file_contains "$CMDS_DIR/parallel.md" "no second pass" "/parallel as an outer call runs its inner calls as its lanes, with no second pass"
 assert_file_contains "$CMDS_DIR/parallel.md" "unless the brief says to run it" "Composition reads a call quoted in a subagent's brief as text"
-# The composition and plain-request lines: CLAUDE-solana.md ships them, and the kit's own
-# CLAUDE.md carries them too, since a session in this repository loads that file instead.
+# The composition and plain-request lines, and the rule that the decision record never
+# outranks the user (their newest explicit instruction wins, and the session supersedes the
+# entry it overrides): CLAUDE-solana.md ships them, and the kit's own CLAUDE.md carries them
+# too, since a session in this repository loads that file instead.
 for f in CLAUDE-solana.md CLAUDE.md; do
   for needle in '`.claude/commands/<name>.md`' 'Composition section' 'unless the brief says to run it' \
-    'Bring me the points I need to decide' 'explain better what I need to unblock you on' 'report on what you found'; do
+    'Bring me the points I need to decide' 'explain better what I need to unblock you on' 'report on what you found' \
+    'newest explicit instruction beats anything recorded earlier, the decision record included' \
+    'supersede the entry it overrides'; do
     assert_file_contains "$REPO_ROOT/$f" "$needle" "$f carries: $needle"
   done
 done
-# The decision record never outranks the user: their newest explicit instruction wins, and
-# the session supersedes the entry it overrides.
-assert_file_contains "$REPO_ROOT/CLAUDE-solana.md" "newest explicit instruction beats anything recorded earlier, the decision record included" \
-  "CLAUDE-solana.md: the user's newest explicit instruction beats the decision record"
 assert_file_contains "$CMDS_DIR/parallel.md" "## Composition" "parallel.md carries the composition rules"
 assert_file_contains "$CMDS_DIR/adversarial.md" "(parallel.md#composition)" "adversarial.md points at /parallel's composition rules"
 for f in parallel.md adversarial.md; do
