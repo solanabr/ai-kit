@@ -55,6 +55,12 @@ CLAIMS = [
     (".claude/settings.json", re.compile(r"no \.claude/settings\.json", re.I)),
     (".mcp.json", re.compile(r"no \.mcp\.json", re.I)),
     ("symlinks", re.compile(r"no symlinks|zero symlinks", re.I)),
+    # A root CLAUDE.md or AGENTS.md is an instruction file an agent loads inside the pack.
+    # That shape let solana-fuzz ship a hooksPath-enabling CLAUDE.md while its record still
+    # claimed none. Only the pack ROOT counts here; a nested one is noted separately, and
+    # GEMINI.md is not checked. Every pack making either claim was verified clean at its pin.
+    ("root CLAUDE.md", re.compile(r"no root CLAUDE\.md", re.I)),
+    ("root AGENTS.md", re.compile(r"no (root CLAUDE\.md or |root )?AGENTS\.md", re.I)),
 ]
 OPENS_CLEAN = re.compile(r"^\s*clean\b", re.I)
 
@@ -109,6 +115,10 @@ def survey(roots):
                     found[".claude/settings.json"].append(rel)
                 if fn in (".mcp.json", "mcp.json"):
                     found[".mcp.json"].append(rel)
+                if dirpath == root and fn == "CLAUDE.md":
+                    found["root CLAUDE.md"].append(rel)
+                if dirpath == root and fn == "AGENTS.md":
+                    found["root AGENTS.md"].append(rel)
     return found
 
 
