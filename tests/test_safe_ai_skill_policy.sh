@@ -46,9 +46,10 @@ else
   DENY="$(printf '%s' "$JSON" | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["secrets"]["deny_read_globs"]))')"
   assert_eq "$(printf '%s\n' '**/*-keypair.json' '~/.superstack/config.json')" "$(printf '%s\n' "$DENY" | head -2)" \
     "secrets.deny_read_globs starts with safe-ai-skill's two defaults"
-  for glob in '~/.bash_history' '~/.zsh_history' '~/.ssh/**' '**/*.kdbx' '**/*.ppk' '**/*.p12' '**/*.asc'; do
+  for glob in '~/.bash_history' '~/.zsh_history' '~/.ssh/**' '**/*.kdbx' '**/*.ppk' '**/*.p12'; do
     assert_contains "$DENY" "$glob" "...and denies $glob, which secrets-guard denies and safe-ai-skill's defaults do not"
   done
+  assert_eq "" "$(printf '%s\n' "$DENY" | grep -F '.asc' || true)" "No deny glob names .asc, which AsciiDoc files and detached signatures use too"
   # An allow list here would replace the default one, which lets the agent read every env
   # template (.env.example, .env.sample, .env.template, .env.dist, .env.schema).
   assert_eq "" "$(printf '%s\n' "$DENY" | grep -F '.env' || true)" "No deny glob names an env file: safe-ai-skill's env classes cover those"

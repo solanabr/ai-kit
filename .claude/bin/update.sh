@@ -1388,7 +1388,7 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
     # Git blob ids, CRs stripped, of every earlier version of the policy in the kit's
     # history, PR branches included. A match is still kit-owned, so it takes this
     # version. tests/test_safe_ai_skill_policy.sh fails when a version is missing here.
-    SHIPPED_POLICY_BLOBS="190fceae262b77cd0429aa9132c204149ecc3475 636f1003bb0228e11136f8d78c284d8ce3181eec d6d72c40dc66d94aa9c6e2178c6fea35bedf49e7 2e5f558930f7f30b4f46b061ee34c6e3e91d7afe"
+    SHIPPED_POLICY_BLOBS="190fceae262b77cd0429aa9132c204149ecc3475 636f1003bb0228e11136f8d78c284d8ce3181eec d6d72c40dc66d94aa9c6e2178c6fea35bedf49e7 2e5f558930f7f30b4f46b061ee34c6e3e91d7afe 2dae448693aac81d0caf55fd7bab13d67ada44bf"
     pblob="$(tr -d '\r' < "$TARGET_DIR/$POLICY" | git hash-object --stdin 2>/dev/null)" || pblob=""
     case " $SHIPPED_POLICY_BLOBS " in
       *" ${pblob:-none} "*)

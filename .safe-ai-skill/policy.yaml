@@ -37,4 +37,3 @@ secrets:
     - "**/*.pfx"
     - "**/*.jks"
     - "**/*.keystore"
-    - "**/*.asc"
