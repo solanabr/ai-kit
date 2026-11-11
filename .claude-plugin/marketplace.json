@@ -26,7 +26,7 @@
         "url": "https://github.com/solanabr/safe-ai-skill.git",
         "path": "plugins/safe-ai-skill",
         "ref": "main",
-        "sha": "2997280e2deaf074e9bf34a79797a0b71123b18a"
+        "sha": "8920686ba919faa9804c6d41297bfa8bcdaed527"
       },
       "description": "Security firewall and supply-chain verifier (hooks): gates mainnet, value-moving and authority actions and secret reads, and pins installed skills and MCPs at session start. Core part of the kit: solana-ai-kit depends on it.",
       "category": "Security",

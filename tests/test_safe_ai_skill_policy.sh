@@ -39,21 +39,21 @@ if [ "$status" -eq 2 ]; then
   echo "  SKIP: no YAML parser (ruby or python3 with PyYAML) to parse $POLICY"
 else
   assert_eq "0" "$status" "$POLICY parses as YAML"
-  assert_eq "True" "$(printf '%s' "$JSON" | python3 -c 'import json, sys; d = json.load(sys.stdin); print(sorted(d) == ["secrets", "supply_chain"] and d["supply_chain"] == {"verify_skills_dirs": [".claude/skills"]} and sorted(d["secrets"]) == ["allow_read_globs"])')" \
-    "It sets only supply_chain.verify_skills_dirs, to [.claude/skills], and secrets.allow_read_globs"
-  # An allow glob matches a path anywhere on the machine, not just in this project:
-  # allowing **/.env here made the pinned engine defer on ~/.env and on other projects'
-  # .env too, which nothing else gates below High. So only the two files that never
-  # carry a value are listed.
-  assert_eq '["**/.env.example", "**/.env.schema"]' "$(printf '%s' "$JSON" | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["secrets"]["allow_read_globs"]))')" \
-    "secrets.allow_read_globs lists only .env.example and .env.schema, never a file that holds values"
-  # The default's deny_read_globs has **/.env.*, which matches .env.schema; an allow glob
-  # wins over it. A list replaces the default's instead of merging, so .env.example has to
-  # be restated or the override would make it unreadable.
-  ALLOW="$(printf '%s' "$JSON" | python3 -c 'import json, sys; print(" ".join(json.load(sys.stdin).get("secrets", {}).get("allow_read_globs", [])))')"
-  assert_contains "$ALLOW" "**/.env.schema" "secrets.allow_read_globs lets the agent read .env.schema"
-  assert_contains "$ALLOW" "**/.env.example" "...and keeps **/.env.example, which a replacing list would otherwise drop"
+  assert_eq "True" "$(printf '%s' "$JSON" | python3 -c 'import json, sys; d = json.load(sys.stdin); print(sorted(d) == ["secrets", "supply_chain"] and d["supply_chain"] == {"exec_install_scripts": "deny"} and sorted(d["secrets"]) == ["deny_read_globs"])')" \
+    "It sets only supply_chain.exec_install_scripts, to deny, and secrets.deny_read_globs"
+  # A project list replaces the default's. safe-ai-skill keeps a default the project
+  # leaves out, and says so at every session start, so the two defaults come first.
+  DENY="$(printf '%s' "$JSON" | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["secrets"]["deny_read_globs"]))')"
+  assert_eq "$(printf '%s\n' '**/*-keypair.json' '~/.superstack/config.json')" "$(printf '%s\n' "$DENY" | head -2)" \
+    "secrets.deny_read_globs starts with safe-ai-skill's two defaults"
+  for glob in '~/.bash_history' '~/.zsh_history' '~/.ssh/**' '**/*.kdbx' '**/*.ppk' '**/*.p12' '**/*.asc'; do
+    assert_contains "$DENY" "$glob" "...and denies $glob, which secrets-guard denies and safe-ai-skill's defaults do not"
+  done
+  # An allow list here would replace the default one, which lets the agent read every env
+  # template (.env.example, .env.sample, .env.template, .env.dist, .env.schema).
+  assert_eq "" "$(printf '%s\n' "$DENY" | grep -F '.env' || true)" "No deny glob names an env file: safe-ai-skill's env classes cover those"
 fi
+assert_file_not_contains "$REPO_ROOT/$POLICY" "allow_read_globs:" "It sets no secrets.allow_read_globs, so the default list of env templates applies"
 assert_file_not_contains "$REPO_ROOT/$POLICY" "verify_ext_submodules:" "verify_ext_submodules stays at its default (false would scan ext/ as one skill)"
 
 echo "[install.sh]"
@@ -96,10 +96,15 @@ printf 'supply_chain:\n  verify_skills_dirs: []\n' > "$P4/$POLICY"
 OUT="$(update_kit "$P4")"
 assert_file_contains "$P4/$POLICY" "verify_skills_dirs: []" "update.sh keeps an edited policy"
 assert_contains "$OUT" "[notice] $POLICY was edited, so it was kept" "...and says so"
-assert_contains "$OUT" 'add "**/.env.schema" to secrets.allow_read_globs' "...naming the line that lets safe-ai-skill read .env.schema"
-printf 'supply_chain:\n  verify_skills_dirs: []\nsecrets:\n  allow_read_globs: ["**/.env.schema"]\n' > "$P4/$POLICY"
+assert_contains "$OUT" "lacks the kit's supply_chain.exec_install_scripts: deny or its secrets.deny_read_globs" "...naming the kit settings it lacks"
+assert_eq "" "$(printf '%s\n' "$OUT" | grep -F '.env.schema' || true)" "...and no .env.schema notice: without an allow list, the default one applies"
+printf 'supply_chain:\n  exec_install_scripts: deny\nsecrets:\n  allow_read_globs: ["**/.env.example"]\n  deny_read_globs: ["~/.ssh/**"]\n' > "$P4/$POLICY"
 OUT="$(update_kit "$P4")"
-assert_eq "" "$(printf '%s\n' "$OUT" | grep -F "$POLICY" || true)" "An edited policy that already allows .env.schema gets no notice"
+assert_contains "$OUT" 'add "**/.env.schema" to it' "An edited allow list without .env.schema gets the .env.schema notice"
+assert_eq "" "$(printf '%s\n' "$OUT" | grep -F "was edited, so it was kept" || true)" "...and no missing-settings notice: it keeps both"
+printf 'supply_chain:\n  exec_install_scripts: deny\nsecrets:\n  deny_read_globs: ["~/.ssh/**"]\n' > "$P4/$POLICY"
+OUT="$(update_kit "$P4")"
+assert_eq "" "$(printf '%s\n' "$OUT" | grep -F "$POLICY" || true)" "An edited policy that keeps the kit's settings and has no allow list gets no notice"
 # An unedited copy of a version the kit shipped earlier is still kit-owned, so /update
 # refreshes it: how a later policy change reaches existing installs. Needs the old blob.
 if OLD_POLICY="$(git -C "$REPO_ROOT" cat-file -p 636f1003bb0228e11136f8d78c284d8ce3181eec 2>/dev/null)"; then

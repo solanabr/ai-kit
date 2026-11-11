@@ -1,19 +1,40 @@
-# safe-ai-skill project policy, deep-merged over the plugin's default policy.
+# safe-ai-skill project policy, merged over the plugin's default policy.
 # install.sh writes it, and /update adds it when missing and refreshes it only while
 # it is still a copy the kit shipped. Once you edit it, it is yours: edit freely.
 #
-# A list replaces the default instead of merging, so the session-start skill check
-# covers this project's .claude/skills and no longer sweeps your personal
-# ~/.claude/skills. verify_ext_submodules stays at its default (true) on purpose:
-# each ext/ pack is then checked on its own, so a finding quarantines one pack
-# rather than all of ext/.
-supply_chain:
-  verify_skills_dirs: [".claude/skills"]
+# A project policy can only tighten: safe-ai-skill keeps any default a list here leaves
+# out, so the list below repeats the two defaults it extends. Its defaults already check
+# this project's .claude/skills (each ext/ pack on its own) and let the agent read the
+# env templates (.env.example, .env.sample, .env.template, .env.dist, .env.schema).
 
-# The default denies reads of **/.env and **/.env.*, which covers varlock's
-# .env.schema: key names and which are secret, never values. An allow glob wins over a
-# deny, and this list replaces the default's, so .env.example is listed again. Keep .env
-# and its variants out of it: an allow glob matches that name anywhere on the machine,
-# so it would open other projects' .env files and your home directory's as well.
+# Download-and-run (`curl … | sh`, `bash <(curl …)`) from a host outside safe-ai-skill's
+# installer list is denied instead of asked. The Anza installer still runs.
+supply_chain:
+  exec_install_scripts: deny
+
+# Reads denied on top of safe-ai-skill's secret classes: shell history, ~/.ssh, the macOS
+# keychain files, and key containers it does not recognise by content.
 secrets:
-  allow_read_globs: ["**/.env.example", "**/.env.schema"]
+  deny_read_globs:
+    - "**/*-keypair.json"
+    - "~/.superstack/config.json"
+    - "~/.zsh_history"
+    - "~/.zhistory"
+    - "~/.bash_history"
+    - "~/.python_history"
+    - "~/.node_repl_history"
+    - "~/.psql_history"
+    - "~/.sqlite_history"
+    - "~/.mysql_history"
+    - "~/.rediscli_history"
+    - "~/.lesshst"
+    - "~/.local/share/fish/fish_history"
+    - "~/.ssh/**"
+    - "~/Library/Keychains/**"
+    - "**/*.kdbx"
+    - "**/*.ppk"
+    - "**/*.p12"
+    - "**/*.pfx"
+    - "**/*.jks"
+    - "**/*.keystore"
+    - "**/*.asc"

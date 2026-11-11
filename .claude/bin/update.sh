@@ -1303,8 +1303,11 @@ GITIGNORE="$TARGET_DIR/.gitignore"
 # reports/ holds the pages bin/report-page.sh writes, which can hold private decisions.
 # context/ holds the commands' hand-offs (/crew's stage file, /rundown --handoff with the
 # record's export appended); install.sh has ignored it since 2.0.0, so a 1.x install lacks it.
+# .ext-pack-sums holds the pack checksums this machine's last update left (see below).
 if [ "$DRY_RUN" = false ] && [ -f "$GITIGNORE" ]; then
-  for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/" "$CONFIG_NAME/reports/" "$CONFIG_NAME/context/"; do
+  PACK_SUMS_IGNORE=""
+  [ "$CONFIG_NAME" != ".claude" ] || PACK_SUMS_IGNORE="$CONFIG_NAME/.ext-pack-sums"
+  for ignore in ".memsearch/" "$CONFIG_NAME/worktrees/" "$CONFIG_NAME/reports/" "$CONFIG_NAME/context/" $PACK_SUMS_IGNORE; do
     # Git for Windows checks a tracked .gitignore out with CRLF: match without the CR,
     # or the line is appended a second time. Two patterns rather than `tr | grep -q`:
     # under pipefail an early match kills `tr` with SIGPIPE, and a large file then
@@ -1339,6 +1342,29 @@ if [ -f "$GITIGNORE" ] && awk -v f="$INSTR_FILE" '
   fi
 fi
 
+# Which ext/ packs this update changed: a checksum of each pack's files (name and
+# content), against the list the previous update left in .ext-pack-sums. "?" when there
+# is no earlier list. The safe-ai-skill block below names them. cksum, not git: a pack
+# may hold a submodule's .git file whose repository is gone. Best effort: a failure here
+# never stops the update, it only leaves the packs unnamed.
+CHANGED_PACKS=""
+EXT_PACKS="$TARGET_DIR/$CONFIG_NAME/skills/ext"
+PACK_SUMS="$TARGET_DIR/$CONFIG_NAME/.ext-pack-sums"
+if [ "$DRY_RUN" = false ] && [ "$CONFIG_NAME" = ".claude" ] && [ -d "$EXT_PACKS" ] && [ ! -L "$PACK_SUMS" ]; then
+  NEW_SUMS="$(for d in "$EXT_PACKS"/*/; do
+    [ -d "$d" ] || continue
+    sum="$(cd "$d" && find . -type f ! -name .git ! -path './.git/*' | LC_ALL=C sort | tr '\n' '\0' \
+      | xargs -0 cksum | cksum)" || continue
+    printf '%s %s\n' "$(basename "$d")" "$(printf '%s' "$sum" | tr ' ' '-')"
+  done)" || NEW_SUMS=""
+  if [ -f "$PACK_SUMS" ]; then
+    CHANGED_PACKS="$(printf '%s\n' "$NEW_SUMS" | grep -vxF -f "$PACK_SUMS" | awk 'NF { printf "%s ", $1 }' || true)"
+  else
+    CHANGED_PACKS="?"
+  fi
+  printf '%s\n' "$NEW_SUMS" > "$PACK_SUMS" 2>/dev/null || true
+fi
+
 # safe-ai-skill project policy (Claude Code installs only; its hooks don't run under
 # --agents): add it when missing, refresh it while it is still a copy the kit shipped,
 # and gitignore it with the kit config while that block is present. An edited policy is
@@ -1362,7 +1388,7 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
     # Git blob ids, CRs stripped, of every earlier version of the policy in the kit's
     # history, PR branches included. A match is still kit-owned, so it takes this
     # version. tests/test_safe_ai_skill_policy.sh fails when a version is missing here.
-    SHIPPED_POLICY_BLOBS="190fceae262b77cd0429aa9132c204149ecc3475 636f1003bb0228e11136f8d78c284d8ce3181eec d6d72c40dc66d94aa9c6e2178c6fea35bedf49e7"
+    SHIPPED_POLICY_BLOBS="190fceae262b77cd0429aa9132c204149ecc3475 636f1003bb0228e11136f8d78c284d8ce3181eec d6d72c40dc66d94aa9c6e2178c6fea35bedf49e7 2e5f558930f7f30b4f46b061ee34c6e3e91d7afe"
     pblob="$(tr -d '\r' < "$TARGET_DIR/$POLICY" | git hash-object --stdin 2>/dev/null)" || pblob=""
     case " $SHIPPED_POLICY_BLOBS " in
       *" ${pblob:-none} "*)
@@ -1373,14 +1399,23 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
           CHANGES="$CHANGES  [updated] $POLICY (unedited copy, refreshed to this version)\n"
         fi ;;
       *)
-        grep -qF '**/.env.schema' "$TARGET_DIR/$POLICY" \
-          || CHANGES="$CHANGES  [notice] $POLICY was edited, so it was kept. It does not let safe-ai-skill read varlock's .env.schema, which holds key names and never values: add \"**/.env.schema\" to secrets.allow_read_globs\n" ;;
+        # An edited policy keeps none of what the kit's copy adds; say which settings it
+        # lacks. An allow list there replaces safe-ai-skill's default one, which names the
+        # env templates, varlock's .env.schema among them.
+        grep -qE '^[[:space:]]*exec_install_scripts:[[:space:]]*deny' "$TARGET_DIR/$POLICY" \
+          && grep -qE '^[[:space:]]*deny_read_globs:' "$TARGET_DIR/$POLICY" \
+          || CHANGES="$CHANGES  [notice] $POLICY was edited, so it was kept. It lacks the kit's supply_chain.exec_install_scripts: deny or its secrets.deny_read_globs (shell history, ~/.ssh, key containers): copy them from https://github.com/solanabr/ai-kit/blob/main/$POLICY\n"
+        if grep -qE '^[[:space:]]*allow_read_globs:' "$TARGET_DIR/$POLICY" && ! grep -qF '**/.env.schema' "$TARGET_DIR/$POLICY"; then
+          CHANGES="$CHANGES  [notice] $POLICY sets secrets.allow_read_globs without varlock's .env.schema, which holds key names and never values: add \"**/.env.schema\" to it, or delete the list to use safe-ai-skill's default\n"
+        fi ;;
     esac
   fi
   # Enabled is not installed: Claude Code fetches a plugin from an external source only
   # when each user runs the install, so say so on every update until it is. Its install
   # list is an internal file, read best-effort; unreadable (High's read fence) is silent.
-  SAS_NOTE="$(python3 - "$TARGET_DIR" "$CONFIG_NAME" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" 2>/dev/null <<'PY' || true
+  # Prints "missing", or "installed" then the install's scope and its shim (empty when
+  # its path is unknown), or nothing when the plugin is not enabled.
+  SAS_STATE="$(python3 - "$TARGET_DIR" "$CONFIG_NAME" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" 2>/dev/null <<'PY' || true
 import json, os, sys
 target, config, cfg = sys.argv[1:4]
 sas = "safe-ai-skill@stbr"
@@ -1403,11 +1438,50 @@ except FileNotFoundError:
 except (OSError, ValueError, AttributeError):
     sys.exit(0)
 here = os.path.realpath(target)
-if not any(r.get("scope") == "user" or os.path.realpath(r.get("projectPath") or "/nonexistent") == here for r in recs):
-    print("  [notice] safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin install %s --scope project" % sas)
+mine = [r for r in recs if r.get("scope") == "user" or os.path.realpath(r.get("projectPath") or "/nonexistent") == here]
+if not mine:
+    print("missing")
+    sys.exit(0)
+rec = sorted(mine, key=lambda r: r.get("scope") == "user")[0]
+shim = os.path.join(rec.get("installPath") or "/nonexistent", "bin", "safe-ai-skill")
+print("installed\n%s\n%s" % (rec.get("scope") or "project", shim if os.path.isfile(shim) else ""))
 PY
 )"
-  [ -z "$SAS_NOTE" ] || CHANGES="$CHANGES$SAS_NOTE\n"
+  case "$SAS_STATE" in
+    missing)
+      CHANGES="$CHANGES  [notice] safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin install safe-ai-skill@stbr --scope project\n" ;;
+    installed*)
+      SAS_SCOPE="$(printf '%s\n' "$SAS_STATE" | sed -n 2p)"
+      SAS_SHIM="$(printf '%s\n' "$SAS_STATE" | sed -n 3p)"
+      # Move the plugin to the commit this kit's stbr marketplace pins. Inside a sandboxed
+      # session Claude Code's plugin dir is not writable, so on any failure print the
+      # commands to run in a shell instead. A local source is a test or an offline run:
+      # it calls claude only when SOLANA_AI_KIT_SAFE_AI_SKILL=1 asks, as in install.sh.
+      SAS_UPDATE="claude plugin marketplace update stbr && claude plugin update safe-ai-skill@stbr --scope $SAS_SCOPE"
+      if [ "$DRY_RUN" = true ]; then
+        CHANGES="$CHANGES  [would run] $SAS_UPDATE\n"
+      elif { [ -z "$LOCAL_SRC" ] || [ "${SOLANA_AI_KIT_SAFE_AI_SKILL:-}" = 1 ]; } \
+          && command -v claude >/dev/null 2>&1 && (cd "$TARGET_DIR" && claude plugin marketplace update stbr \
+          && claude plugin update safe-ai-skill@stbr --scope "$SAS_SCOPE") < /dev/null > "$TEMP_DIR/sas-update.log" 2>&1; then
+        grep -q "already at the latest version" "$TEMP_DIR/sas-update.log" \
+          || CHANGES="$CHANGES  [updated] safe-ai-skill plugin, to the version this kit pins (it loads in your next session)\n"
+      else
+        CHANGES="$CHANGES  [notice] safe-ai-skill was not updated to the version this kit pins. In your shell, in this directory: $SAS_UPDATE\n"
+      fi
+      # safe-ai-skill blocks a skill pack whose files changed since it pinned them, until
+      # you approve it from a terminal: the agent may not. Name the packs this update
+      # changed, against the checksums the previous update recorded.
+      SAS_CLI="safe-ai-skill"
+      [ -z "$SAS_SHIM" ] || SAS_CLI="\"$SAS_SHIM\""
+      if [ "$CHANGED_PACKS" = "?" ]; then
+        CHANGES="$CHANGES  [notice] safe-ai-skill blocks a skill pack whose files changed until you approve it. If your next session start lists blocked packs, run this in your own terminal, in this directory, for each one: $SAS_CLI verify approve $CONFIG_NAME/skills/ext/<pack>\n"
+      elif [ -n "$CHANGED_PACKS" ]; then
+        CHANGES="$CHANGES  [notice] This update changed these skill packs, and safe-ai-skill blocks each until you approve it. Run in your own terminal, in this directory:\n"
+        for pack in $CHANGED_PACKS; do
+          CHANGES="$CHANGES      $SAS_CLI verify approve $CONFIG_NAME/skills/ext/$pack\n"
+        done
+      fi ;;
+  esac
   if [ -f "$GITIGNORE" ] && grep -qF ">>> solana-ai-kit config" "$GITIGNORE" \
     && ! sed -n '/>>> solana-ai-kit config/,/<<< solana-ai-kit config/p' "$GITIGNORE" | tr -d '\r' | grep -qxF ".safe-ai-skill/"; then
     if [ "$DRY_RUN" = true ]; then

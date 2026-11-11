@@ -245,7 +245,7 @@ PY
 Read these in order; stop at the first that matches.
 - `n/a` no `.claude/` directory: an `--agents` install. Its hooks are Claude Code only; vet add-ons with `npx @stbr/safe-ai-skill add skill|mcp <source>`.
 - WARN `enabled: False`: turned off in `settings.local.json`. That is a choice: report it and offer no fix.
-- WARN `platform` is neither `Darwin` nor `Linux`: it has no engine build here and fails closed, blocking every tool call (solanabr/safe-ai-skill#6). Keep it off: `"safe-ai-skill@stbr": false` under `enabledPlugins` in `.claude/settings.local.json`.
+- WARN `platform` is not `Darwin`, `Linux` or `Windows` (Git Bash): safe-ai-skill has no engine build here, so its gates fail open with a notice and only Solana CLI calls still ask. Report it; there is no fix.
 - WARN `installed: unknown`: Claude Code's install list is unreadable here (High's read fence covers `~/`). Ask the user to run `claude plugin list` in their own shell.
 - FAIL `installed: no` and `enabled: True`: enabled but not installed, so none of its gates run. In the user's shell, in this directory: `claude plugin install safe-ai-skill@stbr --scope project`. If that cannot find the plugin, add the kit's marketplace first: `claude plugin marketplace add https://github.com/solanabr/ai-kit.git`.
 - WARN `installed: no` and `enabled: None` and `full_install: True`: an install from before safe-ai-skill was core. The same install command enables it too.
