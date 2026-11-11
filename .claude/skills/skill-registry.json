@@ -17,14 +17,14 @@
       "type": "plugin",
       "tier": "core-plugin",
       "domain": "security",
-      "commit": "2997280e2deaf074e9bf34a79797a0b71123b18a",
+      "commit": "8920686ba919faa9804c6d41297bfa8bcdaed527",
       "description": "The kit's security plugin: Claude Code hooks that gate mainnet, authority and value-moving actions in Bash and in MCP tools, hold transfers to spend caps, block secret reads, and pin installed skills and MCPs at session start. Installed with the kit, as the kit plugin's dependency or by install.sh; skills.sh does not manage it.",
       "triggers": ["always on", "mainnet gate", "spend caps", "secret reads", "skill and MCP vetting"],
       "source": "https://github.com/solanabr/safe-ai-skill",
       "install": { "method": "plugin-cli", "command": "claude plugin install safe-ai-skill@stbr --scope project", "env": [] },
       "maintainer": "solanabr",
       "default_installed": true,
-      "safety": "runs on every Bash, Read, Grep, Glob and MCP call, every prompt and every session start, through a prebuilt engine binary its shim picks by platform (macOS, glibc Linux; x64, arm64). Where no build matches, such as native Windows, it fails closed and blocks every gated call (solanabr/safe-ai-skill#6), so install.sh skips it there. Its session-start sweep can quarantine a skill pack on a plain-text heuristic match (solanabr/safe-ai-skill#5). Known gaps at this pin: its mainnet gate defers on shell keywords, wrappers and VAR= prefixes (#21), its secret-read gate covers cat and head but not other readers (#22), and its output redaction never fires in Claude Code (#24).",
+      "safety": "runs on every Bash, Read, Grep, Glob, Write and Edit, WebFetch, Skill and MCP call, every prompt and every session start, through a prebuilt engine binary its shim picks by platform (macOS and Linux on x64 and arm64, 64-bit Windows under Git Bash). Where no build matches it fails open with a notice, and Solana CLI calls still ask. Its Bash, Skill and permission-request hooks block when the engine fails, so a crashing engine blocks those calls. Its session-start sweep denies a skill pack in place, never moving it, when the pack's files changed since it pinned them or a check finds a BLOCK, until the user runs `safe-ai-skill verify approve <pack>` in a terminal. Its known holes are listed in its SECURITY.md.",
       "tags": ["security", "hooks", "mainnet", "spend-caps", "supply-chain", "core"]
     },
     {

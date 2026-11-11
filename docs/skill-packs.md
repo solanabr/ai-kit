@@ -6,7 +6,7 @@ The kit's Solana knowledge is not written here: it is pinned from the ecosystem'
 
 [safe-ai-skill](https://github.com/solanabr/safe-ai-skill) is core to the kit. It is not a skill pack but a Claude Code plugin, pinned by commit in the kit's own `stbr` marketplace and installed with the kit: as the kit plugin's dependency, or by `install.sh` in a full install. It is listed here because it governs what the packs below can do.
 - **Gates:** mainnet, authority and value-moving actions, including the transfers and swaps some packs and MCP servers describe, held to spend caps.
-- **Session-start checks:** it pins the installed packs and quarantines one whose content trips its heuristics.
+- **Session-start checks:** it pins the installed packs and denies one in place, without moving it, when its files changed or a check finds a BLOCK, until you approve it in a terminal (`safe-ai-skill verify approve <pack>`). At High a HIGH heuristic finding denies it too.
 - **Add-ons:** an opt-in one is installed only after `safe-ai-skill add skill|mcp <source>` returns `proceed: true` (see `/skill-packs`).
 
 How it is installed, its project policy and its limits are in the [README](../README.md#security-firewall-safe-ai-skill). `skill-registry.json` lists it under its own tier, `core-plugin`. `skills.sh list` shows it with the state `plugin` and otherwise leaves it alone, and `tests/test_skill_extensions.sh` holds its recorded commit to the marketplace's pin.

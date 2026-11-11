@@ -503,53 +503,70 @@ if [ -f "$TEMP_DIR/repo/.mcp.json" ] && [ ! -f "$TARGET_DIR/.mcp.json" ]; then
   cp "$TEMP_DIR/repo/.mcp.json" "$TARGET_DIR/.mcp.json"
 fi
 
-# safe-ai-skill project policy: stops its session-start check sweeping ~/.claude/skills.
-# Written once, never overwritten. Claude Code only: its hooks don't run under --agents.
+# safe-ai-skill project policy: the kit's extra denies (download-and-run from unlisted
+# hosts; reads of shell history, ~/.ssh and key containers). Written once, never
+# overwritten. Claude Code only: its hooks don't run under --agents.
 POLICY=".safe-ai-skill/policy.yaml"
 if [ "$AGENTS_ONLY" = false ] && [ -f "$TEMP_DIR/repo/$POLICY" ] && [ ! -f "$TARGET_DIR/$POLICY" ]; then
   mkdir -p "$TARGET_DIR/.safe-ai-skill"
   cp "$TEMP_DIR/repo/$POLICY" "$TARGET_DIR/$POLICY"
-  ok "Created $POLICY (safe-ai-skill checks .claude/skills, not ~/.claude/skills)"
+  ok "Created $POLICY (the kit's extra safe-ai-skill denies)"
 fi
 
 # The safe-ai-skill plugin itself. settings.json enables it, but Claude Code installs a
 # plugin from an external source only when each user runs the install, so a full install
-# runs it here. Skipped where its engine has no build: it fails closed there and would
-# block every tool call (solanabr/safe-ai-skill#6). The platforms below mirror its
-# launcher's, which ships binaries for exactly these four; musl Linux cannot run them.
+# runs it here. Skipped where its engine has no build: its gates would not run there. The
+# platforms below mirror its launcher's: macOS and Linux (static builds, any libc) on x64
+# and arm64, and Git Bash, MSYS2 or Cygwin on 64-bit Windows.
 SAS_ID="safe-ai-skill@stbr"
 SAS_CMD="claude plugin install $SAS_ID --scope project"
 SAS_STATE=""
 # Whether Claude Code already records it as installed for this project. That list is an
 # internal file (format 2 in Claude Code 2.1), read best-effort: any surprise reads as
-# "not installed", and the CLI install below settles it.
+# "not installed", and the CLI install below settles it. `sas_installed <dir> scope`
+# also prints that install's scope, the project's own first.
 sas_installed() {
-  python3 - "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json" "$1" "$SAS_ID" 2>/dev/null <<'PY'
+  python3 - "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json" "$1" "$SAS_ID" "${2:-}" 2>/dev/null <<'PY'
 import json, os, sys
 try:
     target = os.path.realpath(sys.argv[2])
-    for e in json.load(open(sys.argv[1])).get("plugins", {}).get(sys.argv[3], []):
-        if e.get("scope") == "user" or os.path.realpath(e.get("projectPath") or "/nonexistent") == target:
-            sys.exit(0)
+    mine = [e for e in json.load(open(sys.argv[1])).get("plugins", {}).get(sys.argv[3], [])
+            if e.get("scope") == "user" or os.path.realpath(e.get("projectPath") or "/nonexistent") == target]
+    if mine:
+        if sys.argv[4] == "scope":
+            print(sorted(mine, key=lambda e: e.get("scope") == "user")[0].get("scope") or "project")
+        sys.exit(0)
 except Exception:
     pass
 sys.exit(1)
 PY
 }
 if [ "$AGENTS_ONLY" = false ]; then
-  SAS_PLATFORM="$(uname -s 2>/dev/null || echo unknown)/$(uname -m 2>/dev/null || echo unknown)"
-  case "$SAS_PLATFORM" in
-    Darwin/arm64|Darwin/aarch64|Darwin/x86_64|Darwin/amd64) SAS_PLATFORM=ok ;;
-    Linux/x86_64|Linux/amd64|Linux/aarch64|Linux/arm64)
-      case "$(ldd --version 2>&1 || true)" in *musl*) SAS_PLATFORM="musl Linux" ;; *) SAS_PLATFORM=ok ;; esac ;;
+  SAS_OS="$(uname -s 2>/dev/null || echo unknown)"
+  SAS_PLATFORM="$SAS_OS/$(uname -m 2>/dev/null || echo unknown)"
+  case "$SAS_OS" in
+    Darwin|Linux|MINGW*|MSYS*|CYGWIN*)
+      case "${SAS_PLATFORM#*/}" in x86_64|amd64|aarch64|arm64) SAS_PLATFORM=ok ;; esac ;;
   esac
   if [ "$SAS_MODE" = 0 ]; then
     SAS_STATE=skipped
   elif [ "$SAS_PLATFORM" != ok ]; then
     SAS_STATE=unsupported
-    warn "safe-ai-skill has no engine build for $SAS_PLATFORM and would block every tool call there, so it was not installed (solanabr/safe-ai-skill#6)"
+    warn "safe-ai-skill has no engine build for $SAS_PLATFORM, so its gates would not run there: it was not installed"
   elif sas_installed "$TARGET_DIR"; then
     SAS_STATE=installed
+    # Move it to the commit this kit's stbr marketplace pins. Best effort, like the install
+    # below: a local source or upstream is a test or an offline run.
+    if command -v claude >/dev/null 2>&1 \
+      && { [ "$SAS_MODE" = 1 ] || { [ -z "$LOCAL_SRC" ] && case "$REPO_URL" in file://*|/*|./*|../*) false ;; *) true ;; esac; }; }; then
+      SAS_SCOPE="$(sas_installed "$TARGET_DIR" scope)"
+      if (cd "$TARGET_DIR" && claude plugin marketplace update stbr && claude plugin update "$SAS_ID" --scope "${SAS_SCOPE:-project}") \
+          < /dev/null > "$TEMP_DIR/sas.log" 2>&1; then
+        ok "safe-ai-skill is at the version this kit pins"
+      else
+        warn "Could not update safe-ai-skill to the version this kit pins. In your shell, in this directory: claude plugin marketplace update stbr && claude plugin update $SAS_ID --scope ${SAS_SCOPE:-project}"
+      fi
+    fi
   elif { [ -n "$LOCAL_SRC" ] || case "$REPO_URL" in file://*|/*|./*|../*) true ;; *) false ;; esac; } \
     && [ "$SAS_MODE" != 1 ]; then
     # A local source or a local upstream is a test or an offline run.
@@ -729,6 +746,8 @@ append_ignore ".env.local"
 # otherwise stage as embedded gitlinks, which then breaks every `git submodule` call.
 append_ignore ".memsearch/"
 append_ignore "$CONFIG_DIR/worktrees/"
+# The pack checksums /update keeps, to name the packs it changed: this machine's state.
+[ "$AGENTS_ONLY" = true ] || append_ignore "$CONFIG_DIR/.ext-pack-sums"
 
 # Merge .env.example (append-only — preserves user edits on reinstall)
 # shellcheck source=.claude/bin/_env_merge.sh

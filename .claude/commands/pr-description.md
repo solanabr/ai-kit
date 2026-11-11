@@ -13,7 +13,7 @@ Write the pull request for the current branch. `$ARGUMENTS` may name an issue an
    - **Summary:** old behaviour and new behaviour, one line each.
    - **Problem:** what broke or was missing, plus one line on how it was found (failing test, user report, audit, `/debug-user-tx`).
    - **Repro without funds:** the smallest repro on a Surfpool fork, LiteSVM, Mollusk, devnet or a local mock, with its output on the base branch and on this branch. Never one that needs mainnet SOL.
-   - **Test plan:** the exact commands and the counts they printed. Show a new test failing on the base, or with the fix reverted (`git stash`, or `git checkout <base> -- <file>` and restore). Name what was not run and why (needs mainnet, a key, a submodule).
+   - **Test plan:** the exact commands and the counts they printed. Show a new test failing on the base, or with the fix reverted (`git stash`, then `git stash pop`; or run it against `git show <base>:<file>`). safe-ai-skill denies `git checkout <base> -- <file>`, which discards work. Name what was not run and why (needs mainnet, a key, a submodule).
    - **Risk:** what does not change, then what to check before merging: upgrade authority, mainnet deploy, account layout or migration, IDL and client regeneration, CU (`/profile-cu`).
    - `Closes #<n>` only when an issue exists.
 5. **Review findings** on an open PR: answer each with the commit that fixes it and how the fix was proven (command and result), or why it was not changed. "Done" alone is not an answer.
