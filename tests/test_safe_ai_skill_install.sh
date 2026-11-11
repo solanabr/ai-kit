@@ -173,6 +173,15 @@ if [ -n "$PACK" ]; then
 else
   echo "  SKIP: no ext/ pack in this install to change"
 fi
+# update.sh prints its changes with the list as printf's format, and a Windows install
+# path holds \b: an install path with \ and % in it must still print as itself.
+ODD="$TEMP_DIR/sas-100%d-\\bin"
+mkdir -p "$ODD/bin" && : > "$ODD/bin/safe-ai-skill"
+printf '{"version": 2, "plugins": {"safe-ai-skill@stbr": [{"scope": "project", "projectPath": "%s", "installPath": "%s"}]}}\n' \
+  "$UP" "$(printf '%s' "$ODD" | sed 's/\\/\\\\/g')" > "$CC/plugins/installed_plugins.json"
+rm -f "$UP/.claude/.ext-pack-sums"
+run_update --
+assert_contains "$OUT" "\"$ODD/bin/safe-ai-skill\" verify approve .claude/skills/ext/<pack>" "An install path with a backslash and % in it prints as itself"
 
 echo "[--agents]"
 run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 -- --agents

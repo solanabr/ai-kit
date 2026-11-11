@@ -1470,9 +1470,11 @@ PY
       fi
       # safe-ai-skill blocks a skill pack whose files changed since it pinned them, until
       # you approve it from a terminal: the agent may not. Name the packs this update
-      # changed, against the checksums the previous update recorded.
+      # changed, against the checksums the previous update recorded. CHANGES is printed as
+      # printf's format, so the shim's path has each \ and % doubled: a Windows install
+      # path holds \b.
       SAS_CLI="safe-ai-skill"
-      [ -z "$SAS_SHIM" ] || SAS_CLI="\"$SAS_SHIM\""
+      [ -z "$SAS_SHIM" ] || SAS_CLI="\"$(printf '%s' "$SAS_SHIM" | sed -e 's/\\/\\\\/g' -e 's/%/%%/g')\""
       if [ "$CHANGED_PACKS" = "?" ]; then
         CHANGES="$CHANGES  [notice] safe-ai-skill blocks a skill pack whose files changed until you approve it. If your next session start lists blocked packs, run this in your own terminal, in this directory, for each one: $SAS_CLI verify approve $CONFIG_NAME/skills/ext/<pack>\n"
       elif [ -n "$CHANGED_PACKS" ]; then
