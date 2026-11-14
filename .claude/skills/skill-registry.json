@@ -53,7 +53,7 @@
       "tier": "core",
       "domain": "security",
       "path": ".claude/skills/ext/auditor-skill",
-      "commit": "c6a4a17297f8994dfb1bb9f2e9e0d19acaab421a",
+      "commit": "69cd33f21526f48b8332a4c6d2bdc2c4bdf786ab",
       "vendored": { "vendor/trailofbits": "cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af" },
       "description": "The kit's security pack: 20 checklists over 1,424 verification items and 138 known attack vectors, covering Solana programs (account validation, access control, arithmetic, CPI/PDA, state machines, economics, opsec) and the code around them (TypeScript, Rust services, Python, backend, frontend, supply chain, secrets, deployment, logging, privacy, AI-agent surface). Scope-gated: it loads only the checklists a repo needs. Read by /audit-solana, /audit-infra, /diff-review and the Anchor and Pinocchio agents. It supersedes the trailofbits, ghostsecurity, defending-code and safe-solana-builder packs the kit used to pin; Trail of Bits' tooling is still reachable through its own vendor/trailofbits submodule, which it invokes for execution rather than copying.",
       "triggers": ["security audit", "program audit", "vulnerability review", "audit report", "differential review of a PR"],
