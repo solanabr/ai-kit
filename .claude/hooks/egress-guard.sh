@@ -12,7 +12,7 @@
 #            a request with no body at all (a GET-smuggled payload).
 #
 # Why the git and gh gates live in this file rather than one of their own: the
-# three guards registered in settings.json are the whole hook surface, and
+# guards registered in settings.json were the whole hook surface, and
 # settings.json is effectively write-once (install.sh copies it only when it is
 # absent).  A fourth script would reach fresh installs and nothing else, which
 # is worse than no gate, because it looks like one.  hooks/ is copied wholesale

@@ -86,7 +86,7 @@ echo " Solana AI Kit - Test Suite"
 echo "========================================"
 echo ""
 
-# The glob below picks up every test_*.sh. These nine carry the firewall's security
+# The glob below picks up every test_*.sh. These eight carry the firewall's security
 # properties, so a rename or a deletion has to fail loudly rather than silently
 # shrinking the suite. test_doc_gates is here for a sharper reason than the others: it is
 # the only check that a gate the documentation promises has something enforcing it, so
@@ -94,17 +94,15 @@ echo ""
 # gate whose whole value is in what it does NOT fire on — delete it and a false positive
 # on `git config user.email` reaches users silently. test_gh_api_guard is the same shape
 # for gh api: delete it and a deny on an ordinary issue comment would go unnoticed.
-# test_secrets_guard holds the shell -c block, the only layer for an agent's bash -c at Off
-# and Relaxed and in a plugin install and a second one elsewhere, and its one exact
-# memsearch exception: without it, a hook change that let any other shell -c through would
-# go unnoticed where no rule backs it. It also holds the Read and Grep refusal on gh's host
-# file, the only thing between those tools and gh's token at Off and Relaxed. test_onchain_guard
-# holds the exact local-host match that lets Relaxed skip the localnet prompt: loosen it
-# and a remote host that merely names a local one would go unprompted.
+# test_onchain_guard holds the exact local-host match that lets Relaxed skip the localnet
+# prompt: loosen it and a remote host that merely names a local one would go unprompted.
 # test_report_page holds report-page.sh's input gate: a firewall rule that lets the script
 # run without a prompt, where a tier carries one, rests on it, and loosened, the renderer
-# would copy any file it is pointed at into a page.
-for required in test_firewall test_egress_guard test_fetch_exec_guard test_doc_gates test_git_guard test_gh_api_guard test_secrets_guard test_onchain_guard test_report_page; do
+# would copy any file it is pointed at into a page. test_safe_ai_skill_policy holds the
+# kit's configuration of safe-ai-skill, which carries the credential paths and the
+# download-and-run deny that retired secrets-guard and fetch-exec-guard: drop an entry and
+# that read or install runs.
+for required in test_firewall test_egress_guard test_doc_gates test_git_guard test_gh_api_guard test_onchain_guard test_report_page test_safe_ai_skill_policy; do
   if [ ! -f "$SCRIPT_DIR/$required.sh" ]; then
     echo "MISSING SUITE: tests/$required.sh (the firewall tiers ship with it)"
     exit 1

@@ -346,24 +346,12 @@ assert_eq "7" "$KEYGEN_FORMS" "every --force spelling in the corpus was evaluate
 assert_eq "1" "$(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | wc -l | tr -d ' ')" \
   "the rule surface treats every solana-keygen --force spelling alike (all $(printf '%s' "$KEYGEN_VERDICTS" | sort -u | awk 'NF' | tr -d '\n'), $KEYGEN_FORMS forms)"
 if [ "$ASK_LEN" = "0" ]; then
-  # No ask rules at this tier, so the gate has to be the secrets hook — and until rule
-  # set 5 it was not: this branch printed an unconditional PASS for a gate that did not
-  # exist. Assert the hook actually carries it. The behaviour (every force spelling
-  # denied, every -o spelling silent) is exercised in test_hooks.sh; this only checks
-  # that the mechanism the message names is present, which is what makes that PASS mean
-  # something when read here.
-  # The detector lives wherever the secrets guard keeps its awk: inline in the .sh
-  # before the shared-tokenizer refactor, in secrets-guard.awk after it. Look in both,
-  # so moving the awk cannot read as removing the gate.
-  if grep -qh 'c0 == "solana-keygen"' "$REPO_ROOT/.claude/hooks/secrets-guard.sh" \
-       "$REPO_ROOT/.claude/hooks/secrets-guard.awk" 2>/dev/null; then
-    echo "  PASS: no ask rules at this tier, and the secrets guard carries the solana-keygen --force gate"
-    PASS=$((PASS + 1))
-  else
-    echo "  FAIL: no ask rules at this tier and the secrets guard has no solana-keygen gate — --force is unguarded"
-    FAIL=$((FAIL + 1))
-  fi
-  TOTAL=$((TOTAL + 1))
+  # No ask rules at this tier, so the gate is safe-ai-skill's: it denies overwriting the
+  # default wallet at every tier, which the kit's own secrets hook did until it was
+  # retired. Its behaviour is safe-ai-skill's to test; this checks that the plugin carrying
+  # it is enabled, which is what makes this PASS mean something when read here.
+  assert_eq "true" "$(json_get '["enabledPlugins"]["safe-ai-skill@stbr"]')" \
+    "no ask rules at this tier, and safe-ai-skill, which carries the solana-keygen --force gate, is enabled"
 else
   assert_eq "no" "$(gated "solana-keygen new --no-bip39-passphrase -o target/deploy/x-keypair.json")" \
     "a new keypair at another path without --force stays prompt-free"
@@ -429,11 +417,8 @@ cmds = [h['command'] for e in d['hooks']['PreToolUse'] for h in e['hooks']]
 print('\n'.join(sorted({m.group(1) for c in cmds for m in re.finditer(r'([A-Za-z0-9_./-]*\.claude/hooks/[A-Za-z0-9_-]+\.sh)', c)})))
 " 2>/dev/null)"
 assert_cmd_success "[ -n '$HOOK_SCRIPTS' ]" "PreToolUse hooks reference scripts under .claude/hooks/"
-SECRETS_SH="$REPO_ROOT/.claude/hooks/secrets-guard.sh"
 ONCHAIN_SH="$REPO_ROOT/.claude/hooks/onchain-guard.sh"
-assert_cmd_success "[ -r '$SECRETS_SH' ]" "secrets guard script exists"
 assert_cmd_success "[ -r '$ONCHAIN_SH' ]" "on-chain guard script exists"
-assert_file_contains "$SECRETS_SH" "exit 2" "secrets guard blocks with exit 2"
 # Both payload shapes: Grok Build sends camelCase toolInput and is fail-open on malformed
 # output, so a guard that reads only tool_input silently permits everything there.
 LIB_SH="$REPO_ROOT/.claude/hooks/lib-headless.sh"
@@ -443,7 +428,6 @@ LIB_SH="$REPO_ROOT/.claude/hooks/lib-headless.sh"
 assert_file_contains "$LIB_SH" "tool_input" "the shared helper reads the command from stdin JSON"
 assert_file_contains "$LIB_SH" "toolInput" "the shared helper also reads Grok's camelCase payload"
 assert_file_contains "$LIB_SH" "permissionDecision" "the shared helper emits permissionDecision"
-assert_file_contains "$SECRETS_SH" "lib-headless.sh" "secrets guard sources the shared helper"
 assert_file_contains "$ONCHAIN_SH" "lib-headless.sh" "on-chain guard sources the shared helper"
 # The model could add an env prefix itself; approval has to come from the user.
 assert_file_not_contains "$SETTINGS" "CONFIRM_MAINNET" "no CONFIRM_MAINNET env-prefix confirmation"

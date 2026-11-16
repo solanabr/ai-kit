@@ -306,6 +306,37 @@ All notable changes to solana-ai-kit.
 - **`/update` gitignores `.claude/context/` on an existing install.** `install.sh` has ignored it since 2.0.0, but `/update`'s backfill never added it. A 1.x install that updated could therefore commit `/crew`'s stage file, and the handoffs `/rundown --handoff` writes, which append the decision record's export. `tests/test_update_migrations.sh` asserts the line lands once across two updates.
 
 ### Removed
+- **`secrets-guard` and `fetch-exec-guard` are retired: safe-ai-skill gates what they did** (`RULE_SET_VERSION` 14, `HOOK_SET_VERSION` 5). Since the pin moved to 1.3.4, every Bash call went through both kit guards and safe-ai-skill's gates for the same rules, so one command could prompt twice, and a kit `ask` overrode a safe-ai-skill `allow`. safe-ai-skill now carries those rules, configured by `.safe-ai-skill/policy.yaml`:
+  - credential reads, by path and by command, with shell history, `~/.ssh` and key containers added by the kit's policy;
+  - the Read and Grep tools on `gh`'s host file;
+  - a keypair command that would overwrite the default wallet;
+  - a nested Claude Code launched through a package runner or by path;
+  - fetch-and-execute of an undeclared package, asked at Relaxed and Medium and denied at High, with the packages the kit's own commands run passing.
+
+  `onchain-guard` (the devnet deploy prompt) and `egress-guard` (publish, process kills, git exec-config keys) stay until safe-ai-skill carries those too.
+  - **What changes for you.**
+    - An agent's own `bash -c` at Off and Relaxed is no longer refused outright: safe-ai-skill reads the string and gates the commands in it.
+    - `curl … | sh` from a host on safe-ai-skill's installer list, such as rustup's, is no longer refused by the kit; from any other host safe-ai-skill denies it.
+    - The permission rules still deny `sh -c`, `bash -lc` and `zsh -c` at every tier, and `bash -c` at Medium and High.
+  - **Rule set 14.** These rules join at every tier, so the permission layer keeps its own copy of two of the retired hook's rules, which holds with hooks off. `/update` re-applies the declared tier.
+    - `Bash(dash -c *)` and `Bash(ksh -c *)`, beside those shell denies.
+    - `Bash(/usr/bin/security *)`, beside `Bash(security *)`.
+  - **Existing installs.**
+    - `/update` deletes `secrets-guard.sh`, `secrets-guard.awk`, `fetch-exec-guard.sh` and `fetch-exec-guard.awk` while each is a version the kit shipped. That covers CRLF copies and the copy an `--agents` install rewrote.
+    - It keeps an edited copy and names it.
+    - It does this only once safe-ai-skill is enabled and installed for the project. Until then the guards are what gates credential reads and downloads there, so `/update` keeps them running and says why.
+    - It never removes a `settings.json` entry; an entry whose script is gone exits 0.
+    - `HOOK_SET_VERSION` 5 records the change and registers nothing.
+  - **Plugin installs** lose both guards from `hooks/hooks.json` and have no `policy.yaml`, so shell history, `~/.ssh/config` and key containers stay readable there, as safe-ai-skill's defaults leave them.
+  - **`/doctor`** check 10 now reports retired guard scripts still on disk, and whether `settings.json` still runs them, in place of the registration check for the two guards.
+  - **Docs.**
+    - `docs/firewall.md`, `FIREWALL-SPEC.md`, the README, `/firewall`, `security.json`'s tier notes and `firewall.sh`'s comments name safe-ai-skill where they named the two guards.
+    - The gate table folds the three rows only those guards kept into safe-ai-skill's row.
+  - **Tests.**
+    - `tests/test_secrets_guard.sh` and `tests/test_fetch_exec_guard.sh` go with the guards. `tests/test_hooks.sh` keeps the shared-library checks they carried, run through egress-guard.
+    - `tests/test_update.sh` covers the retire step, and holds `update.sh`'s list of retired versions to the kit's history.
+    - `tests/test_firewall.sh` checks the new rules.
+    - `tests/run_all.sh` requires `test_safe_ai_skill_policy.sh` in the guards' place.
 - **`install.sh --agents` no longer writes `.agents/settings.json`** (#160, #213). It was the kit's full Claude Code settings file — 22,289 bytes with `sandbox.enabled: true`, 213 deny and 165 allow rules and the `hooks` block — and no harness reading `.agents/` parses it: Codex takes `AGENTS.md` and `.agents/skills/`, Grok takes hooks from `.claude/settings.json` only, and the rest read instructions. So it read as a policy in force where none was, the one place the reasoning that already kept `security.json` and the firewall out of `--agents` installs had not been applied. `settings.json` joins `AGENTS_SKIP_FILES` in `install.sh` and `update.sh`.
   - **Existing installs.** `/update` and an `--agents` re-install delete the old copy and report it (`[removed] .agents/settings.json (Claude Code only)`). Nothing enforced it, so nothing stops being enforced, but an edited copy goes too. Neither removes anything when `.agents/` is a symlink to `.claude/`, where those files are Claude Code's live settings and firewall; that guard covers the files the list already removed as well.
   - **`/doctor`** reports checks 9 and 10 as `n/a` in an `--agents` install instead of a missing policy block or hooks "removed on purpose", and check 8 names a dual install (regular beside `--agents`) and says only the Claude Code side is governed. The installer's closing box says no `settings.json` is installed. `docs/other-agents.md` covers both, and `tests/test_install_agents_only.sh` now requires the file's absence, its removal from an older install by both routes, and the symlink case.

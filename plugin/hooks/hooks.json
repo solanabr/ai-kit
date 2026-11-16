@@ -26,16 +26,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/secrets-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__context-mode__.*",
-        "hooks": [
-          {
-            "type": "command",
             "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/onchain-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
             "timeout": 10
           }
@@ -47,26 +37,6 @@
           {
             "type": "command",
             "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/egress-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__context-mode__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/fetch-exec-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "H=\"${CLAUDE_PLUGIN_ROOT}/hooks/secrets-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
             "timeout": 10
           }
         ]

@@ -47,7 +47,7 @@ else
   assert_eq "$(printf '%s\n' '**/*-keypair.json' '~/.superstack/config.json')" "$(printf '%s\n' "$DENY" | head -2)" \
     "secrets.deny_read_globs starts with safe-ai-skill's two defaults"
   for glob in '~/.bash_history' '~/.zsh_history' '~/.ssh/**' '**/*.kdbx' '**/*.ppk' '**/*.p12'; do
-    assert_contains "$DENY" "$glob" "...and denies $glob, which secrets-guard denies and safe-ai-skill's defaults do not"
+    assert_contains "$DENY" "$glob" "...and denies $glob, which safe-ai-skill's defaults do not"
   done
   assert_eq "" "$(printf '%s\n' "$DENY" | grep -F '.asc' || true)" "No deny glob names .asc, which AsciiDoc files and detached signatures use too"
   # An allow list here would replace the default one, which lets the agent read every env

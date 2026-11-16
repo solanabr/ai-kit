@@ -206,7 +206,12 @@ SECURITY = os.path.join(TARGET, SECURITY_REL)
 #           else. DENY_GIT_DASH_LOWER_C twins every destructive git rule behind each literal safe value,
 #           and ALLOW_GIT_SAFE_CONFIG each git allow rule behind the two safe values, so
 #           the subcommand after the prefix keeps the verdict it has bare.
-RULE_SET_VERSION = 13
+#   13 -> 14: `Bash(dash -c *)` and `Bash(ksh -c *)` join DENY_WRAPPERS beside `sh -c` and
+#           `zsh -c`, and `Bash(/usr/bin/security *)` joins `Bash(security *)`, at every
+#           tier. The kit's secrets-guard.sh and fetch-exec-guard.sh are retired in favour
+#           of safe-ai-skill's gates; these keep the permission layer's own copy of two of
+#           secrets-guard's rules, which holds with every hook off.
+RULE_SET_VERSION = 14
 # enforced.ruleIdsScope: this record lists the generated block and nothing else. Records
 # without it predate #165, when a first apply recorded the user's own rules as well.
 RULEIDS_SCOPE = "generated"
@@ -520,9 +525,9 @@ DENY_POLICY_ESCAPE = [
     # and a plain `claude -p` in the project (which inherits these same rules and whose
     # asks become refusals) are left to run. Each `*` touches the flag, so it may be empty
     # and the bare `claude --flag` is covered without a twin.
-    # Still open from here, by design, and closed in a hook instead (fetch-exec-guard):
-    # the package-runner launchers (npx, bunx, npm exec/x, bun x, pnpm/yarn dlx or exec
-    # of @anthropic-ai/claude-code or the claude bin), a path-named claude, and a
+    # Still open from here, by design, and closed by safe-ai-skill's gates instead: the
+    # package-runner launchers (npx, bunx, npm exec/x, bun x, pnpm/yarn dlx or exec of
+    # @anthropic-ai/claude-code or the claude bin), a path-named claude, and a
     # `CLAUDE_CONFIG_DIR=...` assignment, which the matcher strips as a leading VAR=.
     "Bash(claude *--dangerously-skip-permissions*)",
     "Bash(claude *--permission-mode*)",
@@ -703,7 +708,7 @@ DENY_ENV_READ = [f"Read({p})" for p in ENV_FILES]
 # `~/.config/gh/hosts.yml` is also in SB_HOST_CREDENTIALS' denyRead, so this rule and the
 # sandbox list fence it from both the model and subprocesses there. At Relaxed the file
 # is readable inside the sandbox, by `gh` and by any process the agent runs. The token
-# stays out of the transcript another way: secrets-guard.sh refuses the Read and Grep
+# stays out of the transcript another way: safe-ai-skill refuses the Read and Grep
 # tools on the file at every tier, `cat ~/.config/gh/hosts.yml` stays denied
 # (DENY_SECRET_READS_VIA_BASH), and the egress gates still refuse to send it. Only this
 # one credential moves; the wallet and every other host/registry token stay denied at
@@ -729,8 +734,8 @@ DENY_CREDENTIALS = [
     # die at Relaxed reading its own host file (it could not start inside the sandbox);
     # a Read() deny only at Medium and High keeps `gh` working at Relaxed while the two
     # stricter tiers still fence it. The gh token stays out of the transcript regardless:
-    # secrets-guard.sh refuses the Read and Grep tools on the file, DENY_SECRET_READS_VIA_BASH
-    # still refuses `cat ~/.config/gh/hosts.yml`, and the secrets and egress guards still
+    # safe-ai-skill refuses the Read and Grep tools on the file, DENY_SECRET_READS_VIA_BASH
+    # still refuses `cat ~/.config/gh/hosts.yml`, and safe-ai-skill and egress-guard still
     # refuse to send it, at every tier. Every OTHER
     # credential here -- the wallet and the registry/host tokens -- stays denied at every
     # tier; only the gh host file moves.
@@ -983,14 +988,17 @@ DENY_WRAPPERS = [
     # Medium and High only, because memsearch's recall skill runs its set-up line as
     # `bash -c '<derive-collection>'`. Claude Code checks a skill's set-up line against
     # the permission rules only, so no hook sees it and none can exempt it: an every-tier
-    # rule stopped recall everywhere. secrets-guard.sh blocks every bash/sh/zsh/dash/ksh
-    # `-c` the agent runs, at every tier, with memsearch's exact line as its one
-    # exception. Behind the rules that is a second layer; for the agent's own `bash -c`
-    # at Off and Relaxed, and in a plugin install, it is the only one.
+    # rule stopped recall everywhere. safe-ai-skill reads inside the `-c` string the agent
+    # runs and gates the commands in it, at every tier. Behind the rules that is a second
+    # layer; for the agent's own `bash -c` at Off and Relaxed, and in a plugin install, it
+    # is the only one. `dash -c` and `ksh -c` joined in rule set 14, when the kit's own
+    # hook that refused every shell's `-c` was retired.
     "Bash(env *)",
     "Bash(sh -c *)",
     "Bash(bash -lc *)",
     "Bash(zsh -c *)",
+    "Bash(dash -c *)",
+    "Bash(ksh -c *)",
     "Bash(git --config-env*)",
     # `git --exec-path=<dir>` puts dir first on the path git searches for its helpers
     # and its own subcommands, so the directory decides what runs: `git
@@ -1016,6 +1024,7 @@ DENY_WRAPPERS = [
 DENY_WHOLE_BINARY = [
     # Subcommand granularity is defeated for these.
     "Bash(security *)",        # security -i reads its subcommands from stdin
+    "Bash(/usr/bin/security *)",  # the same tool by path: a rule never matches a path-named binary
     "Bash(crontab*)",
     "Bash(launchctl *)",
     "Bash(defaults *)",
@@ -1098,9 +1107,9 @@ DENY_DOCKER_DESTRUCTIVE = [
 # rules only and aborts the skill on a deny, so an every-tier rule stopped recall at
 # every tier. At Off and Relaxed it now runs. The cost is the same for every skill: at
 # those two tiers any installed skill's set-up line may run `bash -c` with no rule and
-# no hook in front of it. The agent's own `bash -c` is still refused at every tier by
-# secrets-guard.sh, which lets only memsearch's exact line through; at Medium and High
-# this rule stands in front of it, and recall stops there again. `sh -c`, `bash -lc`
+# no hook in front of it. The agent's own `bash -c` is read by safe-ai-skill at every
+# tier, which gates the commands inside it; at Medium and High this rule stands in front
+# of it, and recall stops there again. `sh -c`, `bash -lc`
 # and `zsh -c` stay in DENY_WRAPPERS: memsearch needs `bash -c` alone.
 DENY_BASH_C = [
     "Bash(bash -c *)",
@@ -1503,9 +1512,10 @@ DENY = [
 #             both of which are read-denied, so a sandboxed `git push` cannot
 #             authenticate at all. Dropping these breaks the kit's core workflow at
 #             every tier. The bypass they re-open is covered at the layer above:
-#             secrets-guard.sh segments the command on ; && || | and newline and
-#             inspects each statement, so the read in `git push -h; cat <secret>`
-#             is still blocked (verified). Belt and braces, not either/or.
+#             DENY_SECRET_READS_VIA_BASH matches each statement of a compound
+#             command, and safe-ai-skill segments the command and inspects each
+#             statement too, so the read in `git push -h; cat <secret>` is still
+#             blocked. Belt and braces, not either/or.
 #
 #   surfpool — genuinely cannot be sandboxed. `surfpool start` panics instantly on
 #             macOS SystemConfiguration and allowLocalBinding does not cover it,
@@ -1546,9 +1556,9 @@ EXCLUDED_COMMANDS = [
 #     against a throwaway project), `claude plugin validate`, `claude --version` — needs
 #     no omission since rule set 10, which replaced the blanket Bash(claude *) and
 #     Bash(claude) at every tier with one deny per policy-weakening flag. Those flag
-#     denies stay here, as at Relaxed, and so does fetch-exec-guard's launcher deny,
-#     which reads this tier as relaxed: a nested `claude --dangerously-skip-permissions`
-#     is refused at this tier too, where through rule set 9 nothing refused it.
+#     denies stay here, as at Relaxed, and so does safe-ai-skill's gate on the
+#     package-runner launches: a nested `claude --dangerously-skip-permissions` is
+#     refused at this tier too, where through rule set 9 nothing refused it.
 #   * Edit(/.safe-ai-skill/**) — the kit repo holds the policy.yaml that install.sh
 #     ships, so editing it is a kit change.
 # Managed settings stay denied: they belong to an administrator, not to the kit.
