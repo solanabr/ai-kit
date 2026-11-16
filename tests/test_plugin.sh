@@ -217,10 +217,9 @@ assert_json_valid "$PLUGIN_HOOKS" "plugin hooks.json is valid JSON"
 # ${CLAUDE_PLUGIN_ROOT} -- a .claude/hooks path here would silently load nothing.
 assert_file_contains "$PLUGIN_HOOKS" 'CLAUDE_PLUGIN_ROOT' "plugin hooks reach their scripts through CLAUDE_PLUGIN_ROOT"
 assert_file_not_contains "$PLUGIN_HOOKS" '.claude/hooks/' "plugin hooks reference no .claude/ path (absent in a plugin install)"
-for guard in lib-headless.sh secrets-guard.sh onchain-guard.sh egress-guard.sh egress-guard.awk; do
+for guard in lib-headless.sh onchain-guard.sh egress-guard.sh egress-guard.awk; do
   assert_cmd_success "[ -e '$PLUGIN_DIR/hooks/$guard' ]" "plugin hooks/$guard resolves (symlink into .claude/hooks)"
 done
-assert_file_contains "$PLUGIN_DIR/hooks/secrets-guard.sh" "exit 2" "plugin secrets gate blocks with exit 2"
 for legacy in '"when"' command_matches CLAUDE_FILE_PATH CLAUDE_TOOL_EXIT_CODE CLAUDE_SUBAGENT_NAME; do
   assert_file_not_contains "$PLUGIN_HOOKS" "$legacy" "plugin hooks.json has no unsupported '$legacy'"
 done

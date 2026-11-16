@@ -131,6 +131,62 @@ else
   echo "  SKIP: the shipped-rule list check needs full git history (shallow clone)"
 fi
 
+# --- Retired guards: an unedited copy is removed, an edited one is kept and named ---
+# secrets-guard and fetch-exec-guard left the kit when safe-ai-skill took over what they
+# gated. The hooks/ copy never deletes, so update.sh removes a file only while it is a
+# version the kit shipped, CRs aside. Unedited copies come from the kit's history, from
+# before the last commit that touched them; without it (shallow clone) skip those, loudly.
+echo "[retired guards]"
+HOOK_HIST_OK=no
+LAST_FE="$(git -C "$REPO_ROOT" rev-list -1 HEAD -- .claude/hooks/fetch-exec-guard.awk 2>/dev/null)" || LAST_FE=""
+if [ -n "$LAST_FE" ] \
+   && git -C "$REPO_ROOT" show "$LAST_FE^:.claude/hooks/fetch-exec-guard.awk" > "$TEMP_DIR/fe.awk" 2>/dev/null \
+   && git -C "$REPO_ROOT" show "$LAST_FE^:.claude/hooks/fetch-exec-guard.sh" > "$TEMP_DIR/fe.sh" 2>/dev/null; then
+  cp "$TEMP_DIR/fe.awk" "$TEMP_DIR/.claude/hooks/fetch-exec-guard.awk"
+  sed 's/$/\r/' "$TEMP_DIR/fe.sh" > "$TEMP_DIR/.claude/hooks/fetch-exec-guard.sh"
+  HOOK_HIST_OK=yes
+fi
+rm -f "$TEMP_DIR/fe.awk" "$TEMP_DIR/fe.sh"
+printf '#!/bin/sh\n# my own secrets checks\nexit 0\n' > "$TEMP_DIR/.claude/hooks/secrets-guard.sh"
+DRY_HOOKS="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
+assert_contains "$DRY_HOOKS" "[notice] .claude/hooks/secrets-guard.sh was edited after install, so it was kept" \
+  "--dry-run names an edited retired guard as kept"
+if [ "$HOOK_HIST_OK" = yes ]; then
+  assert_contains "$DRY_HOOKS" "[would remove] .claude/hooks/fetch-exec-guard.awk" "--dry-run reports an unedited retired guard"
+  assert_contains "$DRY_HOOKS" "[would remove] .claude/hooks/fetch-exec-guard.sh" "--dry-run matches a CRLF copy of a retired guard"
+  assert_file_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.awk" "--dry-run leaves the unedited retired guard in place"
+else
+  echo "  SKIP: removal of unedited retired guards needs the kit's git history (shallow clone)"
+fi
+(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+if [ "$HOOK_HIST_OK" = yes ]; then
+  assert_file_not_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.awk" "Unedited retired guard removed by update"
+  assert_file_not_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.sh" "Unedited retired guard with CRLF endings removed by update"
+fi
+assert_file_exists "$TEMP_DIR/.claude/hooks/secrets-guard.sh" "Edited retired guard kept by update"
+rm -f "$TEMP_DIR/.claude/hooks/secrets-guard.sh"
+# The list of retired versions is pasted by hand as well. It must hold every version of the
+# four files in the kit's history, as shipped and as an --agents install rewrote it, or an
+# unedited copy would be kept as if the user had edited it. Needs full history.
+if [ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository 2>/dev/null)" = false ]; then
+  LISTED_HOOK="$(sed -n '/^RETIRED_HOOK_BLOBS="/,/"$/p' "$REPO_ROOT/.claude/bin/update.sh" \
+    | sed -e 's/^RETIRED_HOOK_BLOBS="//' -e 's/"$//')"
+  MISSING_HOOK=""
+  for f in secrets-guard.sh secrets-guard.awk fetch-exec-guard.sh fetch-exec-guard.awk; do
+    for c in $(git -C "$REPO_ROOT" rev-list HEAD -- ".claude/hooks/$f"); do
+      git -C "$REPO_ROOT" show "$c:.claude/hooks/$f" > "$TEMP_DIR/retired.v" 2>/dev/null || continue
+      for b in "$(git hash-object "$TEMP_DIR/retired.v")" \
+               "$(sed -E '/\.agents\//!{s#(^|[^[:alnum:]_./~-])\.claude/#\1.agents/#g;s#([$][{]CLAUDE_PROJECT_DIR:-[.][}])/\.claude/#\1/.agents/#g;}' "$TEMP_DIR/retired.v" | git hash-object --stdin)"; do
+        grep -qxF "$b  $f" <<<"$LISTED_HOOK" || MISSING_HOOK="$MISSING_HOOK $b($f)"
+      done
+    done
+  done
+  rm -f "$TEMP_DIR/retired.v"
+  assert_eq "" "$MISSING_HOOK" "update.sh lists every version of the retired guards, as shipped and as --agents rewrote it"
+else
+  echo "  SKIP: the retired-guard list check needs full git history (shallow clone)"
+fi
+
 # --- A failed fetch stops the update instead of reporting success ---
 # The clone sits in update.sh's frozen range and swallows git's exit status, so a dead
 # upstream used to run every step below it and exit 0 with "Update complete!". A

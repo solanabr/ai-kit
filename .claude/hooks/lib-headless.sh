@@ -1,8 +1,8 @@
 #!/bin/sh
 # lib-headless.sh — shared helpers for the solana-ai-kit firewall hooks.
 #
-# Sourced (never executed) by secrets-guard.sh, onchain-guard.sh and
-# egress-guard.sh.  POSIX sh only: no bash builtins, no arrays, no [[ ]].
+# Sourced (never executed) by onchain-guard.sh, egress-guard.sh and
+# decisions-guard.sh.  POSIX sh only: no bash builtins, no arrays, no [[ ]].
 #
 # It also normalises MCP tool calls into the same KIT_CMD the Bash guards already
 # read, which is what lets one copy of the pattern corpus cover both.  See
@@ -80,9 +80,9 @@ kit_field() {
 #
 # Key-scoped on purpose, rather than sweeping every string in the object: the
 # same tools carry free prose in `intent`, `label`, `source` and `queries`, and
-# a guard that matched prose is the false-positive class secrets-guard.sh was
-# rewritten to eliminate (see its header).  Naming a credential path in an
-# `intent` string is not access to it.
+# a guard that matched prose is the false-positive class the guards were
+# rewritten to eliminate.  Naming a credential path in an `intent` string is
+# not access to it.
 kit_field_all() {
   printf '%s' "$KIT_INPUT" | KIT_KEY="$1" awk '
     function ws(s) { while (substr(s,1,1) == " " || substr(s,1,1) == "\t" || substr(s,1,1) == "\n" || substr(s,1,1) == "\r") s = substr(s,2); return s }
@@ -165,9 +165,9 @@ kit_field_top() {
 
 # kit_mcp_normalize — turn an MCP tool input into a shell-shaped KIT_CMD.
 #
-# Why normalise instead of writing a dedicated MCP guard: each of the four guards
-# is a pattern corpus (kit_vault_re, kit_secret_re, the on-chain verb regex,
-# egress-guard.awk, fetch-exec-guard.awk) applied to one command string.  An MCP
+# Why normalise instead of writing a dedicated MCP guard: each guard is a
+# pattern corpus (kit_secret_re, the on-chain verb regex, egress-guard.awk)
+# applied to one command string.  An MCP
 # guard would need its own copy of every one, and a copy is a corpus that drifts.
 # Feeding the MCP payload in as KIT_CMD means one corpus, and every future
 # addition to it covers both surfaces the day it lands.
@@ -182,12 +182,14 @@ kit_field_top() {
 #                       so it is presented as `cat <path>`
 #   url, requests[].url ctx_fetch_and_index — presented as `curl <url>`
 #
-# A non-shell `code` is emitted TWICE, because the two guards want opposite
-# things from a bracket and one string cannot give both:
+# A non-shell `code` is emitted TWICE, because two guards wanted opposite
+# things from a bracket and one string cannot give both.  The flattened form
+# was secrets-guard's, retired now that safe-ai-skill gates credential reads;
+# the guards left read past it, and it goes with this library:
 #
-#   * secrets wants it flattened.  Punctuation blanked, under the command word
-#     kit_mcp_code, which secrets-guard.sh lists in is_interp() so the payload is
-#     tokenised the way `python3 -c '...'` is.  Without the flattening, `(` is a
+#   * secrets wanted it flattened.  Punctuation blanked, under the command word
+#     kit_mcp_code, which secrets-guard.sh listed in is_interp() so the payload
+#     was tokenised the way `python3 -c '...'` is.  Without the flattening, `(` is a
 #     pipeline-stage boundary in that tokeniser, so open("/home/u/.aws/creds")
 #     splits until the path lands in COMMAND position — where nothing checks it,
 #     because a command word is something you execute, not something you read.
@@ -466,19 +468,6 @@ kit_ask() {
 # looks for a word: bash runs `a"n"chor deploy` and `npm pub"l"ish` as the words
 # without them, which a glob on the raw text never saw (#297).
 kit_unquoted() { printf '%s' "$1" | tr -d "\"'\\\\"; }
-
-# kit_allow <reason> — approve a call, skipping its permission prompt.  The
-# guards almost never grant: their job is to restrict, and a silent exit 0
-# already defers to the permission rules.  An allow cannot lift a rule either:
-# Claude Code evaluates deny and ask rules whatever a hook returns, so it decides
-# only where no rule does.  The one caller is secrets-guard.sh's exact allowlist
-# for memsearch's collection-derivation line, a `bash -c` that `Bash(bash -c *)`
-# still denies at Medium and High.  The match that reaches it must be whole-string
-# exact, never a prefix or a pattern.
-kit_allow() {
-  _kit_emit allow "$1"
-  exit 0
-}
 
 # kit_deny <reason> — hard block.  Both shapes: the JSON decision for harnesses
 # that read stdout, stderr + exit 2 for Claude Code (and for Grok Build, which

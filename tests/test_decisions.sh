@@ -383,7 +383,7 @@ words: keys, funds, mainnet, money are mine
 EOF"
 HD_PAYLOAD="$(python3 -c 'import json, sys; print(json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": sys.argv[1]}}))' "$HD_CMD")"
 for tier in off relaxed high; do
-  for guard in secrets-guard onchain-guard egress-guard fetch-exec-guard; do
+  for guard in onchain-guard egress-guard; do
     set +e
     HD_OUT="$(cd "$MAIN" && printf '%s' "$HD_PAYLOAD" | CLAUDE_PROJECT_DIR="$MAIN" KIT_FIREWALL_TIER="$tier" KIT_FIREWALL_HEADLESS=0 \
       sh "$REPO_ROOT/.claude/hooks/$guard.sh" 2>&1)"

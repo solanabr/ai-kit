@@ -640,12 +640,10 @@ assert_eq "" "$BAD" "high denies every self-protected config path"
 # the hooks riding along with the config group and becoming editable at the DEFAULT
 # tier, where an agent that trips the mainnet gate could rewrite the script behind it.
 HOOK_PATHS=".claude/hooks/onchain-guard.sh
-.claude/hooks/secrets-guard.sh
 .claude/hooks/egress-guard.sh
-.claude/hooks/fetch-exec-guard.sh
 .claude/hooks/lib-headless.sh
 .claude/hooks/lib-tokenize.awk
-.claude/hooks/fetch-exec-guard.awk
+.claude/hooks/egress-guard.awk
 ~/.claude/hooks/my-hook.sh"
 for t in $TIERS; do
   BAD=""
@@ -1708,14 +1706,15 @@ for t in medium high; do
   done
 done
 
-# `sh -c`, `bash -lc` and `zsh -c` keep their permission-layer denies at every tier.
-# `bash -c` keeps its rule at Medium and High only: memsearch's recall runs its set-up
-# line through it, and Claude Code checks a skill's set-up line against the rules alone,
-# so an every-tier rule stopped recall everywhere. At Off and Relaxed secrets-guard.sh
-# still refuses the agent's own `bash -c` (tests/test_secrets_guard.sh); no rule does.
+# `sh -c`, `bash -lc`, `zsh -c`, `dash -c` and `ksh -c` keep their permission-layer
+# denies at every tier (the last two since rule set 14). `bash -c` keeps its rule at
+# Medium and High only: memsearch's recall runs its set-up line through it, and Claude
+# Code checks a skill's set-up line against the rules alone, so an every-tier rule
+# stopped recall everywhere. At Off and Relaxed no rule refuses the agent's own
+# `bash -c`; safe-ai-skill reads the string and gates the commands in it.
 echo "[shell -c at the permission layer]"
 for t in $TIERS; do
-  for cmd in "sh -c 'echo hi'" "bash -lc 'echo hi'" "zsh -c 'echo hi'"; do
+  for cmd in "sh -c 'echo hi'" "bash -lc 'echo hi'" "zsh -c 'echo hi'" "dash -c 'echo hi'" "ksh -c 'echo hi'"; do
     assert_eq "yes" "$(dm "$t" "$cmd")" "$t denies \`$cmd\` at the permission layer"
   done
   # The rule strings travel in argv: bash 3.2 mis-scans a `)` inside a quoted python
@@ -1723,8 +1722,9 @@ for t in $TIERS; do
   assert_eq "yes" "$(python3 -c "
 import json, sys
 deny = set((json.load(open('$WORK/gen.$t.json')).get('permissions') or {}).get('deny') or [])
-print('yes' if set(sys.argv[1:]) <= deny else 'no')" 'Bash(sh -c *)' 'Bash(bash -lc *)' 'Bash(zsh -c *)' 2>/dev/null)" \
-    "$t carries Bash(sh -c *), Bash(bash -lc *) and Bash(zsh -c *) verbatim"
+print('yes' if set(sys.argv[1:]) <= deny else 'no')" 'Bash(sh -c *)' 'Bash(bash -lc *)' 'Bash(zsh -c *)' 'Bash(dash -c *)' 'Bash(ksh -c *)' 2>/dev/null)" \
+    "$t carries Bash(sh -c *), Bash(bash -lc *), Bash(zsh -c *), Bash(dash -c *) and Bash(ksh -c *) verbatim"
+  assert_eq "yes" "$(dm "$t" "/usr/bin/security dump-keychain")" "$t denies the keychain tool by path, \`/usr/bin/security\`"
 done
 for t in off relaxed; do
   assert_eq "no" "$(dm "$t" "bash -c 'echo hi'")" "$t has no rule for \`bash -c\` (a skill's set-up line can run)"

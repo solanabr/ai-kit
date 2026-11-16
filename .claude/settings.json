@@ -708,6 +708,8 @@
       "Bash(sh -c *)",
       "Bash(bash -lc *)",
       "Bash(zsh -c *)",
+      "Bash(dash -c *)",
+      "Bash(ksh -c *)",
       "Bash(git --config-env*)",
       "Bash(git --exec-path=*)",
       "Bash(git config *alias.*)",
@@ -722,6 +724,7 @@
       "Bash(docker exec *)",
 
       "Bash(security *)",
+      "Bash(/usr/bin/security *)",
       "Bash(crontab*)",
       "Bash(launchctl *)",
       "Bash(defaults *)",
@@ -890,16 +893,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "H=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/secrets-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__context-mode__.*",
-        "hooks": [
-          {
-            "type": "command",
             "command": "H=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/onchain-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
             "timeout": 10
           }
@@ -911,26 +904,6 @@
           {
             "type": "command",
             "command": "H=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/egress-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|mcp__context-mode__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "H=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/fetch-exec-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "H=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/secrets-guard.sh\"; [ -r \"$H\" ] && exec sh \"$H\"; exit 0",
             "timeout": 10
           }
         ]
