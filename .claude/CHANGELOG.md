@@ -324,6 +324,7 @@ All notable changes to solana-ai-kit.
   - **Existing installs.**
     - `/update` deletes `secrets-guard.sh`, `secrets-guard.awk`, `fetch-exec-guard.sh` and `fetch-exec-guard.awk` while each is a version the kit shipped. That covers CRLF copies and the copy an `--agents` install rewrote.
     - It keeps an edited copy and names it.
+    - It does this only once safe-ai-skill is enabled and installed for the project. Until then the guards are what gates credential reads and downloads there, so `/update` keeps them running and says why.
     - It never removes a `settings.json` entry; an entry whose script is gone exits 0.
     - `HOOK_SET_VERSION` 5 records the change and registers nothing.
   - **Plugin installs** lose both guards from `hooks/hooks.json` and have no `policy.yaml`, so shell history, `~/.ssh/config` and key containers stay readable there, as safe-ai-skill's defaults leave them.

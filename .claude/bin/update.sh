@@ -202,12 +202,54 @@ if [ -d "$HOOKS_SRC" ]; then
   fi
 fi
 
+# safe-ai-skill's state for this project, from Claude Code's install list, an internal
+# file read best-effort: "installed" then the install's scope and its shim (empty when
+# its path is unknown), "missing" when it is enabled but not installed, "disabled" when
+# it is not enabled, and nothing when the list cannot be read (High's read fence).
+sas_state() {
+  python3 - "$TARGET_DIR" "$CONFIG_NAME" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" 2>/dev/null <<'PY' || true
+import json, os, sys
+target, config, cfg = sys.argv[1:4]
+sas = "safe-ai-skill@stbr"
+def plugins(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("enabledPlugins") or {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+on = plugins(os.path.join(target, config, "settings.local.json")).get(sas)
+if on is None:
+    on = plugins(os.path.join(target, config, "settings.json")).get(sas)
+if on is not True:
+    print("disabled")
+    sys.exit(0)
+try:
+    with open(os.path.join(cfg, "plugins", "installed_plugins.json"), encoding="utf-8") as f:
+        recs = (json.load(f).get("plugins") or {}).get(sas, [])
+except FileNotFoundError:
+    recs = []
+except (OSError, ValueError, AttributeError):
+    sys.exit(0)
+here = os.path.realpath(target)
+mine = [r for r in recs if r.get("scope") == "user" or os.path.realpath(r.get("projectPath") or "/nonexistent") == here]
+if not mine:
+    print("missing")
+    sys.exit(0)
+rec = sorted(mine, key=lambda r: r.get("scope") == "user")[0]
+shim = os.path.join(rec.get("installPath") or "/nonexistent", "bin", "safe-ai-skill")
+print("installed\n%s\n%s" % (rec.get("scope") or "project", shim if os.path.isfile(shim) else ""))
+PY
+}
+
 # secrets-guard and fetch-exec-guard are retired: safe-ai-skill's gates cover what they
 # did, configured by .safe-ai-skill/policy.yaml. The copy above never deletes, so remove
 # each file here while it is byte-identical (CRs aside) to a version the kit shipped, as
 # rules/ is below. A copy the user edited stays, and the report says so. So does any
 # settings.json entry that runs one: the hook migration only appends, and an entry whose
-# script is gone exits 0.
+# script is gone exits 0. Where these hooks are live, they go only once safe-ai-skill is
+# enabled and installed for the project: until then they are what gates credential
+# reads and downloads there, so they stay, still running, and the report says why. In an
+# --agents install nothing runs them, unless .agents/ is .claude/ under another name.
 # Git blob ids of every version of these four files on the kit's main branch, as a full
 # install has it and as an --agents install rewrote it to .agents/ paths:
 RETIRED_HOOK_BLOBS="2a5ebfb4bccad13937443cb143b685081b8145cb  fetch-exec-guard.awk
@@ -279,10 +321,31 @@ e73f2e1b4d7e01438e48606b4b1e1d2d56ae4801  secrets-guard.awk
 a10a32a7da4015d3b7bbb20c45e2d9511e71760e  secrets-guard.sh
 ec89edb5a47b7f858e8353758c10e6c0b0c0395e  secrets-guard.sh
 fe152aef853f710a300f39e0c7b67acd7e82981e  secrets-guard.sh"
+RETIRE_WHY=""
+if [ "$CONFIG_NAME" = ".claude" ] || { [ -d "$TARGET_DIR/.claude" ] && [ "$TARGET_DIR/$CONFIG_NAME" -ef "$TARGET_DIR/.claude" ]; }; then
+  case "$(sas_state)" in
+    installed*) ;;
+    missing)  RETIRE_WHY="safe-ai-skill is enabled but not installed" ;;
+    disabled) RETIRE_WHY="safe-ai-skill is not enabled in this project" ;;
+    *)        RETIRE_WHY="this update could not confirm that safe-ai-skill is installed" ;;
+  esac
+fi
+RETIRE_KEPT=""
 for f in secrets-guard.sh secrets-guard.awk fetch-exec-guard.sh fetch-exec-guard.awk; do
   OLD="$HOOKS_DST/$f"
   [ -f "$OLD" ] || continue
-  blob="$(tr -d '\r' < "$OLD" | git hash-object --stdin 2>/dev/null)" || continue
+  if [ -L "$OLD" ]; then
+    CHANGES="$CHANGES  [notice] $CONFIG_NAME/hooks/$f is a link, so it was left alone: /update never writes through one. The kit retired it: safe-ai-skill gates what it did\n"
+    continue
+  fi
+  if [ -n "$RETIRE_WHY" ]; then
+    RETIRE_KEPT="$RETIRE_KEPT $f"
+    continue
+  fi
+  if ! blob="$(tr -d '\r' < "$OLD" | git hash-object --stdin 2>/dev/null)" || [ -z "$blob" ]; then
+    CHANGES="$CHANGES  [notice] $CONFIG_NAME/hooks/$f was kept: without git this update cannot tell the kit's copy from an edited one. The kit retired it: delete it unless you edited it\n"
+    continue
+  fi
   if grep -qxF "$blob  $f" <<<"$RETIRED_HOOK_BLOBS"; then
     if [ "$DRY_RUN" = true ]; then
       CHANGES="$CHANGES  [would remove] $CONFIG_NAME/hooks/$f (retired: safe-ai-skill gates what it did)\n"
@@ -294,6 +357,7 @@ for f in secrets-guard.sh secrets-guard.awk fetch-exec-guard.sh fetch-exec-guard
     CHANGES="$CHANGES  [notice] $CONFIG_NAME/hooks/$f was edited after install, so it was kept, and a settings.json entry naming it still runs it. The kit retired it: safe-ai-skill gates what it did. Delete it unless you still want it\n"
   fi
 done
+[ -z "$RETIRE_KEPT" ] || CHANGES="$CHANGES  [notice] kept $CONFIG_NAME/hooks/:$RETIRE_KEPT, still run from settings.json: $RETIRE_WHY, and until it runs these are what gates credential reads and downloads here. The kit retired them for safe-ai-skill: once it is installed and enabled, run the update again (from your own shell at High) and they go\n"
 
 # The kit no longer ships rules/. Its old rule files used `globs:`, which Claude Code
 # ignores, so they loaded into every session. Remove a copy only when it is
@@ -1508,42 +1572,9 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
     esac
   fi
   # Enabled is not installed: Claude Code fetches a plugin from an external source only
-  # when each user runs the install, so say so on every update until it is. Its install
-  # list is an internal file, read best-effort; unreadable (High's read fence) is silent.
-  # Prints "missing", or "installed" then the install's scope and its shim (empty when
-  # its path is unknown), or nothing when the plugin is not enabled.
-  SAS_STATE="$(python3 - "$TARGET_DIR" "$CONFIG_NAME" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" 2>/dev/null <<'PY' || true
-import json, os, sys
-target, config, cfg = sys.argv[1:4]
-sas = "safe-ai-skill@stbr"
-def plugins(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f).get("enabledPlugins") or {}
-    except (OSError, ValueError, AttributeError):
-        return {}
-on = plugins(os.path.join(target, config, "settings.local.json")).get(sas)
-if on is None:
-    on = plugins(os.path.join(target, config, "settings.json")).get(sas)
-if on is not True:
-    sys.exit(0)
-try:
-    with open(os.path.join(cfg, "plugins", "installed_plugins.json"), encoding="utf-8") as f:
-        recs = (json.load(f).get("plugins") or {}).get(sas, [])
-except FileNotFoundError:
-    recs = []
-except (OSError, ValueError, AttributeError):
-    sys.exit(0)
-here = os.path.realpath(target)
-mine = [r for r in recs if r.get("scope") == "user" or os.path.realpath(r.get("projectPath") or "/nonexistent") == here]
-if not mine:
-    print("missing")
-    sys.exit(0)
-rec = sorted(mine, key=lambda r: r.get("scope") == "user")[0]
-shim = os.path.join(rec.get("installPath") or "/nonexistent", "bin", "safe-ai-skill")
-print("installed\n%s\n%s" % (rec.get("scope") or "project", shim if os.path.isfile(shim) else ""))
-PY
-)"
+  # when each user runs the install, so say so on every update until it is. An
+  # unreadable install list (High's read fence) is silent.
+  SAS_STATE="$(sas_state)"
   case "$SAS_STATE" in
     missing)
       CHANGES="$CHANGES  [notice] safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin install safe-ai-skill@stbr --scope project\n" ;;

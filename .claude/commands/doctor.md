@@ -151,6 +151,7 @@ Read these in order; stop at the first that matches.
 - OK `scripts: none`: neither guard runs, and safe-ai-skill does their work (check 11). `entries` above 0 is harmless: each entry exits 0 without its script.
 - `n/a` `config_dir: .agents`: nothing registers hooks in an `--agents` install, so the files are inert. They can be deleted.
 - WARN `hook_set` below 5: this install predates the retirement. Run `/update`; it deletes the unmodified scripts and names any it kept.
+- WARN `entries` above 0 and check 11 does not report safe-ai-skill installed and enabled: `/update` keeps these guards running until it is, because they still gate credential reads and downloads here. Fix check 11 first, then run `/update`, which retires them.
 - WARN `entries` above 0: `/update` kept an edited copy, and `settings.json` still runs it beside safe-ai-skill, so each call is gated twice, and where the guard asks, the ask overrides an allow safe-ai-skill gives. Ask the user whether they still want it; if not, delete the files `scripts` lists.
 - OK otherwise: the files `scripts` lists are on disk, but nothing runs them. They can be deleted.
 

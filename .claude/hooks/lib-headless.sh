@@ -184,8 +184,9 @@ kit_field_top() {
 #
 # A non-shell `code` is emitted TWICE, because two guards wanted opposite
 # things from a bracket and one string cannot give both.  The flattened form
-# was secrets-guard's, retired now that safe-ai-skill gates credential reads;
-# the guards left read past it, and it goes with this library:
+# is the retired secrets-guard's, kept for an install that still runs it (an
+# edited copy, or one /update keeps until safe-ai-skill is installed); the
+# other guards read past it, and it goes with this library:
 #
 #   * secrets wanted it flattened.  Punctuation blanked, under the command word
 #     kit_mcp_code, which secrets-guard.sh listed in is_interp() so the payload
@@ -468,6 +469,20 @@ kit_ask() {
 # looks for a word: bash runs `a"n"chor deploy` and `npm pub"l"ish` as the words
 # without them, which a glob on the raw text never saw (#297).
 kit_unquoted() { printf '%s' "$1" | tr -d "\"'\\\\"; }
+
+# kit_allow <reason> — approve a call, skipping its permission prompt.  The
+# guards almost never grant: their job is to restrict, and a silent exit 0
+# already defers to the permission rules.  An allow cannot lift a rule either:
+# Claude Code evaluates deny and ask rules whatever a hook returns, so it decides
+# only where no rule does.  Its one caller is the retired secrets-guard.sh's
+# exact allowlist for memsearch's collection-derivation line, kept for an install
+# that still runs that guard (an edited copy, or one /update keeps until
+# safe-ai-skill is installed).  The match that reaches it must be whole-string
+# exact, never a prefix or a pattern.
+kit_allow() {
+  _kit_emit allow "$1"
+  exit 0
+}
 
 # kit_deny <reason> — hard block.  Both shapes: the JSON decision for harnesses
 # that read stdout, stderr + exit 2 for Claude Code (and for Grok Build, which

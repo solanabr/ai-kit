@@ -148,7 +148,21 @@ if [ -n "$LAST_FE" ] \
 fi
 rm -f "$TEMP_DIR/fe.awk" "$TEMP_DIR/fe.sh"
 printf '#!/bin/sh\n# my own secrets checks\nexit 0\n' > "$TEMP_DIR/.claude/hooks/secrets-guard.sh"
-DRY_HOOKS="$(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
+# Until safe-ai-skill is installed and enabled the guards are what gates credential reads
+# and downloads, so they stay, unedited copies included, and the report says why. The
+# plugin's state comes from Claude Code's install list under CLAUDE_CONFIG_DIR.
+CC_NONE="$TEMP_DIR/cc-none"; CC_SAS="$TEMP_DIR/cc-sas"
+mkdir -p "$CC_NONE/plugins" "$CC_SAS/plugins"
+printf '{"version": 2, "plugins": {"safe-ai-skill@stbr": [{"scope": "project", "projectPath": "%s", "installPath": "%s"}]}}\n' \
+  "$TEMP_DIR" "$CC_SAS/none" > "$CC_SAS/plugins/installed_plugins.json"
+KEEP_HOOKS="$(cd "$TEMP_DIR" && CLAUDE_CONFIG_DIR="$CC_NONE" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh 2>&1)"
+assert_contains "$KEEP_HOOKS" "[notice] kept .claude/hooks/: secrets-guard.sh" "the guards are kept, and named, while safe-ai-skill is not installed"
+assert_contains "$KEEP_HOOKS" "safe-ai-skill is enabled but not installed" "...and the report says why"
+assert_file_exists "$TEMP_DIR/.claude/hooks/secrets-guard.sh" "the edited guard is kept while safe-ai-skill is not installed"
+if [ "$HOOK_HIST_OK" = yes ]; then
+  assert_file_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.awk" "an unedited guard is kept too while safe-ai-skill is not installed"
+fi
+DRY_HOOKS="$(cd "$TEMP_DIR" && CLAUDE_CONFIG_DIR="$CC_SAS" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh --dry-run 2>&1)"
 assert_contains "$DRY_HOOKS" "[notice] .claude/hooks/secrets-guard.sh was edited after install, so it was kept" \
   "--dry-run names an edited retired guard as kept"
 if [ "$HOOK_HIST_OK" = yes ]; then
@@ -158,13 +172,13 @@ if [ "$HOOK_HIST_OK" = yes ]; then
 else
   echo "  SKIP: removal of unedited retired guards needs the kit's git history (shallow clone)"
 fi
-(cd "$TEMP_DIR" && SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
+(cd "$TEMP_DIR" && CLAUDE_CONFIG_DIR="$CC_SAS" SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" bash .claude/bin/update.sh) > "$QUIET_LOG" 2>&1 || quiet_fail "update.sh"
 if [ "$HOOK_HIST_OK" = yes ]; then
   assert_file_not_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.awk" "Unedited retired guard removed by update"
   assert_file_not_exists "$TEMP_DIR/.claude/hooks/fetch-exec-guard.sh" "Unedited retired guard with CRLF endings removed by update"
 fi
 assert_file_exists "$TEMP_DIR/.claude/hooks/secrets-guard.sh" "Edited retired guard kept by update"
-rm -f "$TEMP_DIR/.claude/hooks/secrets-guard.sh"
+rm -rf "$TEMP_DIR/.claude/hooks/secrets-guard.sh" "$CC_NONE" "$CC_SAS"
 # The list of retired versions is pasted by hand as well. It must hold every version of the
 # four files in the kit's history, as shipped and as an --agents install rewrote it, or an
 # unedited copy would be kept as if the user had edited it. Needs full history.
