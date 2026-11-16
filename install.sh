@@ -576,16 +576,22 @@ if [ "$AGENTS_ONLY" = false ]; then
     warn "The claude CLI is not on PATH, so safe-ai-skill was not installed"
   else
     step "Installing the safe-ai-skill plugin ($SAS_ID)..."
-    # A new machine has never registered the kit's marketplace, so a first failure adds it
-    # and retries. stdin is /dev/null: under `curl | bash` the script itself is stdin.
+    # A first failure means this machine's copy of the kit's marketplace is missing, or is
+    # stale: one registered before the kit listed safe-ai-skill never finds it, since Claude
+    # Code leaves auto-update off for a third-party marketplace and `marketplace add`
+    # leaves a registered one as it is. So refresh stbr, add it where none is registered,
+    # and retry. stdin is /dev/null: under `curl | bash` the script itself is stdin.
     if (cd "$TARGET_DIR" && claude plugin install "$SAS_ID" --scope project) < /dev/null > "$TEMP_DIR/sas.log" 2>&1 \
-      || { (cd "$TARGET_DIR" && claude plugin marketplace add "$REPO_URL") < /dev/null >> "$TEMP_DIR/sas.log" 2>&1 \
+      || { (cd "$TARGET_DIR" && { claude plugin marketplace update stbr || claude plugin marketplace add "$REPO_URL"; }) \
+             < /dev/null >> "$TEMP_DIR/sas.log" 2>&1 \
            && (cd "$TARGET_DIR" && claude plugin install "$SAS_ID" --scope project) < /dev/null >> "$TEMP_DIR/sas.log" 2>&1; }; then
       SAS_STATE=installed
       ok "Installed safe-ai-skill: its gates load with your next Claude Code session"
     else
       SAS_STATE=manual
-      warn "Could not install safe-ai-skill: $(tail -1 "$TEMP_DIR/sas.log" | sed -E 's#://[^/@ ]*@#://#g')"
+      # The CLI's last word, without its progress text: its output ends with a blank line.
+      warn "Could not install safe-ai-skill: $(tr '\r' '\n' < "$TEMP_DIR/sas.log" | grep -v '^[[:space:]]*$' | tail -1 \
+        | sed -E -e 's/^.*✘ //' -e 's#://[^/@ ]*@#://#g')"
     fi
   fi
 fi

@@ -197,7 +197,7 @@ Read these in order; stop at the first that matches.
 - WARN `enabled: False`: turned off in `settings.local.json`. That is a choice: report it and offer no fix.
 - WARN `platform` is not `Darwin`, `Linux` or `Windows` (Git Bash): safe-ai-skill has no engine build here, so its gates fail open with a notice and only Solana CLI calls still ask. Report it; there is no fix.
 - WARN `installed: unknown`: Claude Code's install list is unreadable here (High's read fence covers `~/`). Ask the user to run `claude plugin list` in their own shell.
-- FAIL `installed: no` and `enabled: True`: enabled but not installed, so none of its gates run. In the user's shell, in this directory: `claude plugin install safe-ai-skill@stbr --scope project`. If that cannot find the plugin, add the kit's marketplace first: `claude plugin marketplace add https://github.com/solanabr/ai-kit.git`.
+- FAIL `installed: no` and `enabled: True`: enabled but not installed, so none of its gates run. In the user's shell, in this directory: `claude plugin marketplace update stbr || claude plugin marketplace add https://github.com/solanabr/ai-kit.git; claude plugin install safe-ai-skill@stbr --scope project`. The refresh comes first because a copy of the marketplace registered before the kit listed safe-ai-skill cannot find it, and `marketplace add` leaves a registered copy as it is; where none is registered, the refresh fails and the add registers it.
 - WARN `installed: no` and `enabled: None` and `full_install: True`: an install from before safe-ai-skill was core. The same install command enables it too.
 - WARN `installed` shows a sha other than `pinned`: the plugin lags the kit's pin. `claude plugin update safe-ai-skill@stbr`.
 - OK otherwise: report its scope and sha.
@@ -337,7 +337,7 @@ One table, then fix-its for the non-OK rows only, in the order to run them:
 1. `git submodule update --init --recursive`
 2. `/setup-mcp`
 3. `solana airdrop 2 --url devnet`
-4. In your shell: `claude plugin install safe-ai-skill@stbr --scope project`
+4. In your shell: `claude plugin marketplace update stbr || claude plugin marketplace add https://github.com/solanabr/ai-kit.git; claude plugin install safe-ai-skill@stbr --scope project`
 ```
 
 ## Guardrails

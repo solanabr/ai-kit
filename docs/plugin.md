@@ -4,14 +4,14 @@ This page is about installing **the kit itself** as a plugin. For other people's
 
 We recommend against installing the kit, or anything else, from a plugin marketplace. A plugin runs with your user permissions: its hooks run shell commands and its stdio MCP servers run as local processes, both outside Claude Code's sandbox, and it can add executables to the PATH of Claude's shell and instructions to Claude's context. A marketplace fetches all of it from a remote repository, and with auto-update on, a plugin changes on disk after you reviewed it. Every marketplace you add is one more publisher, and one more account that can be compromised, able to ship code to your machine. The [installer](../README.md#installer-recommended) ships hooks too, but as plain files in your project that you can read and that change only when you run `/update`.
 
-The full install uses this mechanism for one plugin, [safe-ai-skill](../README.md#security-firewall-safe-ai-skill): its `.claude/settings.json` registers this repository's `stbr` marketplace (default branch, not pinned) for the project and enables `safe-ai-skill@stbr`. Claude Code registers the marketplace only after you trust the folder, and fetches the plugin only when someone runs `claude plugin install safe-ai-skill@stbr --scope project`, at the commit the marketplace pins. `install.sh` runs that install itself, registering the marketplace first when needed, so only a later clone of the project needs it run by hand.
+The full install uses this mechanism for one plugin, [safe-ai-skill](../README.md#security-firewall-safe-ai-skill): its `.claude/settings.json` registers this repository's `stbr` marketplace (default branch, not pinned) for the project and enables `safe-ai-skill@stbr`. Claude Code registers the marketplace only after you trust the folder, and fetches the plugin only when someone runs `claude plugin install safe-ai-skill@stbr --scope project`, at the commit the marketplace pins. `install.sh` runs that install itself, refreshing a stale copy of the marketplace or registering it when needed, so only a later clone of the project needs it run by hand.
 
 If you use the plugin anyway, keep the exposure small:
 
-1. Add the marketplace pinned to a release tag instead of the default branch. Replace `v2.1.0` with the newest tag on the [tags page](https://github.com/solanabr/ai-kit/tags):
+1. Add the marketplace pinned to a release tag instead of the default branch. Replace `v2.4.0` with the newest tag on the [tags page](https://github.com/solanabr/ai-kit/tags):
 
    ```text
-   /plugin marketplace add solanabr/ai-kit#v2.1.0
+   /plugin marketplace add solanabr/ai-kit#v2.4.0
    ```
 
 2. Read what it runs, at that tag: the hooks in [`plugin/hooks/hooks.json`](../plugin/hooks/hooks.json) and the MCP servers in [`.mcp.json`](../.mcp.json).
