@@ -141,6 +141,11 @@ All notable changes to solana-ai-kit.
   - **Docs.** The README's Firewall tiers table and memsearch section, `docs/firewall.md`'s gate table and limits, `docs/configuration.md`'s memsearch section, `docs/other-agents.md`, `FIREWALL-SPEC.md`, `/firewall`, `/doctor` and `/setup-mcp` describe rule set 10.
 
 ### Fixed
+- **`install.sh` installs safe-ai-skill on a machine whose copy of the `stbr` marketplace is stale.** Where `stbr` was registered before the kit listed safe-ai-skill, the install failed with `Plugin "safe-ai-skill" not found in marketplace "stbr"`. Claude Code leaves auto-update off for a third-party marketplace, so that copy never learns the plugin, and the installer's retry ran `claude plugin marketplace add`, which leaves a registered marketplace as it is.
+  - The retry now runs `claude plugin marketplace update stbr` first, adds the marketplace only where none is registered, and installs again.
+  - `/update`'s "enabled but not installed" notice and `/doctor`'s fix-it give the same order as one command. `/doctor` used to suggest `marketplace add`, which fails the same way.
+  - When the install still fails, the installer gives the CLI's error. It used to print an empty reason, since the CLI ends its output with a blank line.
+  - `docs/plugin.md`'s pinned-marketplace example names `v2.4.0`. The marketplace at `v2.1.0` does not list safe-ai-skill, and a refresh keeps a pinned marketplace on its tag.
 - **The `solana-fuzz` and `mongodb` safety records match their `#326` pins, and the test now checks for a claimed-absent root `CLAUDE.md`/`AGENTS.md`.**
   - `solana-fuzz` (`ff594b8`) gained a second executable, `.githooks/commit-msg`, and a root `CLAUDE.md` — a benign no-attribution policy that asks an agent to enable that commit-msg hook via `git config core.hooksPath .githooks` (a write the kit firewall denies at every tier, so it is inert in a Claude Code session; only an `--agents` install would run it). Its record said "one executable" and "no root CLAUDE.md"; it now names both and what they do.
   - `mongodb` (`155bb9c4`): the pinned MCP server moved to `mongodb-mcp-server@<4` (latest `3.3.0`); the record said `@<3`.

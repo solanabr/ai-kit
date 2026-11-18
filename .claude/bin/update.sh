@@ -1573,11 +1573,13 @@ if [ "$CONFIG_NAME" = ".claude" ] && [ -n "$POLICY_SRC" ] && [ -f "$POLICY_SRC" 
   fi
   # Enabled is not installed: Claude Code fetches a plugin from an external source only
   # when each user runs the install, so say so on every update until it is. An
-  # unreadable install list (High's read fence) is silent.
+  # unreadable install list (High's read fence) is silent. The command refreshes the kit's
+  # marketplace first, as install.sh does: a copy registered before the kit listed
+  # safe-ai-skill never finds it. It adds the marketplace where none is registered.
   SAS_STATE="$(sas_state)"
   case "$SAS_STATE" in
     missing)
-      CHANGES="$CHANGES  [notice] safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin install safe-ai-skill@stbr --scope project\n" ;;
+      CHANGES="$CHANGES  [notice] safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin marketplace update stbr || claude plugin marketplace add https://github.com/solanabr/ai-kit.git; claude plugin install safe-ai-skill@stbr --scope project\n" ;;
     installed*)
       SAS_SCOPE="$(printf '%s\n' "$SAS_STATE" | sed -n 2p)"
       SAS_SHIM="$(printf '%s\n' "$SAS_STATE" | sed -n 3p)"

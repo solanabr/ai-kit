@@ -23,16 +23,27 @@ cat > "$BIN/claude" <<'EOF'
 #!/bin/sh
 printf '%s :: %s\n' "$PWD" "$*" >> "$CLAUDE_FAKE_LOG"
 cat >> "$CLAUDE_FAKE_LOG.stdin"
+# This machine's copy of the kit's stbr marketplace, as CLAUDE_FAKE_MKT starts it: none,
+# stale (registered before it listed safe-ai-skill) or current.
+MKT="$CLAUDE_FAKE_LOG.mkt"
+[ -f "$MKT" ] || echo "${CLAUDE_FAKE_MKT:-current}" > "$MKT"
 case "$*" in
   "plugin install safe-ai-skill@stbr --scope project")
-    if [ -n "${CLAUDE_FAKE_FAIL_FIRST:-}" ] && [ ! -e "$CLAUDE_FAKE_LOG.failed" ]; then
-      : > "$CLAUDE_FAKE_LOG.failed"
-      echo "Plugin safe-ai-skill not found in marketplace stbr" >&2
+    if [ "$(cat "$MKT")" != current ]; then
+      # Claude Code's own shape: progress text, the error on the same line, a blank line.
+      printf '%s\n\n' 'Installing plugin "safe-ai-skill@stbr"...✘ Failed to install plugin "safe-ai-skill@stbr": Plugin "safe-ai-skill" not found in marketplace "stbr".' >&2
       exit 1
     fi
     echo "Successfully installed plugin: safe-ai-skill@stbr (scope: project)" ;;
-  "plugin marketplace add "*) echo "Successfully added marketplace: stbr" ;;
-  "plugin marketplace update stbr") echo "Successfully updated marketplace: stbr" ;;
+  "plugin marketplace add "*)
+    # As in Claude Code, add leaves a registered marketplace as it is, stale or not.
+    if [ "$(cat "$MKT")" = none ]; then echo current > "$MKT"; fi
+    echo "Successfully added marketplace: stbr" ;;
+  "plugin marketplace update stbr")
+    [ "$(cat "$MKT")" != none ] || { echo "Marketplace 'stbr' not found" >&2; exit 1; }
+    [ -z "${CLAUDE_FAKE_FAIL_REFRESH:-}" ] || { echo "Failed to update marketplace(s): network error" >&2; exit 1; }
+    echo current > "$MKT"
+    echo "Successfully updated marketplace: stbr" ;;
   "plugin update safe-ai-skill@stbr --scope "*)
     [ -z "${CLAUDE_FAKE_FAIL_UPDATE:-}" ] || { echo "EACCES: permission denied" >&2; exit 1; }
     echo "safe-ai-skill is already at the latest version (1.3.4)." ;;
@@ -59,7 +70,7 @@ run_install() {
   [ "${1:-}" = -- ] && shift
   N=$((N + 1)); P="$TEMP_DIR/p$N"
   mkdir -p "$P" && git -C "$P" init -q
-  rm -f "$LOG" "$LOG.stdin" "$LOG.failed"
+  rm -f "$LOG" "$LOG.stdin" "$LOG.mkt"
   OUT="$(printf 'NOT-FOR-CLAUDE\n' | env PATH="$BIN:$PATH" CLAUDE_FAKE_LOG="$LOG" CLAUDE_CONFIG_DIR="$TEMP_DIR/cc$N" \
     SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" ${vars[@]+"${vars[@]}"} bash "$REPO_ROOT/install.sh" "$@" "$P" 2>&1)" || true
 }
@@ -81,11 +92,25 @@ assert_contains "$OUT" "Installed safe-ai-skill" "...reports it"
 assert_contains "$OUT" "Security plugin: safe-ai-skill is installed." "...and the closing box says so"
 assert_eq "" "$(cat "$LOG.stdin" 2>/dev/null || true)" "claude never reads install.sh's stdin"
 
-echo "[marketplace registered on first failure]"
-run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 CLAUDE_FAKE_FAIL_FIRST=1 --
-assert_contains "$(calls)" "plugin marketplace add https://github.com/solanabr/ai-kit.git" "A failed first install registers the kit's marketplace"
-assert_eq "2" "$(calls | grep -c 'plugin install safe-ai-skill@stbr --scope project')" "...then installs again"
+echo "[marketplace missing or stale on first failure]"
+run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 CLAUDE_FAKE_MKT=none --
+assert_eq "$(printf '%s\n' "p$N :: plugin install safe-ai-skill@stbr --scope project" "p$N :: plugin marketplace update stbr" \
+    "p$N :: plugin marketplace add https://github.com/solanabr/ai-kit.git" "p$N :: plugin install safe-ai-skill@stbr --scope project")" \
+  "$(calls | sed -E 's#^.*/([^/]+) :: #\1 :: #')" \
+  "With no stbr marketplace, a failed first install finds none to refresh, registers the kit's and installs again"
 assert_contains "$OUT" "Security plugin: safe-ai-skill is installed." "...and reports the plugin installed"
+run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 CLAUDE_FAKE_MKT=stale --
+assert_eq "$(printf '%s\n' "p$N :: plugin install safe-ai-skill@stbr --scope project" "p$N :: plugin marketplace update stbr" \
+    "p$N :: plugin install safe-ai-skill@stbr --scope project")" \
+  "$(calls | sed -E 's#^.*/([^/]+) :: #\1 :: #')" \
+  "With a stale stbr, registered before the kit listed safe-ai-skill, a failed first install refreshes it and installs again"
+assert_contains "$OUT" "Security plugin: safe-ai-skill is installed." "...and reports the plugin installed"
+assert_eq "" "$(cat "$LOG.stdin" 2>/dev/null || true)" "...and no claude call reads install.sh's stdin"
+run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 CLAUDE_FAKE_MKT=stale CLAUDE_FAKE_FAIL_REFRESH=1 --
+assert_contains "$OUT" 'Could not install safe-ai-skill: Failed to install plugin "safe-ai-skill@stbr": Plugin "safe-ai-skill" not found in marketplace "stbr".' \
+  "A stale stbr that can't be refreshed leaves the plugin uninstalled, and install.sh gives the CLI's error"
+assert_contains "$OUT" "safe-ai-skill is enabled but not installed" "...and the closing box says so"
+assert_contains "$OUT" "$SAS_CMD" "...with the command that installs it"
 
 echo "[already installed]"
 N1=$((N + 1)); mkdir -p "$TEMP_DIR/cc$N1/plugins" "$TEMP_DIR/p$N1"
@@ -137,7 +162,7 @@ run_update() {
   local vars=()
   while [ "$#" -gt 0 ] && [ "$1" != -- ]; do vars+=("$1"); shift; done
   [ "${1:-}" = -- ] && shift
-  rm -f "$LOG" "$LOG.stdin"
+  rm -f "$LOG" "$LOG.stdin" "$LOG.mkt"
   OUT="$(cd "$UP" && printf 'NOT-FOR-CLAUDE\n' | env PATH="$BIN:$PATH" CLAUDE_FAKE_LOG="$LOG" CLAUDE_CONFIG_DIR="$CC" \
     SOLANA_AI_KIT_LOCAL_SRC="$REPO_ROOT" ${vars[@]+"${vars[@]}"} bash .claude/bin/update.sh "$@" 2>&1)" || true
 }
@@ -182,6 +207,9 @@ printf '{"version": 2, "plugins": {"safe-ai-skill@stbr": [{"scope": "project", "
 rm -f "$UP/.claude/.ext-pack-sums"
 run_update --
 assert_contains "$OUT" "\"$ODD/bin/safe-ai-skill\" verify approve .claude/skills/ext/<pack>" "An install path with a backslash and % in it prints as itself"
+run_update CLAUDE_CONFIG_DIR="$TEMP_DIR/cc-missing" --
+assert_contains "$OUT" "safe-ai-skill is enabled but not installed, so none of its gates run. In your shell, in this directory: claude plugin marketplace update stbr || claude plugin marketplace add https://github.com/solanabr/ai-kit.git; claude plugin install safe-ai-skill@stbr --scope project" \
+  "A plugin enabled but not installed is named, with commands that refresh or register the kit's marketplace before installing"
 
 echo "[--agents]"
 run_install SOLANA_AI_KIT_SAFE_AI_SKILL=1 -- --agents
